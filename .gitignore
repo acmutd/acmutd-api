@@ -1,2 +1,3 @@
 acmutd-api.json
-*.sh
+output/
+.env

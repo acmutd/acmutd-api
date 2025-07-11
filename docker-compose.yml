@@ -1,0 +1,13 @@
+services:
+  scraper:
+    build:
+      context: ./scraper
+      dockerfile: Dockerfile
+    container_name: acm-scraper
+    environment:
+      - NETID=${NETID}
+      - PASSWORD=${PASSWORD}
+      - CLASS_TERMS=${CLASS_TERMS}
+    volumes:
+      - ./output:/app/output
+      - ./.env:/app/.env:ro
