@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 
@@ -16,57 +14,29 @@ import (
 
 func main() {
 	err := godotenv.Load()
+	ctx := context.Background()
 	if err != nil {
 		log.Fatalf("error loading .env file: %v\n", err)
 	}
 
 	sa := option.WithCredentialsFile(os.Getenv("FIREBASE_CONFIG"))
-	app, err := firebase.NewApp(context.Background(), nil, sa)
+	app, err := firebase.NewApp(ctx, nil, sa)
 	if err != nil {
 		log.Fatalf("error initializing firebase app: %v\n", err)
 	}
 
-	storageClient, err := storage.NewStorage(context.Background(), app)
+	storage, err := storage.NewStorage(ctx, app)
 	if err != nil {
-		log.Fatalf("error initializing storage client: %v\n", err)
+		log.Fatalf("error initializing storage: %v\n", err)
 	}
 
-	// Create scraper service
-	scraperService := scraper.NewScraperService(storageClient)
+	scraper := scraper.NewScraperService(storage)
 
-	// Check if output is empty and run scraper if needed
-	log.Println("Checking if scraper needs to run...")
-	if err := scraperService.CheckAndRunScraper(); err != nil {
+	log.Println("Starting scraper check...")
+	if err := scraper.CheckAndRunScraper(); err != nil {
 		log.Printf("Error running scraper: %v", err)
-		return
+	} else {
+		log.Println("Scraper check completed successfully")
 	}
 
-	// Get the scraped data
-	log.Println("Reading scraped data...")
-	data, err := scraperService.GetScrapedData()
-	if err != nil {
-		log.Printf("Error reading scraped data: %v", err)
-		return
-	}
-
-	// Process the data (example: store in Firestore)
-	log.Println("Processing scraped data...")
-
-	for term, jsonData := range data {
-		bytes, err := json.Marshal(jsonData)
-		if err != nil {
-			log.Printf("Error marshalling data: %v", err)
-			return
-		}
-
-		path := fmt.Sprintf("classes/%s.json", term)
-		err = storageClient.UploadFile(context.Background(), path, bytes)
-		if err != nil {
-			log.Printf("Error uploading data: %v", err)
-			return
-		}
-		log.Printf("Uploaded data for term: %s", term)
-	}
-
-	log.Println("Scraping and processing completed!")
 }

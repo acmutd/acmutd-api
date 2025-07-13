@@ -11,8 +11,7 @@ import (
 )
 
 type Storage struct {
-	app    *firebase.App
-	client *storage.Client
+	*storage.Client
 }
 
 var (
@@ -26,13 +25,12 @@ func NewStorage(ctx context.Context, app *firebase.App) (*Storage, error) {
 	}
 
 	return &Storage{
-		app:    app,
-		client: client,
+		Client: client,
 	}, nil
 }
 
 func (s *Storage) UploadFile(ctx context.Context, path string, data []byte) error {
-	bucket, err := s.client.Bucket(bucketName)
+	bucket, err := s.Bucket(bucketName)
 	if err != nil {
 		return err
 	}

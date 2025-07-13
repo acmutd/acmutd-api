@@ -41,7 +41,7 @@ def main():
         data = scrape(session_id, term, prefixes)
 
         # Write data to local file
-        save_data(data, 'output', term)
+        save_data(data, '/app/output', term)
 
 
 def str_to_list(s):

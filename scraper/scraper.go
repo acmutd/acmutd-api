@@ -1,13 +1,17 @@
 package scraper
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/acmutd/acmutd-api/storage"
+	"github.com/acmutd/acmutd-api/types"
 )
 
 type ScraperService struct {
@@ -21,13 +25,55 @@ func NewScraperService(storageClient *storage.Storage) *ScraperService {
 }
 
 func (s *ScraperService) CheckAndRunScraper() error {
-	outputDir := "./output"
+	outputDir := "/app/output"
 
 	if s.isOutputEmpty(outputDir) {
-		return fmt.Errorf("output directory is empty. Please run the docker container.")
+		log.Println("Output directory is empty. Running scraper container...")
+		return s.runScraperContainer()
 	}
 
 	log.Println("Output directory contains data. Skipping scraper run.")
+	return nil
+}
+
+func (s *ScraperService) runScraperContainer() error {
+	if os.Getenv("DOCKER_CONTAINER") == "true" {
+		return s.runPythonScraper()
+	}
+
+	// We're outside Docker, use docker compose to run the scraper
+	cmd := exec.Command("docker", "compose", "--profile", "scraper", "run", "--rm", "scraper")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	log.Println("Starting scraper container...")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run scraper container: %w", err)
+	}
+
+	// Wait a bit for files to be written
+	time.Sleep(5 * time.Second)
+
+	log.Println("Scraper container completed successfully")
+	return nil
+}
+
+// This function runs when we're inside the Docker container
+func (s *ScraperService) runPythonScraper() error {
+	cmd := exec.Command("python", "main.py")
+	cmd.Dir = "/app/scripts"
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), "PYTHONPATH=/app/scripts")
+
+	log.Println("Running Python scraper from directory:", cmd.Dir)
+	log.Println("Python command:", cmd.String())
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run Python scraper: %w", err)
+	}
+
+	log.Println("Python scraper completed successfully")
 	return nil
 }
 
@@ -45,14 +91,14 @@ func (s *ScraperService) isOutputEmpty(outputDir string) bool {
 	return len(entries) == 0
 }
 
-func (s *ScraperService) GetScrapedData() (map[string]any, error) {
-	outputDir := "./output"
+func (s *ScraperService) GetScrapedData() (map[string][]types.Course, error) {
+	outputDir := "/app/output"
 
 	if s.isOutputEmpty(outputDir) {
 		return nil, fmt.Errorf("no scraped data available. Run CheckAndRunScraper() first")
 	}
 
-	data := make(map[string]any)
+	data := make(map[string][]types.Course)
 
 	entries, err := os.ReadDir(outputDir)
 	if err != nil {
@@ -70,7 +116,12 @@ func (s *ScraperService) GetScrapedData() (map[string]any, error) {
 
 			// Extract term from filename (e.g., "classes_24f.json" -> "24f")
 			term := strings.TrimSuffix(strings.TrimPrefix(entry.Name(), "classes_"), ".json")
-			data[term] = string(fileData)
+			var courses []types.Course
+			if err := json.Unmarshal(fileData, &courses); err != nil {
+				log.Printf("Warning: failed to unmarshal file %s: %v", filePath, err)
+				continue
+			}
+			data[term] = courses
 		}
 	}
 
@@ -78,7 +129,7 @@ func (s *ScraperService) GetScrapedData() (map[string]any, error) {
 }
 
 func (s *ScraperService) CleanupOutput() error {
-	outputDir := "./output"
+	outputDir := "/app/output"
 
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		return nil

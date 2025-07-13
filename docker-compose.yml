@@ -1,13 +1,27 @@
 services:
-  scraper:
+  api:
     build:
-      context: ./scraper
+      context: .
       dockerfile: Dockerfile
-    container_name: acm-scraper
+    container_name: acm-api
+    ports:
+      - "8080:8080"
     environment:
+      - FIREBASE_CONFIG=${FIREBASE_CONFIG}
       - NETID=${NETID}
       - PASSWORD=${PASSWORD}
       - CLASS_TERMS=${CLASS_TERMS}
+      - DOCKER_CONTAINER=true
     volumes:
       - ./output:/app/output
       - ./.env:/app/.env:ro
+      - ./acmutd-api.json:/app/acmutd-api.json:ro
+    networks:
+      - acm-network
+
+networks:
+  acm-network:
+    driver: bridge
+
+volumes:
+  output:
