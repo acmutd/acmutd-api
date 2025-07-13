@@ -25,7 +25,12 @@ func NewScraperService(storageClient *storage.Storage) *ScraperService {
 }
 
 func (s *ScraperService) CheckAndRunScraper() error {
-	outputDir := "/app/output"
+	var outputDir string
+	if os.Getenv("DOCKER_CONTAINER") == "true" {
+		outputDir = "/app/output"
+	} else {
+		outputDir = "./output"
+	}
 
 	if s.isOutputEmpty(outputDir) {
 		log.Println("Output directory is empty. Running scraper container...")
@@ -42,7 +47,7 @@ func (s *ScraperService) runScraperContainer() error {
 	}
 
 	// We're outside Docker, use docker compose to run the scraper
-	cmd := exec.Command("docker", "compose", "--profile", "scraper", "run", "--rm", "scraper")
+	cmd := exec.Command("docker", "compose", "run", "--rm", "--no-TTY", "scraper")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

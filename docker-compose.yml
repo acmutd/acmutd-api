@@ -18,6 +18,21 @@ services:
       - ./acmutd-api.json:/app/acmutd-api.json:ro
     networks:
       - acm-network
+  scraper:
+    build:
+      context: ./scraper
+      dockerfile: Dockerfile
+    container_name: acm-scraper
+    environment:
+      - PYTHONPATH=/app/scripts
+      - NETID=${NETID}
+      - PASSWORD=${PASSWORD}
+      - CLASS_TERMS=${CLASS_TERMS}
+    volumes:
+      - ./scraper/scripts:/app/scripts
+      - ./output:/app/output
+    profiles:
+      - scraper
 
 networks:
   acm-network:
