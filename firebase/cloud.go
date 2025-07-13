@@ -1,4 +1,4 @@
-package storage
+package firebase
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Storage struct {
+type CloudStorage struct {
 	*storage.Client
 }
 
@@ -18,18 +18,18 @@ var (
 	bucketName = "acmutd-api.firebasestorage.app"
 )
 
-func NewStorage(ctx context.Context, app *firebase.App) (*Storage, error) {
+func NewCloudStorage(ctx context.Context, app *firebase.App) (*CloudStorage, error) {
 	client, err := app.Storage(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Storage{
+	return &CloudStorage{
 		Client: client,
 	}, nil
 }
 
-func (s *Storage) UploadFile(ctx context.Context, path string, data []byte) error {
+func (s *CloudStorage) UploadFile(ctx context.Context, path string, data []byte) error {
 	bucket, err := s.Bucket(bucketName)
 	if err != nil {
 		return err

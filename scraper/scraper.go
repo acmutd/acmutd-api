@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/acmutd/acmutd-api/storage"
+	"github.com/acmutd/acmutd-api/firebase"
 	"github.com/acmutd/acmutd-api/types"
 )
 
 type ScraperService struct {
-	storageClient *storage.Storage
+	storageClient *firebase.CloudStorage
 }
 
-func NewScraperService(storageClient *storage.Storage) *ScraperService {
+func NewScraperService(storageClient *firebase.CloudStorage) *ScraperService {
 	return &ScraperService{
 		storageClient: storageClient,
 	}
