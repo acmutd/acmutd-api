@@ -53,6 +53,11 @@ func (api *API) SetupRoutes() {
 			courses.GET("/:term/search", api.searchCourses)
 		}
 
+		terms := v1.Group("/terms")
+		{
+			terms.GET("/", api.getTerms)
+		}
+
 		// Schools routes
 		schools := v1.Group("/schools")
 		{
@@ -242,5 +247,18 @@ func (api *API) getSchoolsByTerm(c *gin.Context) {
 		"term":    term,
 		"count":   len(schools),
 		"schools": schools,
+	})
+}
+
+func (api *API) getTerms(c *gin.Context) {
+	terms, err := api.db.QueryAllTerms(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count": len(terms),
+		"terms": terms,
 	})
 }

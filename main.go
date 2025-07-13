@@ -43,7 +43,7 @@ func main() {
 	}
 
 	// Initialize scraper
-	scraper := scraper.NewScraperService(storage)
+	scraper := scraper.NewScraperService(storage, firestore)
 
 	// Initialize API
 	api := api.NewAPI(firestore)

@@ -65,13 +65,13 @@ Retrieve all courses for a specific term.
 
 **Path Parameters:**
 
-- `term` (required): The academic term (e.g., "2024FALL", "2025SPRING")
+- `term` (required): The academic term (e.g., "24f", "25s")
 
 **Query Parameters:**
 
-- `prefix` (optional): Filter by course prefix (e.g., "CS", "MATH")
+- `prefix` (optional): Filter by course prefix (e.g., "cs", "math")
 - `number` (optional): Filter by course number (e.g., "1337", "2305")
-- `school` (optional): Filter by school (e.g., "ECS", "NSM")
+- `school` (optional): Filter by school (e.g., "ecs", "nsm")
 
 **Response:**
 
@@ -209,6 +209,35 @@ curl "http://localhost:8080/api/v1/courses/2024FALL/search?q=Computer Science"
 
 ---
 
+## Term Endpoints
+
+### Get All Terms
+
+**GET** `/api/v1/terms/`
+
+Retrieve all available academic terms in the database.
+
+**Response:**
+
+```json
+{
+  "count": 3,
+  "terms": [
+    "24f",
+    "25s",
+    "23f"
+  ]
+}
+```
+
+**Example:**
+```bash
+
+curl http://localhost:8080/api/v1/terms/
+```
+
+---
+
 ## School Endpoints
 
 ### Get Schools by Term
@@ -225,17 +254,17 @@ Retrieve all schools that have courses in a specific term.
 
 ```json
 {
-  "term": "2024FALL",
+  "term": "24f",
   "count": 8,
   "schools": [
-    "ECS",
-    "NSM",
-    "JSOM",
-    "AH",
-    "BBS",
-    "EPPS",
-    "IS",
-    "ATEC"
+    "ecs",
+    "nsm",
+    "jsom",
+    "ah",
+    "bbs",
+    "epps",
+    "is",
+    "atec"
   ]
 }
 ```
@@ -350,6 +379,9 @@ print(data)
 ### cURL
 
 ```bash
+# Get all available terms
+curl http://localhost:8080/api/v1/terms/
+
 # Get all courses for a term
 curl http://localhost:8080/api/v1/courses/2024FALL
 

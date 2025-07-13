@@ -68,11 +68,37 @@ func (c *Firestore) InsertClassesWithIndexes(ctx context.Context, courses []type
 	batch.End()
 }
 
-type CourseIndex struct {
-	Count   int            `json:"count" firestore:"count"`
-	Courses []types.Course `json:"courses" firestore:"courses"`
+func (c *Firestore) InsertTerms(ctx context.Context, terms []string) {
+	batch := c.BulkWriter(ctx)
+
+	for _, term := range terms {
+		doc := c.Collection("classes").Doc(term)
+		batch.Set(doc, map[string]any{
+			"term": term,
+		})
+	}
+
+	batch.End()
 }
 
+func (c *Firestore) QueryAllTerms(ctx context.Context) ([]string, error) {
+	query := c.Collection("classes")
+	iter := query.Documents(ctx)
+
+	var terms []string
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next document: %w", err)
+		}
+		terms = append(terms, doc.Ref.ID)
+	}
+
+	return terms, nil
+}
 func (c *Firestore) QueryByCourseNumber(ctx context.Context, term, coursePrefix, courseNumber string) ([]types.Course, error) {
 	query := c.Collection("classes").Doc(term).Collection("courses").Where("course_prefix", "==", coursePrefix).Where("course_number", "==", courseNumber)
 	iter := query.Documents(ctx)

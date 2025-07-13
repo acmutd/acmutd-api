@@ -1,6 +1,7 @@
 package scraper
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,12 +16,14 @@ import (
 )
 
 type ScraperService struct {
-	storageClient *firebase.CloudStorage
+	storageClient   *firebase.CloudStorage
+	firestoreClient *firebase.Firestore
 }
 
-func NewScraperService(storageClient *firebase.CloudStorage) *ScraperService {
+func NewScraperService(storageClient *firebase.CloudStorage, firestoreClient *firebase.Firestore) *ScraperService {
 	return &ScraperService{
-		storageClient: storageClient,
+		storageClient:   storageClient,
+		firestoreClient: firestoreClient,
 	}
 }
 
@@ -32,12 +35,28 @@ func (s *ScraperService) CheckAndRunScraper() error {
 		outputDir = "./output"
 	}
 
-	if s.isOutputEmpty(outputDir) {
-		log.Println("Output directory is empty. Running scraper container...")
-		return s.runScraperContainer()
+	if !s.isOutputEmpty(outputDir) {
+		log.Println("Output directory contains data. Skipping scraper run.")
+		return nil
 	}
 
-	log.Println("Output directory contains data. Skipping scraper run.")
+	err := s.runScraperContainer()
+	if err != nil {
+		return err
+	}
+
+	data, err := s.GetScrapedData()
+	if err != nil {
+		return err
+	}
+
+	terms := strings.Split(os.Getenv("CLASS_TERMS"), ",")
+	s.firestoreClient.InsertTerms(context.Background(), terms)
+
+	for term, courses := range data {
+		s.firestoreClient.InsertClassesWithIndexes(context.Background(), courses, term)
+	}
+
 	return nil
 }
 
@@ -97,7 +116,12 @@ func (s *ScraperService) isOutputEmpty(outputDir string) bool {
 }
 
 func (s *ScraperService) GetScrapedData() (map[string][]types.Course, error) {
-	outputDir := "/app/output"
+	var outputDir string
+	if os.Getenv("DOCKER_CONTAINER") == "true" {
+		outputDir = "/app/output"
+	} else {
+		outputDir = "./output"
+	}
 
 	if s.isOutputEmpty(outputDir) {
 		return nil, fmt.Errorf("no scraped data available. Run CheckAndRunScraper() first")
