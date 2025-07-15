@@ -8,7 +8,64 @@ The ACM API provides access to course and school data for the University of Texa
 
 ## Authentication
 
-Currently, no authentication is required for any endpoints.
+The ACM API uses API key authentication for all endpoints except the health check. You must include your API key in the `Authorization` header for all requests.
+
+### Getting an API Key
+
+API keys can be created by administrators using the admin endpoints. Contact your system administrator to obtain an API key.
+
+### Using API Keys
+
+Include your API key in the `Authorization` header:
+
+```bash
+Authorization: Bearer YOUR_API_KEY_HERE
+```
+
+**Example:**
+
+```bash
+curl -H "Authorization: Bearer abc123def456..." http://localhost:8080/api/v1/courses/2024FALL
+```
+
+### Rate Limiting
+
+Each API key has configurable rate limits:
+
+- **Rate Limit**: Maximum number of requests per time window
+- **Rate Interval**: Time window duration (e.g., 30 minutes)
+
+Rate limit information is included in response headers:
+
+- `X-RateLimit-Limit`: Maximum requests per window
+- `X-RateLimit-Remaining`: Remaining requests in current window
+- `X-RateLimit-Reset`: When the current window resets (RFC3339 format)
+
+When rate limit is exceeded, you'll receive a `429 Too Many Requests` response with rate limit information.
+
+### Error Responses
+
+Authentication errors return `401 Unauthorized`:
+
+```json
+{
+  "error": "API key required. Include 'Authorization: Bearer YOUR_API_KEY' header"
+}
+```
+
+Rate limit errors return `429 Too Many Requests`:
+
+```json
+{
+  "error": "Rate limit exceeded",
+  "rate_limit_info": {
+    "remaining_requests": 0,
+    "reset_time": "2024-01-15T10:30:00Z",
+    "rate_limit": 30,
+    "rate_interval": "30m0s"
+  }
+}
+```
 
 ## Response Format
 
@@ -115,16 +172,16 @@ Retrieve all courses for a specific term.
 
 ```bash
 # Get all courses for Fall 2024
-curl http://localhost:8080/api/v1/courses/2024FALL
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/courses/2024FALL
 
 # Get all CS courses for Fall 2024
-curl "http://localhost:8080/api/v1/courses/2024FALL?prefix=CS"
+curl -H "Authorization: Bearer YOUR_API_KEY" "http://localhost:8080/api/v1/courses/2024FALL?prefix=CS"
 
 # Get CS 1337 for Fall 2024
-curl "http://localhost:8080/api/v1/courses/2024FALL?prefix=CS&number=1337"
+curl -H "Authorization: Bearer YOUR_API_KEY" "http://localhost:8080/api/v1/courses/2024FALL?prefix=CS&number=1337"
 
 # Get all ECS school courses for Fall 2024
-curl "http://localhost:8080/api/v1/courses/2024FALL?school=ECS"
+curl -H "Authorization: Bearer YOUR_API_KEY" "http://localhost:8080/api/v1/courses/2024FALL?school=ECS"
 ```
 
 ### Get Courses by Prefix
@@ -143,7 +200,7 @@ Retrieve all courses with a specific prefix for a term.
 **Example:**
 
 ```bash
-curl http://localhost:8080/api/v1/courses/2024FALL/prefix/CS
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/courses/2024FALL/prefix/CS
 ```
 
 ### Get Courses by Number
@@ -163,7 +220,7 @@ Retrieve specific courses by prefix and number for a term.
 **Example:**
 
 ```bash
-curl http://localhost:8080/api/v1/courses/2024FALL/prefix/CS/number/1337
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/courses/2024FALL/prefix/CS/number/1337
 ```
 
 ### Get Courses by School
@@ -182,7 +239,7 @@ Retrieve all courses from a specific school for a term.
 **Example:**
 
 ```bash
-curl http://localhost:8080/api/v1/courses/2024FALL/school/ECS
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/courses/2024FALL/school/ECS
 ```
 
 ### Search Courses
@@ -231,9 +288,10 @@ Retrieve all available academic terms in the database.
 ```
 
 **Example:**
+
 ```bash
 
-curl http://localhost:8080/api/v1/terms/
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/terms/
 ```
 
 ---
@@ -272,7 +330,7 @@ Retrieve all schools that have courses in a specific term.
 **Example:**
 
 ```bash
-curl http://localhost:8080/api/v1/schools/2024FALL
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/schools/2024FALL
 ```
 
 ---
@@ -336,9 +394,152 @@ Each course object contains the following fields:
 
 ---
 
-## Rate Limiting
+## Admin Endpoints
 
-Currently, no rate limiting is implemented. Please be respectful of the API and avoid making excessive requests.
+The admin endpoints allow administrators to manage API keys. These endpoints require admin authentication using the `X-Admin-Token` header.
+
+### Admin Authentication
+
+Include the admin token in the `X-Admin-Token` header:
+
+```bash
+X-Admin-Token: ADMIN_TOKEN
+```
+
+### Create API Key
+
+**POST** `/admin/keys/`
+
+Create a new API key with specified rate limits.
+
+**Headers:**
+
+- `X-Admin-Token`: Admin authentication token
+- `Content-Type`: application/json
+
+**Request Body:**
+
+```json
+{
+  "rate_limit": 30,
+  "rate_interval": "30m",
+  "expires_at": "2024-12-31T23:59:59Z"
+}
+```
+
+**Parameters:**
+
+- `rate_limit` (required): Maximum requests per time window (1-1000)
+- `rate_interval` (required): Time window duration as a string (e.g., "30m", "1h", "24h"). Must be between 1 minute and 24 hours.
+- `expires_at` (optional): Expiration date (ISO 8601 format)
+
+**Valid rate_interval formats:**
+
+- `"1m"` - 1 minute
+- `"30m"` - 30 minutes
+- `"1h"` - 1 hour
+- `"2h30m"` - 2 hours 30 minutes
+- `"24h"` - 24 hours
+
+**Response:**
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "key": "generated-api-key-here",
+  "expires_at": "2024-12-31T23:59:59Z",
+  "rate_limit": 30,
+  "rate_interval": "30m0s",
+  "is_active": true,
+  "created_at": "2024-01-15T10:00:00Z",
+  "usage_count": 0,
+  "last_used_at": "0001-01-01T00:00:00Z"
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8080/admin/keys/ \
+  -H "X-Admin-Token: your-admin-token" \
+  -H "Content-Type: application/json" \
+  -d '{"rate_limit": 30, "rate_interval": "30m"}'
+```
+
+### Get All API Keys
+
+**GET** `/admin/keys/`
+
+Retrieve all API keys (keys are masked for security).
+
+**Headers:**
+
+- `X-Admin-Token`: Admin authentication token
+
+**Response:**
+
+```json
+{
+  "count": 2,
+  "keys": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "key": "***",
+      "expires_at": "2024-12-31T23:59:59Z",
+      "rate_limit": 30,
+      "rate_interval": "30m0s",
+      "is_active": true,
+      "created_at": "2024-01-15T10:00:00Z",
+      "usage_count": 15,
+      "last_used_at": "2024-01-15T09:30:00Z"
+    }
+  ]
+}
+```
+
+### Get API Key by ID
+
+**GET** `/admin/keys/{id}`
+
+Retrieve a specific API key by ID.
+
+**Path Parameters:**
+
+- `id` (required): API key ID
+
+**Response:** Same format as create response, but key is masked.
+
+### Update API Key
+
+**PUT** `/admin/keys/{id}`
+
+Update an existing API key's rate limits or expiration.
+
+**Path Parameters:**
+
+- `id` (required): API key ID
+
+**Request Body:** Same format as create request.
+
+**Response:** Same format as create response, but key is masked.
+
+### Delete API Key
+
+**DELETE** `/admin/keys/{id}`
+
+Delete an API key.
+
+**Path Parameters:**
+
+- `id` (required): API key ID
+
+**Response:**
+
+```json
+{
+  "message": "API key deleted successfully"
+}
+```
 
 ---
 
@@ -358,7 +559,11 @@ The API supports Cross-Origin Resource Sharing (CORS) and allows requests from a
 
 ```javascript
 // Get all CS courses for Fall 2024
-fetch('http://localhost:8080/api/v1/courses/2024FALL?prefix=CS')
+fetch('http://localhost:8080/api/v1/courses/2024FALL?prefix=CS', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+})
   .then(response => response.json())
   .then(data => console.log(data))
   .catch(error => console.error('Error:', error));
@@ -370,8 +575,10 @@ fetch('http://localhost:8080/api/v1/courses/2024FALL?prefix=CS')
 import requests
 
 # Get all CS courses for Fall 2024
+headers = {'Authorization': 'Bearer YOUR_API_KEY'}
 response = requests.get('http://localhost:8080/api/v1/courses/2024FALL',
-                       params={'prefix': 'CS'})
+                       params={'prefix': 'CS'},
+                       headers=headers)
 data = response.json()
 print(data)
 ```
@@ -380,16 +587,16 @@ print(data)
 
 ```bash
 # Get all available terms
-curl http://localhost:8080/api/v1/terms/
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/terms/
 
 # Get all courses for a term
-curl http://localhost:8080/api/v1/courses/2024FALL
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/courses/2024FALL
 
 # Search for courses
-curl "http://localhost:8080/api/v1/courses/2024FALL/search?q=Computer Science"
+curl -H "Authorization: Bearer YOUR_API_KEY" "http://localhost:8080/api/v1/courses/2024FALL/search?q=Computer Science"
 
 # Get schools for a term
-curl http://localhost:8080/api/v1/schools/2024FALL
+curl -H "Authorization: Bearer YOUR_API_KEY" http://localhost:8080/api/v1/schools/2024FALL
 ```
 
 ---

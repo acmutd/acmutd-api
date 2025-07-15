@@ -39,8 +39,10 @@ func (api *API) SetupRoutes() {
 	// Health check endpoint
 	api.router.GET("/health", api.healthCheck)
 
-	// API v1 routes
+	api.SetupAdminRoutes()
+
 	v1 := api.router.Group("/api/v1")
+	v1.Use(api.AuthMiddleware())
 	{
 		// Course routes
 		courses := v1.Group("/courses")

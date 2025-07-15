@@ -9,6 +9,7 @@ import (
 	"github.com/acmutd/acmutd-api/api"
 	"github.com/acmutd/acmutd-api/firebase"
 	"github.com/acmutd/acmutd-api/scraper"
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"google.golang.org/api/option"
 )
@@ -18,6 +19,10 @@ func init() {
 	if err != nil {
 		log.Fatalf("error loading .env file: %v\n", err)
 	}
+
+	log.SetFlags(0)
+	log.SetPrefix("[acmutd-api] ")
+	log.SetOutput(gin.DefaultWriter)
 }
 
 func main() {

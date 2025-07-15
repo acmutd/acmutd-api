@@ -239,3 +239,80 @@ func (c *Firestore) GetSchoolsByTerm(ctx context.Context, term string) ([]string
 
 	return schools, nil
 }
+
+func (c *Firestore) CreateAPIKey(ctx context.Context, apiKey *types.APIKey) error {
+	doc := c.Collection("api_keys").Doc(apiKey.ID)
+	_, err := doc.Set(ctx, apiKey)
+	return err
+}
+
+func (c *Firestore) GetAPIKeyByKey(ctx context.Context, key string) (*types.APIKey, error) {
+	query := c.Collection("api_keys").Where("key", "==", key)
+	iter := query.Documents(ctx)
+
+	doc, err := iter.Next()
+	if err == iterator.Done {
+		return nil, fmt.Errorf("api key not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get api key: %w", err)
+	}
+
+	var apiKey types.APIKey
+	if err := doc.DataTo(&apiKey); err != nil {
+		return nil, fmt.Errorf("failed to convert document to api key: %w", err)
+	}
+
+	return &apiKey, nil
+}
+
+func (c *Firestore) GetAPIKeyByID(ctx context.Context, id string) (*types.APIKey, error) {
+	doc := c.Collection("api_keys").Doc(id)
+	snapshot, err := doc.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get api key: %w", err)
+	}
+
+	var apiKey types.APIKey
+	if err := snapshot.DataTo(&apiKey); err != nil {
+		return nil, fmt.Errorf("failed to convert document to api key: %w", err)
+	}
+
+	return &apiKey, nil
+}
+
+func (c *Firestore) UpdateAPIKey(ctx context.Context, apiKey *types.APIKey) error {
+	doc := c.Collection("api_keys").Doc(apiKey.ID)
+	_, err := doc.Set(ctx, apiKey)
+	return err
+}
+
+func (c *Firestore) GetAllAPIKeys(ctx context.Context) ([]types.APIKey, error) {
+	query := c.Collection("api_keys")
+	iter := query.Documents(ctx)
+
+	var apiKeys []types.APIKey
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next document: %w", err)
+		}
+
+		var apiKey types.APIKey
+		if err := doc.DataTo(&apiKey); err != nil {
+			return nil, fmt.Errorf("failed to convert document to api key: %w", err)
+		}
+		apiKeys = append(apiKeys, apiKey)
+	}
+
+	return apiKeys, nil
+}
+
+func (c *Firestore) DeleteAPIKey(ctx context.Context, id string) error {
+	doc := c.Collection("api_keys").Doc(id)
+	_, err := doc.Delete(ctx)
+	return err
+}
