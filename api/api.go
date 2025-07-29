@@ -2,15 +2,24 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/acmutd/acmutd-api/firebase"
 	"github.com/acmutd/acmutd-api/types"
 	"github.com/gin-gonic/gin"
+	"github.com/patrickmn/go-cache"
+)
+
+const (
+	apiKeyCacheTTL    = 5 * time.Minute
+	rateLimitCacheTTL = 1 * time.Minute
 )
 
 type API struct {
-	db     *firebase.Firestore
-	router *gin.Engine
+	db          *firebase.Firestore
+	router      *gin.Engine
+	apiKeyCache *cache.Cache
+	rateLimiter *RateLimiter
 }
 
 func NewAPI(db *firebase.Firestore) *API {
@@ -19,7 +28,7 @@ func NewAPI(db *firebase.Firestore) *API {
 	router.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
@@ -29,18 +38,34 @@ func NewAPI(db *firebase.Firestore) *API {
 		c.Next()
 	})
 
+	rl := NewRateLimiter()
+	rl.StartCleanup(1 * time.Minute)
+
 	return &API{
-		db:     db,
-		router: router,
+		db:          db,
+		router:      router,
+		apiKeyCache: cache.New(apiKeyCacheTTL, 10*time.Minute),
+		rateLimiter: rl,
 	}
 }
 
 func (api *API) SetupRoutes() {
 	// Health check endpoint
 	api.router.GET("/health", api.healthCheck)
+	// Admin routes
+	admin := api.router.Group("/admin")
+	admin.Use(api.AuthMiddleware())
+	admin.Use(api.RateLimitMiddleware())
+	admin.Use(api.AdminMiddleware())
+	{
+		admin.POST("/apikeys", api.createAPIKey)
+		admin.GET("/apikeys/:key", api.getAPIKey)
+	}
 
-	// API v1 routes
+	// API v1 routes (protected)
 	v1 := api.router.Group("/api/v1")
+	v1.Use(api.AuthMiddleware())
+	v1.Use(api.RateLimitMiddleware())
 	{
 		// Course routes
 		courses := v1.Group("/courses")
@@ -261,4 +286,70 @@ func (api *API) getTerms(c *gin.Context) {
 		"count": len(terms),
 		"terms": terms,
 	})
+}
+
+func (api *API) createAPIKey(c *gin.Context) {
+	var req struct {
+		RateLimit     int    `json:"rate_limit" binding:"required"`
+		WindowSeconds int    `json:"window_seconds" binding:"required"`
+		IsAdmin       bool   `json:"is_admin"`
+		ExpiresAt     string `json:"expires_at"` // ISO 8601 format
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.RateLimit <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "rate limit must be greater than 0"})
+		return
+	}
+
+	if req.WindowSeconds <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "window seconds must be greater than 0"})
+		return
+	}
+
+	// Parse expiration time
+	var expiresAt time.Time
+	if req.ExpiresAt != "" {
+		var err error
+		expiresAt, err = time.Parse(time.RFC3339, req.ExpiresAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid expires_at format"})
+			return
+		}
+
+		if expiresAt.Before(time.Now()) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "expiration date must be in the future"})
+			return
+		}
+	}
+
+	key, err := api.db.GenerateAPIKey(
+		c.Request.Context(),
+		req.RateLimit,
+		req.WindowSeconds,
+		req.IsAdmin,
+		expiresAt,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create API key"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"key": key})
+}
+
+func (api *API) getAPIKey(c *gin.Context) {
+	key := c.Param("key")
+
+	apiKey, err := api.db.GetAPIKey(c.Request.Context(), key)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get API key"})
+		return
+	}
+
+	c.JSON(http.StatusOK, apiKey)
 }

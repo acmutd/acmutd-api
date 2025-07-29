@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"time"
 
 	fb "firebase.google.com/go/v4"
 	"github.com/acmutd/acmutd-api/api"
@@ -18,13 +19,13 @@ func init() {
 	if err != nil {
 		log.Fatalf("error loading .env file: %v\n", err)
 	}
+	log.SetPrefix("[acmutd-api] ")
 }
 
 func main() {
 	ctx := context.Background()
 
 	sa := option.WithCredentialsFile(os.Getenv("FIREBASE_CONFIG"))
-	log.Println(os.Getenv("FIREBASE_CONFIG"))
 	app, err := fb.NewApp(ctx, nil, sa)
 	if err != nil {
 		log.Fatalf("error initializing firebase app: %v\n", err)
@@ -58,6 +59,17 @@ func main() {
 			log.Println("Scraper check completed successfully")
 		}
 	}()
+
+	// FOR TESTING NOW
+	if os.Getenv("CREATE_ADMIN_KEY") == "true" {
+
+		key, err := firestore.GenerateAPIKey(ctx, 1000, 60, true, time.Now().Add(time.Hour*24*30))
+		if err != nil {
+			log.Printf("Failed to create admin key: %v", err)
+		} else {
+			log.Printf("Admin API Key: %s", key)
+		}
+	}
 
 	// Start Server
 	port := os.Getenv("PORT")

@@ -8,7 +8,22 @@ The ACM API provides access to course and school data for the University of Texa
 
 ## Authentication
 
-Currently, no authentication is required for any endpoints.
+**All API endpoints (except `/health`) require authentication using an API key.**
+
+Include your API key in the request header:
+
+```bash
+X-API-Key: your-api-key-here
+```
+
+### API Key Management
+
+API keys are managed through admin endpoints and include:
+
+- Rate limiting configuration
+- Expiration dates
+- Admin privileges
+- Usage tracking
 
 ## Response Format
 
@@ -36,7 +51,7 @@ Error responses follow this format:
 
 **GET** `/health`
 
-Check if the API is running.
+Check if the API is running. This endpoint does not require authentication.
 
 **Response:**
 
@@ -55,6 +70,96 @@ curl http://localhost:8080/health
 
 ---
 
+## Admin Endpoints
+
+### Create API Key
+
+**POST** `/admin/apikeys`
+
+Create a new API key with specified rate limiting and permissions.
+
+**Headers:**
+
+- `X-API-Key`: Admin API key (required)
+
+**Request Body:**
+
+```json
+{
+  "rate_limit": 100,
+  "window_seconds": 60,
+  "is_admin": false,
+  "expires_at": "2024-12-31T23:59:59Z"
+}
+```
+
+**Parameters:**
+
+- `rate_limit` (required): Maximum requests allowed per window
+- `window_seconds` (required): Time window in seconds for rate limiting
+- `is_admin` (optional): Whether the key has admin privileges (default: false)
+- `expires_at` (optional): Expiration date in ISO 8601 format
+
+**Response:**
+
+```json
+{
+  "key": "generated-api-key-string"
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8080/admin/apikeys \
+  -H "X-API-Key: admin-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rate_limit": 100,
+    "window_seconds": 60,
+    "is_admin": false,
+    "expires_at": "2024-12-31T23:59:59Z"
+  }'
+```
+
+### Get API Key Information
+
+**GET** `/admin/apikeys/{key}`
+
+Retrieve information about a specific API key.
+
+**Headers:**
+
+- `X-API-Key`: Admin API key (required)
+
+**Path Parameters:**
+
+- `key` (required): The API key to retrieve information for
+
+**Response:**
+
+```json
+{
+  "key": "api-key-string",
+  "rate_limit": 100,
+  "window_seconds": 60,
+  "is_admin": false,
+  "created_at": "2024-01-01T00:00:00Z",
+  "expires_at": "2024-12-31T23:59:59Z",
+  "last_used_at": "2024-01-15T10:30:00Z",
+  "usage_count": 150
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:8080/admin/apikeys/api-key-here \
+  -H "X-API-Key: admin-key-here"
+```
+
+---
+
 ## Course Endpoints
 
 ### Get All Courses by Term
@@ -62,6 +167,10 @@ curl http://localhost:8080/health
 **GET** `/api/v1/courses/{term}`
 
 Retrieve all courses for a specific term.
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
 
 **Path Parameters:**
 
@@ -115,16 +224,20 @@ Retrieve all courses for a specific term.
 
 ```bash
 # Get all courses for Fall 2024
-curl http://localhost:8080/api/v1/courses/2024FALL
+curl http://localhost:8080/api/v1/courses/24f \
+  -H "X-API-Key: your-api-key-here"
 
 # Get all CS courses for Fall 2024
-curl "http://localhost:8080/api/v1/courses/2024FALL?prefix=CS"
+curl "http://localhost:8080/api/v1/courses/24f?prefix=cs" \
+  -H "X-API-Key: your-api-key-here"
 
 # Get CS 1337 for Fall 2024
-curl "http://localhost:8080/api/v1/courses/2024FALL?prefix=CS&number=1337"
+curl "http://localhost:8080/api/v1/courses/24f?prefix=cs&number=1337" \
+  -H "X-API-Key: your-api-key-here"
 
 # Get all ECS school courses for Fall 2024
-curl "http://localhost:8080/api/v1/courses/2024FALL?school=ECS"
+curl "http://localhost:8080/api/v1/courses/24f?school=ecs" \
+  -H "X-API-Key: your-api-key-here"
 ```
 
 ### Get Courses by Prefix
@@ -132,6 +245,10 @@ curl "http://localhost:8080/api/v1/courses/2024FALL?school=ECS"
 **GET** `/api/v1/courses/{term}/prefix/{prefix}`
 
 Retrieve all courses with a specific prefix for a term.
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
 
 **Path Parameters:**
 
@@ -143,7 +260,8 @@ Retrieve all courses with a specific prefix for a term.
 **Example:**
 
 ```bash
-curl http://localhost:8080/api/v1/courses/2024FALL/prefix/CS
+curl http://localhost:8080/api/v1/courses/24f/prefix/cs \
+  -H "X-API-Key: your-api-key-here"
 ```
 
 ### Get Courses by Number
@@ -151,6 +269,10 @@ curl http://localhost:8080/api/v1/courses/2024FALL/prefix/CS
 **GET** `/api/v1/courses/{term}/prefix/{prefix}/number/{number}`
 
 Retrieve specific courses by prefix and number for a term.
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
 
 **Path Parameters:**
 
@@ -163,7 +285,8 @@ Retrieve specific courses by prefix and number for a term.
 **Example:**
 
 ```bash
-curl http://localhost:8080/api/v1/courses/2024FALL/prefix/CS/number/1337
+curl http://localhost:8080/api/v1/courses/24f/prefix/cs/number/1337 \
+  -H "X-API-Key: your-api-key-here"
 ```
 
 ### Get Courses by School
@@ -171,6 +294,10 @@ curl http://localhost:8080/api/v1/courses/2024FALL/prefix/CS/number/1337
 **GET** `/api/v1/courses/{term}/school/{school}`
 
 Retrieve all courses from a specific school for a term.
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
 
 **Path Parameters:**
 
@@ -182,7 +309,8 @@ Retrieve all courses from a specific school for a term.
 **Example:**
 
 ```bash
-curl http://localhost:8080/api/v1/courses/2024FALL/school/ECS
+curl http://localhost:8080/api/v1/courses/24f/school/ecs \
+  -H "X-API-Key: your-api-key-here"
 ```
 
 ### Search Courses
@@ -190,6 +318,10 @@ curl http://localhost:8080/api/v1/courses/2024FALL/school/ECS
 **GET** `/api/v1/courses/{term}/search`
 
 Search courses by title, instructor, or other text fields.
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
 
 **Path Parameters:**
 
@@ -204,7 +336,8 @@ Search courses by title, instructor, or other text fields.
 **Example:**
 
 ```bash
-curl "http://localhost:8080/api/v1/courses/2024FALL/search?q=Computer Science"
+curl "http://localhost:8080/api/v1/courses/24f/search?q=Computer Science" \
+  -H "X-API-Key: your-api-key-here"
 ```
 
 ---
@@ -216,6 +349,10 @@ curl "http://localhost:8080/api/v1/courses/2024FALL/search?q=Computer Science"
 **GET** `/api/v1/terms/`
 
 Retrieve all available academic terms in the database.
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
 
 **Response:**
 
@@ -231,9 +368,10 @@ Retrieve all available academic terms in the database.
 ```
 
 **Example:**
-```bash
 
-curl http://localhost:8080/api/v1/terms/
+```bash
+curl http://localhost:8080/api/v1/terms/ \
+  -H "X-API-Key: your-api-key-here"
 ```
 
 ---
@@ -245,6 +383,10 @@ curl http://localhost:8080/api/v1/terms/
 **GET** `/api/v1/schools/{term}`
 
 Retrieve all schools that have courses in a specific term.
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
 
 **Path Parameters:**
 
@@ -272,7 +414,8 @@ Retrieve all schools that have courses in a specific term.
 **Example:**
 
 ```bash
-curl http://localhost:8080/api/v1/schools/2024FALL
+curl http://localhost:8080/api/v1/schools/24f \
+  -H "X-API-Key: your-api-key-here"
 ```
 
 ---
@@ -332,13 +475,20 @@ Each course object contains the following fields:
 |-------------|-------------|
 | 200 | Success |
 | 400 | Bad Request - Missing or invalid parameters |
+| 401 | Unauthorized - Missing or invalid API key |
+| 403 | Forbidden - Admin access required |
+| 429 | Too Many Requests - Rate limit exceeded |
 | 500 | Internal Server Error - Database or server error |
 
 ---
 
 ## Rate Limiting
 
-Currently, no rate limiting is implemented. Please be respectful of the API and avoid making excessive requests.
+The API implements rate limiting based on your API key configuration:
+
+- Each API key has a configurable rate limit and time window
+- Rate limits are enforced per API key
+- Rate limit information is included in your API key configuration
 
 ---
 
@@ -348,7 +498,7 @@ The API supports Cross-Origin Resource Sharing (CORS) and allows requests from a
 
 - Access-Control-Allow-Origin: *
 - Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
-- Access-Control-Allow-Headers: Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization
+- Access-Control-Allow-Headers: Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key
 
 ---
 
@@ -358,7 +508,11 @@ The API supports Cross-Origin Resource Sharing (CORS) and allows requests from a
 
 ```javascript
 // Get all CS courses for Fall 2024
-fetch('http://localhost:8080/api/v1/courses/2024FALL?prefix=CS')
+fetch('http://localhost:8080/api/v1/courses/24f?prefix=cs', {
+  headers: {
+    'X-API-Key': 'your-api-key-here'
+  }
+})
   .then(response => response.json())
   .then(data => console.log(data))
   .catch(error => console.error('Error:', error));
@@ -370,8 +524,10 @@ fetch('http://localhost:8080/api/v1/courses/2024FALL?prefix=CS')
 import requests
 
 # Get all CS courses for Fall 2024
-response = requests.get('http://localhost:8080/api/v1/courses/2024FALL',
-                       params={'prefix': 'CS'})
+headers = {'X-API-Key': 'your-api-key-here'}
+response = requests.get('http://localhost:8080/api/v1/courses/24f',
+                       params={'prefix': 'cs'},
+                       headers=headers)
 data = response.json()
 print(data)
 ```
@@ -380,16 +536,31 @@ print(data)
 
 ```bash
 # Get all available terms
-curl http://localhost:8080/api/v1/terms/
+curl http://localhost:8080/api/v1/terms/ \
+  -H "X-API-Key: your-api-key-here"
 
 # Get all courses for a term
-curl http://localhost:8080/api/v1/courses/2024FALL
+curl http://localhost:8080/api/v1/courses/24f \
+  -H "X-API-Key: your-api-key-here"
 
 # Search for courses
-curl "http://localhost:8080/api/v1/courses/2024FALL/search?q=Computer Science"
+curl "http://localhost:8080/api/v1/courses/24f/search?q=Computer Science" \
+  -H "X-API-Key: your-api-key-here"
 
 # Get schools for a term
-curl http://localhost:8080/api/v1/schools/2024FALL
+curl http://localhost:8080/api/v1/schools/24f \
+  -H "X-API-Key: your-api-key-here"
+
+# Create a new API key (admin only)
+curl -X POST http://localhost:8080/admin/apikeys \
+  -H "X-API-Key: admin-key-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rate_limit": 100,
+    "window_seconds": 60,
+    "is_admin": false,
+    "expires_at": "2024-12-31T23:59:59Z"
+  }'
 ```
 
 ---

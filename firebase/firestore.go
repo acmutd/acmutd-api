@@ -2,8 +2,11 @@ package firebase
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
@@ -238,4 +241,75 @@ func (c *Firestore) GetSchoolsByTerm(ctx context.Context, term string) ([]string
 	}
 
 	return schools, nil
+}
+
+func (c *Firestore) GenerateAPIKey(
+	ctx context.Context,
+	rateLimit int,
+	windowSeconds int,
+	isAdmin bool,
+	expiresAt time.Time,
+) (string, error) {
+	keyBytes := make([]byte, 16)
+	if _, err := rand.Read(keyBytes); err != nil {
+		return "", fmt.Errorf("failed to generate key: %w", err)
+	}
+	key := hex.EncodeToString(keyBytes)
+
+	apiKey := types.APIKey{
+		Key:           key,
+		RateLimit:     rateLimit,
+		WindowSeconds: windowSeconds,
+		IsAdmin:       isAdmin,
+		CreatedAt:     time.Now(),
+		ExpiresAt:     expiresAt,
+		LastUsedAt:    time.Time{}, // Zero time for initial value
+		UsageCount:    0,
+	}
+
+	_, err := c.Collection("api_keys").Doc(key).Set(ctx, apiKey)
+	return key, err
+}
+
+// ValidateAPIKey with expiration check
+func (c *Firestore) ValidateAPIKey(ctx context.Context, key string) (*types.APIKey, error) {
+	doc, err := c.Collection("api_keys").Doc(key).Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var apiKey types.APIKey
+	if err := doc.DataTo(&apiKey); err != nil {
+		return nil, err
+	}
+
+	// Check expiration
+	if !apiKey.ExpiresAt.IsZero() && time.Now().After(apiKey.ExpiresAt) {
+		return nil, fmt.Errorf("key expired")
+	}
+
+	return &apiKey, nil
+}
+
+// UpdateKeyUsage updates last used and usage count
+func (c *Firestore) UpdateKeyUsage(ctx context.Context, key string) error {
+	_, err := c.Collection("api_keys").Doc(key).Update(ctx, []firestore.Update{
+		{Path: "last_used_at", Value: time.Now()},
+		{Path: "usage_count", Value: firestore.Increment(1)},
+	})
+	return err
+}
+
+func (c *Firestore) GetAPIKey(ctx context.Context, key string) (*types.APIKey, error) {
+	doc, err := c.Collection("api_keys").Doc(key).Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var apiKey types.APIKey
+	if err := doc.DataTo(&apiKey); err != nil {
+		return nil, err
+	}
+
+	return &apiKey, nil
 }
