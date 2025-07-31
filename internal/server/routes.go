@@ -1,102 +1,61 @@
-package api
+package server
 
 import (
 	"net/http"
 	"time"
 
-	"github.com/acmutd/acmutd-api/firebase"
-	"github.com/acmutd/acmutd-api/types"
+	"github.com/acmutd/acmutd-api/internal/types"
 	"github.com/gin-gonic/gin"
-	"github.com/patrickmn/go-cache"
 )
 
-const (
-	apiKeyCacheTTL    = 5 * time.Minute
-	rateLimitCacheTTL = 1 * time.Minute
-)
-
-type API struct {
-	db          *firebase.Firestore
-	router      *gin.Engine
-	apiKeyCache *cache.Cache
-	rateLimiter *RateLimiter
-}
-
-func NewAPI(db *firebase.Firestore) *API {
+func (s *Server) RegisterRoutes() http.Handler {
 	router := gin.Default()
 
-	router.Use(func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-
-		c.Next()
-	})
-
-	rl := NewRateLimiter()
-	rl.StartCleanup(1 * time.Minute)
-
-	return &API{
-		db:          db,
-		router:      router,
-		apiKeyCache: cache.New(apiKeyCacheTTL, 10*time.Minute),
-		rateLimiter: rl,
-	}
-}
-
-func (api *API) SetupRoutes() {
 	// Health check endpoint
-	api.router.GET("/health", api.healthCheck)
+	router.GET("/health", s.healthCheck)
 	// Admin routes
-	admin := api.router.Group("/admin")
-	admin.Use(api.AuthMiddleware())
-	admin.Use(api.RateLimitMiddleware())
-	admin.Use(api.AdminMiddleware())
+	admin := router.Group("/admin")
+	admin.Use(s.AuthMiddleware())
+	admin.Use(s.RateLimitMiddleware())
+	admin.Use(s.AdminMiddleware())
 	{
-		admin.POST("/apikeys", api.createAPIKey)
-		admin.GET("/apikeys/:key", api.getAPIKey)
+		admin.POST("/apikeys", s.createAPIKey)
+		admin.GET("/apikeys/:key", s.getAPIKey)
 	}
 
 	// API v1 routes (protected)
-	v1 := api.router.Group("/api/v1")
-	v1.Use(api.AuthMiddleware())
-	v1.Use(api.RateLimitMiddleware())
+	v1 := router.Group("/api/v1")
+	v1.Use(s.AuthMiddleware())
+	v1.Use(s.RateLimitMiddleware())
 	{
 		// Course routes
 		courses := v1.Group("/courses")
 		{
-			courses.GET("/", api.getAllCourses)
-			courses.GET("/:term", api.getCoursesByTerm)
-			courses.GET("/:term/prefix/:prefix", api.getCoursesByPrefix)
-			courses.GET("/:term/prefix/:prefix/number/:number", api.getCoursesByNumber)
-			courses.GET("/:term/school/:school", api.getCoursesBySchool)
-			courses.GET("/:term/search", api.searchCourses)
+			courses.GET("/", s.getAllCourses)
+			courses.GET("/:term", s.getCoursesByTerm)
+			courses.GET("/:term/prefix/:prefix", s.getCoursesByPrefix)
+			courses.GET("/:term/prefix/:prefix/number/:number", s.getCoursesByNumber)
+			courses.GET("/:term/school/:school", s.getCoursesBySchool)
+			courses.GET("/:term/search", s.searchCourses)
 		}
 
 		terms := v1.Group("/terms")
 		{
-			terms.GET("/", api.getTerms)
+			terms.GET("/", s.getTerms)
 		}
 
 		// Schools routes
 		schools := v1.Group("/schools")
 		{
-			schools.GET("/:term", api.getSchoolsByTerm)
+			schools.GET("/:term", s.getSchoolsByTerm)
 		}
 	}
-}
 
-func (api *API) Run(addr string) error {
-	return api.router.Run(addr)
+	return router
 }
 
 // Health check endpoint
-func (api *API) healthCheck(c *gin.Context) {
+func (s *Server) healthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "healthy",
 		"message": "ACM API is running",
@@ -104,14 +63,14 @@ func (api *API) healthCheck(c *gin.Context) {
 }
 
 // Get all courses (requires term parameter)
-func (api *API) getAllCourses(c *gin.Context) {
+func (s *Server) getAllCourses(c *gin.Context) {
 	c.JSON(http.StatusBadRequest, gin.H{
 		"error": "Term parameter is required. Use /api/v1/courses/{term}",
 	})
 }
 
 // Get courses by term
-func (api *API) getCoursesByTerm(c *gin.Context) {
+func (s *Server) getCoursesByTerm(c *gin.Context) {
 	term := c.Param("term")
 	if term == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Term parameter is required"})
@@ -128,14 +87,14 @@ func (api *API) getCoursesByTerm(c *gin.Context) {
 
 	// Apply filters based on query parameters
 	if prefix != "" && number != "" {
-		courses, err = api.db.QueryByCourseNumber(c.Request.Context(), term, prefix, number)
+		courses, err = s.db.QueryByCourseNumber(c.Request.Context(), term, prefix, number)
 	} else if prefix != "" {
-		courses, err = api.db.QueryByCoursePrefix(c.Request.Context(), term, prefix)
+		courses, err = s.db.QueryByCoursePrefix(c.Request.Context(), term, prefix)
 	} else if school != "" {
-		courses, err = api.db.QueryBySchool(c.Request.Context(), term, school)
+		courses, err = s.db.QueryBySchool(c.Request.Context(), term, school)
 	} else {
 		// Get all courses for the term
-		courses, err = api.db.GetAllCoursesByTerm(c.Request.Context(), term)
+		courses, err = s.db.GetAllCoursesByTerm(c.Request.Context(), term)
 	}
 
 	if err != nil {
@@ -151,7 +110,7 @@ func (api *API) getCoursesByTerm(c *gin.Context) {
 }
 
 // Get courses by prefix
-func (api *API) getCoursesByPrefix(c *gin.Context) {
+func (s *Server) getCoursesByPrefix(c *gin.Context) {
 	term := c.Param("term")
 	prefix := c.Param("prefix")
 
@@ -160,7 +119,7 @@ func (api *API) getCoursesByPrefix(c *gin.Context) {
 		return
 	}
 
-	courses, err := api.db.QueryByCoursePrefix(c.Request.Context(), term, prefix)
+	courses, err := s.db.QueryByCoursePrefix(c.Request.Context(), term, prefix)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -175,7 +134,7 @@ func (api *API) getCoursesByPrefix(c *gin.Context) {
 }
 
 // Get courses by number
-func (api *API) getCoursesByNumber(c *gin.Context) {
+func (s *Server) getCoursesByNumber(c *gin.Context) {
 	term := c.Param("term")
 	prefix := c.Param("prefix")
 	number := c.Param("number")
@@ -185,7 +144,7 @@ func (api *API) getCoursesByNumber(c *gin.Context) {
 		return
 	}
 
-	courses, err := api.db.QueryByCourseNumber(c.Request.Context(), term, prefix, number)
+	courses, err := s.db.QueryByCourseNumber(c.Request.Context(), term, prefix, number)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -201,7 +160,7 @@ func (api *API) getCoursesByNumber(c *gin.Context) {
 }
 
 // Get courses by school
-func (api *API) getCoursesBySchool(c *gin.Context) {
+func (s *Server) getCoursesBySchool(c *gin.Context) {
 	term := c.Param("term")
 	school := c.Param("school")
 
@@ -210,7 +169,7 @@ func (api *API) getCoursesBySchool(c *gin.Context) {
 		return
 	}
 
-	courses, err := api.db.QueryBySchool(c.Request.Context(), term, school)
+	courses, err := s.db.QueryBySchool(c.Request.Context(), term, school)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -225,7 +184,7 @@ func (api *API) getCoursesBySchool(c *gin.Context) {
 }
 
 // Search courses
-func (api *API) searchCourses(c *gin.Context) {
+func (s *Server) searchCourses(c *gin.Context) {
 	term := c.Param("term")
 	query := c.Query("q")
 
@@ -239,7 +198,7 @@ func (api *API) searchCourses(c *gin.Context) {
 		return
 	}
 
-	courses, err := api.db.SearchCourses(c.Request.Context(), term, query)
+	courses, err := s.db.SearchCourses(c.Request.Context(), term, query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -254,7 +213,7 @@ func (api *API) searchCourses(c *gin.Context) {
 }
 
 // Get schools by term
-func (api *API) getSchoolsByTerm(c *gin.Context) {
+func (s *Server) getSchoolsByTerm(c *gin.Context) {
 	term := c.Param("term")
 
 	if term == "" {
@@ -262,7 +221,7 @@ func (api *API) getSchoolsByTerm(c *gin.Context) {
 		return
 	}
 
-	schools, err := api.db.GetSchoolsByTerm(c.Request.Context(), term)
+	schools, err := s.db.GetSchoolsByTerm(c.Request.Context(), term)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -275,8 +234,8 @@ func (api *API) getSchoolsByTerm(c *gin.Context) {
 	})
 }
 
-func (api *API) getTerms(c *gin.Context) {
-	terms, err := api.db.QueryAllTerms(c.Request.Context())
+func (s *Server) getTerms(c *gin.Context) {
+	terms, err := s.db.QueryAllTerms(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -288,7 +247,7 @@ func (api *API) getTerms(c *gin.Context) {
 	})
 }
 
-func (api *API) createAPIKey(c *gin.Context) {
+func (s *Server) createAPIKey(c *gin.Context) {
 	var req struct {
 		RateLimit     int    `json:"rate_limit" binding:"required"`
 		WindowSeconds int    `json:"window_seconds" binding:"required"`
@@ -327,7 +286,7 @@ func (api *API) createAPIKey(c *gin.Context) {
 		}
 	}
 
-	key, err := api.db.GenerateAPIKey(
+	key, err := s.db.GenerateAPIKey(
 		c.Request.Context(),
 		req.RateLimit,
 		req.WindowSeconds,
@@ -342,10 +301,10 @@ func (api *API) createAPIKey(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"key": key})
 }
 
-func (api *API) getAPIKey(c *gin.Context) {
+func (s *Server) getAPIKey(c *gin.Context) {
 	key := c.Param("key")
 
-	apiKey, err := api.db.GetAPIKey(c.Request.Context(), key)
+	apiKey, err := s.db.GetAPIKey(c.Request.Context(), key)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get API key"})
 		return

@@ -1,16 +1,16 @@
-package api
+package server
 
 import (
 	"context"
 	"net/http"
 	"time"
 
-	"github.com/acmutd/acmutd-api/types"
+	"github.com/acmutd/acmutd-api/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/patrickmn/go-cache"
 )
 
-func (api *API) AuthMiddleware() gin.HandlerFunc {
+func (api *Server) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.URL.Path == "/health" {
 			c.Next()
@@ -54,7 +54,7 @@ func (api *API) AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-func (api *API) RateLimitMiddleware() gin.HandlerFunc {
+func (api *Server) RateLimitMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.URL.Path == "/health" {
 			c.Next()
@@ -79,7 +79,7 @@ func (api *API) RateLimitMiddleware() gin.HandlerFunc {
 	}
 }
 
-func (api *API) AdminMiddleware() gin.HandlerFunc {
+func (api *Server) AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		keyData, exists := c.Get("api_key")
 		if !exists {

@@ -1,42 +1,16 @@
 services:
-  api:
+  app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: acm-api
+      target: prod
+    restart: unless-stopped
     ports:
-      - "8080:8080"
+      - ${PORT}:${PORT}
     environment:
-      - FIREBASE_CONFIG=${FIREBASE_CONFIG}
-      - NETID=${NETID}
-      - PASSWORD=${PASSWORD}
-      - CLASS_TERMS=${CLASS_TERMS}
-      - DOCKER_CONTAINER=true
-    volumes:
-      - ./output:/app/output
-      - ./.env:/app/.env:ro
-      - ./acmutd-api.json:/app/acmutd-api.json:ro
+      PORT: ${PORT}
+      FIREBASE_CONFIG: ${FIREBASE_CONFIG}
     networks:
-      - acm-network
-  scraper:
-    build:
-      context: ./scraper
-      dockerfile: Dockerfile
-    container_name: acm-scraper
-    environment:
-      - PYTHONPATH=/app/scripts
-      - NETID=${NETID}
-      - PASSWORD=${PASSWORD}
-      - CLASS_TERMS=${CLASS_TERMS}
-    volumes:
-      - ./scraper/scripts:/app/scripts
-      - ./output:/app/output
-    profiles:
-      - scraper
-
+      - acmutd-api
 networks:
-  acm-network:
-    driver: bridge
-
-volumes:
-  output:
+  acmutd-api:

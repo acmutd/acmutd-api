@@ -10,7 +10,7 @@ import (
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go/v4"
-	"github.com/acmutd/acmutd-api/types"
+	"github.com/acmutd/acmutd-api/internal/types"
 	"google.golang.org/api/iterator"
 )
 
