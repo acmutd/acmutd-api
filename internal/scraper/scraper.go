@@ -9,38 +9,44 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"github.com/acmutd/acmutd-api/firebase"
-	"github.com/acmutd/acmutd-api/types"
+	fb "firebase.google.com/go/v4"
+	"github.com/acmutd/acmutd-api/internal/firebase"
+	"github.com/acmutd/acmutd-api/internal/types"
+	"google.golang.org/api/option"
 )
 
 type ScraperService struct {
-	storageClient   *firebase.CloudStorage
 	firestoreClient *firebase.Firestore
+	outputDir       string
 }
 
-func NewScraperService(storageClient *firebase.CloudStorage, firestoreClient *firebase.Firestore) *ScraperService {
+func NewScraperService(outputDir string) *ScraperService {
+	sa := option.WithCredentialsFile(os.Getenv("FIREBASE_CONFIG"))
+	app, err := fb.NewApp(context.Background(), nil, sa)
+	if err != nil {
+		log.Fatalf("error initializing firebase app: %v\n", err)
+	}
+
+	firestoreClient, err := firebase.NewFirestore(context.Background(), app)
+	if err != nil {
+		log.Fatalf("error initializing firestore: %v\n", err)
+	}
+
 	return &ScraperService{
-		storageClient:   storageClient,
 		firestoreClient: firestoreClient,
+		outputDir:       outputDir,
 	}
 }
 
 func (s *ScraperService) CheckAndRunScraper() error {
-	var outputDir string
-	if os.Getenv("DOCKER_CONTAINER") == "true" {
-		outputDir = "/app/output"
-	} else {
-		outputDir = "./output"
-	}
 
-	if !s.isOutputEmpty(outputDir) {
+	if !s.isOutputEmpty(s.outputDir) {
 		log.Println("Output directory contains data. Skipping scraper run.")
 		return nil
 	}
 
-	err := s.runScraperContainer()
+	err := s.runPythonScraper()
 	if err != nil {
 		return err
 	}
@@ -60,30 +66,13 @@ func (s *ScraperService) CheckAndRunScraper() error {
 	return nil
 }
 
-func (s *ScraperService) runScraperContainer() error {
-	if os.Getenv("DOCKER_CONTAINER") == "true" {
-		return s.runPythonScraper()
-	}
-
-	// We're outside Docker, use docker compose to run the scraper
-	cmd := exec.Command("docker", "compose", "run", "--rm", "--no-TTY", "scraper")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	log.Println("Starting scraper container...")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to run scraper container: %w", err)
-	}
-
-	// Wait a bit for files to be written
-	time.Sleep(5 * time.Second)
-
-	log.Println("Scraper container completed successfully")
-	return nil
-}
-
 // This function runs when we're inside the Docker container
 func (s *ScraperService) runPythonScraper() error {
+	// Check if the script exists
+	if _, err := os.Stat("/app/scripts/main.py"); os.IsNotExist(err) {
+		return fmt.Errorf("main.py not found in /app/scripts")
+	}
+
 	cmd := exec.Command("python", "main.py")
 	cmd.Dir = "/app/scripts"
 	cmd.Stdout = os.Stdout
@@ -116,27 +105,21 @@ func (s *ScraperService) isOutputEmpty(outputDir string) bool {
 }
 
 func (s *ScraperService) GetScrapedData() (map[string][]types.Course, error) {
-	var outputDir string
-	if os.Getenv("DOCKER_CONTAINER") == "true" {
-		outputDir = "/app/output"
-	} else {
-		outputDir = "./output"
-	}
 
-	if s.isOutputEmpty(outputDir) {
+	if s.isOutputEmpty(s.outputDir) {
 		return nil, fmt.Errorf("no scraped data available. Run CheckAndRunScraper() first")
 	}
 
 	data := make(map[string][]types.Course)
 
-	entries, err := os.ReadDir(outputDir)
+	entries, err := os.ReadDir(s.outputDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read output directory: %w", err)
 	}
 
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			filePath := filepath.Join(outputDir, entry.Name())
+			filePath := filepath.Join(s.outputDir, entry.Name())
 			fileData, err := os.ReadFile(filePath)
 			if err != nil {
 				log.Printf("Warning: failed to read file %s: %v", filePath, err)

@@ -1,4 +1,16 @@
-FROM python:3.11-slim
+FROM golang:1.24.5-alpine AS build
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN go build -o main cmd/scraper/main.go
+
+# Install Chrome dependencies
+FROM python:3.11-slim AS chrome
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -8,7 +20,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN wget https://dl-ssl.google.com/linux/linux_signing_key.pub -O /tmp/google.pub \
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+    wget https://dl-ssl.google.com/linux/linux_signing_key.pub -O /tmp/google.pub \
     && gpg --no-default-keyring --keyring /etc/apt/keyrings/google-chrome.gpg --import /tmp/google.pub \
     && echo 'deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main' | tee /etc/apt/sources.list.d/google-chrome.list \
     && apt-get update \
@@ -23,32 +36,21 @@ RUN wget https://dl-ssl.google.com/linux/linux_signing_key.pub -O /tmp/google.pu
     apt-get update \
     && apt-get install -y chromium chromium-driver \
     && ln -s /usr/bin/chromium /usr/bin/google-chrome \
-    && ln -s /usr/bin/chromedriver /usr/local/bin/chromedriver;
-
+    && ln -s /usr/bin/chromedriver /usr/local/bin/chromedriver; \
+    fi
 ENV CHROME_BIN=/usr/bin/google-chrome
 ENV CHROME_PATH=/usr/bin/google-chrome
 
-# Create app directory
-WORKDIR /app
-
-# Copy requirements first for better caching
 COPY scripts/requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the scripts
-COPY scripts/ .
+WORKDIR /app
 
-# Create a non-root user and set up chromedriver permissions
-RUN useradd -m -u 1000 scraper && chown -R scraper:scraper /app \
-    && chown scraper:scraper /usr/local/bin/chromedriver \
-    && chmod +x /usr/local/bin/chromedriver
-USER scraper
+# Copy only necessary items
+COPY scripts/ /app/scripts/
+COPY --from=build /app/main /app/main
 
-# Set environment variables
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
+COPY ${FIREBASE_CONFIG} /app/${FIREBASE_CONFIG}
 
-# Default command
-CMD ["python", "main.py"]
+VOLUME /app/output
+CMD ["./main"]

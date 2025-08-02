@@ -2,13 +2,10 @@ from login import get_cookie
 from grab_data import get_prefixes, get_terms, scrape
 from save_data import save_data
 from os import environ
-import dotenv
-
-# Load .env file
-dotenv.load_dotenv()
 
 
 def main():
+    print("Starting scraper...")
     # Check for environmental variables
     if 'CLASS_TERMS' not in environ:
         print("CLASS_TERMS environmental variable not set.")
