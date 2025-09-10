@@ -5,11 +5,9 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from os import environ
-from tempfile import mkdtemp
 import time
 
 url = 'https://coursebook.utdallas.edu'
-
 
 def get_cookie():
     # Set up Selenium to use Chrome
@@ -19,22 +17,16 @@ def get_cookie():
         chrome_options.add_argument("--log-level=3")
         chrome_options.add_argument("--ignore-certificate-errors")
         chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--remote-debugging-port=9222")
         # chrome_options.add_experimental_option("detach", True)  # Keeps the browser window open
         # service = Service("./chromedriver")  # Specify the path to your chromedriver
-        # driver = webdriver.Chrome(service=service, options=chrome_options)
-        # Use the installed chromedriver
-        service = Service("/usr/local/bin/chromedriver")
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        print("Chrome driver started successfully.")
+        driver = webdriver.Chrome(options=chrome_options)
+
     except Exception as e:
         print(f"Failed to start the Chrome driver: {e}")
+        print("Go to https://googlechromelabs.github.io/chrome-for-testing/#stable to download the latest version of ChromeDriver. Copy the executable to the root folder of this project. You may also need the latest version of Chrome; make sure your chrome is updated.")
         exit(1)
 
-    # Open the coursebook website
+    # Open a website of your choice
     driver.get(url)
 
     # Click the button with id 'pauth_link'
@@ -42,8 +34,7 @@ def get_cookie():
         # Wait for up to 10 seconds for the button to be clickable
         wait = WebDriverWait(driver, 10)
         button = wait.until(EC.element_to_be_clickable((By.ID, 'pauth_link')))
-        print(f"Opened {url}")
-
+        
         # Click the button once it's clickable
         button.click()
         print("Button with ID 'pauth_link' clicked.")
@@ -55,10 +46,8 @@ def get_cookie():
     try:
         # Wait for up to 10 seconds for the login form to be visible
         wait = WebDriverWait(driver, 10)
-        netid_input = wait.until(
-            EC.visibility_of_element_located((By.ID, 'netid')))
-        password_input = wait.until(
-            EC.visibility_of_element_located((By.ID, 'password')))
+        netid_input = wait.until(EC.visibility_of_element_located((By.ID, 'netid')))
+        password_input = wait.until(EC.visibility_of_element_located((By.ID, 'password')))
         print("Entering credentials...")
         netid_input.send_keys(environ['NETID'])
         password_input.send_keys(environ['PASSWORD'])
@@ -69,8 +58,7 @@ def get_cookie():
 
     # Click the login button
     try:
-        login_button = wait.until(
-            EC.element_to_be_clickable((By.ID, 'login-button')))
+        login_button = wait.until(EC.element_to_be_clickable((By.ID, 'login-button')))
         login_button.click()
         print("Login button clicked.")
     except Exception as e:
