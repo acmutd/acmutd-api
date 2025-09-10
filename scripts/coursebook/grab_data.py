@@ -115,6 +115,8 @@ def scrape(session_id, term):
     schools = get_schools()
     print(f'Found {len(prefixes)} prefixes and {len(schools)} schools')
 
+    seen_sections = set() # used to avoid duplicates when gathering from multiple filters
+
     # Loop through all the classes
     for i,p in enumerate(prefixes):
         while True:
@@ -138,9 +140,10 @@ def scrape(session_id, term):
                 # If the "displaying maximum" text is found, need to do individual requests
                 # on the day modality to split up data
                 if 'displaying maximum' in response.text:
-                    print('\tCurrent term has more than 300 items, need to split up data query')
-                    new_data = find_big_term_prefix(p, term, session_id)
-                    all_data.extend(new_data)
+                    for d in new_data:
+                        if d['section_address'] not in seen_sections:
+                            all_data.append(d)
+                            seen_sections.add(d['section_address'])
                     break
 
                 # Get number of items
@@ -157,7 +160,9 @@ def scrape(session_id, term):
                     break
                 elif items == 1:
                     class_data = get_single_class(response.text, term, p)
-                    all_data.append(class_data)
+                    if class_data['section_address'] not in seen_sections:
+                        all_data.append(class_data)
+                        seen_sections.add(class_data['section_address'])
                     break
 
                 # Use the regex to find the desired part of the response
@@ -209,14 +214,61 @@ def scrape(session_id, term):
                     except Exception as e:
                         print(f'Failed to manually extract classes: {e}')
                 else:
-                    for i, d in enumerate(report_data):
-                        d['instructors'] = names[i]
-                        d['instructor_ids'] = ids[i]
-                    all_data.extend(report_data)
+                    for j, d in enumerate(report_data):
+                        d['instructors'] = names[j] if j < len(names) else ''
+                        d['instructor_ids'] = ids[j] if j < len(ids) else ''
+                        if d['section_address'] not in seen_sections:
+                            all_data.append(d)
+                            seen_sections.add(d['section_address'])
                 break
             except Exception as e:
                 print(f'Failed to get data for prefix {p}: {e}')
                 print(f'Prompting for new token...')
+                session_id = get_cookie()
+
+
+    print(f"\nChecking {len(schools)} schools for missing classes...")
+    for s in schools:
+        while True:
+            try:
+                print(f'Checking school {s}')
+                response = make_course_request(session_id, term, s)
+
+                if '(no items found)' in response.text:
+                    break
+
+                items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
+                items = int(items[0]) if items else 0
+                if items == 0:
+                    break
+
+                if items == 1:
+                    class_data = get_single_class(response.text, term, s)
+                    if class_data['section_address'] not in seen_sections:
+                        print(f"\tAdding missing class {class_data['section_address']} from {s}")
+                        all_data.append(class_data)
+                        seen_sections.add(class_data['section_address'])
+                    break
+
+                matches = re.findall(r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
+                if not matches:
+                    break
+                report_id = matches[-1]
+                monkey_response = make_monkey_request(report_id, session_id)
+                report_data = monkey_response.json().get('report_data', [])
+
+                ids, names = get_instructor_netids(response.text)
+                for j, d in enumerate(report_data):
+                    d['instructors'] = names[j] if j < len(names) else ''
+                    d['instructor_ids'] = ids[j] if j < len(ids) else ''
+                    if d['section_address'] not in seen_sections:
+                        print(f"\tAdding missing class {d['section_address']} from {s}")
+                        all_data.append(d)
+                        seen_sections.add(d['section_address'])
+                break
+
+            except Exception as e:
+                print(f'Failed to get data for school {s}: {e}')
                 session_id = get_cookie()
 
 

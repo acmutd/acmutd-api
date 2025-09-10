@@ -2,3 +2,4 @@ acmutd-api.json
 output/
 .env
 __pycache__/
+*.json
