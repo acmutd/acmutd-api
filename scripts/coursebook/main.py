@@ -1,5 +1,5 @@
-from src.login import get_cookie
-from src.grab_data import get_prefixes, scrape
+from login import get_cookie
+from grab_data import get_prefixes, scrape
 from os import environ
 import dotenv
 

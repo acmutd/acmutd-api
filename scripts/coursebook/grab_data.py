@@ -2,7 +2,7 @@ import requests
 import re
 import json
 from bs4 import BeautifulSoup
-from .login import get_cookie
+from login import get_cookie
 
 base_url = 'https://coursebook.utdallas.edu'
 url = 'https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog'

@@ -1,3 +1,4 @@
 acmutd-api.json
 output/
 .env
+__pycache__/
