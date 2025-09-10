@@ -45,6 +45,68 @@ def get_schools():
 
     return values
 
+def make_course_request(session_id, term, prefix, day=None):
+    """
+    Perform a POST to coursebook with given filters and return the response.
+    """
+
+    headers = {
+        'accept': '*/*',
+        'accept-language': 'en-US,en;q=0.9',
+        'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'cookie': f'PTGSESSID={session_id}',
+        'origin': 'https://coursebook.utdallas.edu',
+        'priority': 'u=1, i',
+        'referer': 'https://coursebook.utdallas.edu/',
+        'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Linux"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'x-requested-with': 'XMLHttpRequest',
+    }
+
+    if day is None:
+        data = {
+            'action': 'search',
+            's[]': [f'term_{term}', prefix]
+        }
+    else: 
+        data = {
+            'action': 'search',
+            's[]': [f'term_{term}', prefix, f'days_{day}']
+        }
+
+    response = requests.post(url, headers=headers, data=data, timeout=5)
+    if response.status_code != 200:
+        raise Exception(f"Failed course request: {response.text[:200]}")
+
+    return response
+
+def make_monkey_request(report_id, session_id):
+    monkey_headers = {
+        'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'accept-language': 'en-US,en;q=0.9',
+        'cookie': f'PTGSESSID={session_id}',
+        'priority': 'u=0, i',
+        'referer': 'https://coursebook.utdallas.edu/',
+        'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Linux"',
+        'sec-fetch-dest': 'document',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-site': 'same-origin',
+        'sec-fetch-user': '?1',
+        'upgrade-insecure-requests': '1',
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    }
+
+    monkey_url = f'https://coursebook.utdallas.edu/reportmonkey/cb11-export/{report_id}/json'
+    monkey_response = requests.get(monkey_url, headers=monkey_headers)
+    return monkey_response
+
 def scrape(session_id, term):
     # Keep track of all data
     all_data = []
@@ -56,52 +118,11 @@ def scrape(session_id, term):
     # Loop through all the classes
     for i,p in enumerate(prefixes):
         while True:
-            headers = {
-                'accept': '*/*',
-                'accept-language': 'en-US,en;q=0.9',
-                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'cookie': f'PTGSESSID={session_id}',
-                'origin': 'https://coursebook.utdallas.edu',
-                'priority': 'u=1, i',
-                'referer': 'https://coursebook.utdallas.edu/',
-                'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Linux"',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-origin',
-                'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-                'x-requested-with': 'XMLHttpRequest',
-            }
-
-            monkey_headers = {
-                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                'accept-language': 'en-US,en;q=0.9',
-                'cookie': f'PTGSESSID={session_id}',
-                'priority': 'u=0, i',
-                'referer': 'https://coursebook.utdallas.edu/',
-                'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Linux"',
-                'sec-fetch-dest': 'document',
-                'sec-fetch-mode': 'navigate',
-                'sec-fetch-site': 'same-origin',
-                'sec-fetch-user': '?1',
-                'upgrade-insecure-requests': '1',
-                'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-            }
-
             try:
                 print(f'[{i+1}/{len(prefixes)}] Getting data for {term} prefix {p}')
 
-                # Form the request data
-                data = {
-                    'action': 'search',
-                    's[]': [f'term_{term}', p]
-                }
-
                 # Get the response
-                response = requests.post(url, headers=headers, data=data, timeout=5)
+                response = make_course_request(session_id, term, p)
 
                 if response.status_code != 200:
                     print('Failed to get the data page')
@@ -149,9 +170,7 @@ def scrape(session_id, term):
                     raise Exception('Failed to find the report ID from the response')
                 report_id = matches[-1]
 
-                monkey_url = f'https://coursebook.utdallas.edu/reportmonkey/cb11-export/{report_id}/json'
-
-                monkey_response = requests.get(monkey_url, headers=monkey_headers)
+                monkey_response = make_monkey_request(report_id, session_id)
 
                 if monkey_response.status_code != 200:
                     print('Failed to get the report response')
@@ -165,6 +184,8 @@ def scrape(session_id, term):
                 ids, names = get_instructor_netids(response.text)
                 # Fallback: If report_data is missing or empty, manually extract each class
                 report_data = new_data.get('report_data', [])
+                if len(report_data) != items:
+                    print(f'\tWarning: Number of classes in report data ({len(report_data)}) does not match expected ({items})')
                 if not report_data:
                     print('\tReport monkey returned no classes, manually extracting each class...')
                     # Parse the HTML from response.text
@@ -216,52 +237,12 @@ def find_big_term_prefix(prefix, term, session_id):
     all_data = []
     for i, day in enumerate(DAYS):
         while True:
-            headers = {
-                'accept': '*/*',
-                'accept-language': 'en-US,en;q=0.9',
-                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'cookie': f'PTGSESSID={session_id}',
-                'origin': 'https://coursebook.utdallas.edu',
-                'priority': 'u=1, i',
-                'referer': 'https://coursebook.utdallas.edu/',
-                'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Linux"',
-                'sec-fetch-dest': 'empty',
-                'sec-fetch-mode': 'cors',
-                'sec-fetch-site': 'same-origin',
-                'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-                'x-requested-with': 'XMLHttpRequest',
-            }
-
-            monkey_headers = {
-                'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-                'accept-language': 'en-US,en;q=0.9',
-                'cookie': f'PTGSESSID={session_id}',
-                'priority': 'u=0, i',
-                'referer': 'https://coursebook.utdallas.edu/',
-                'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Linux"',
-                'sec-fetch-dest': 'document',
-                'sec-fetch-mode': 'navigate',
-                'sec-fetch-site': 'same-origin',
-                'sec-fetch-user': '?1',
-                'upgrade-insecure-requests': '1',
-                'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-            }
-
             try:
                 print(f'\t[{i+1}/{len(DAYS)}] Getting data for prefix {prefix} ({day})')
 
-                # Form the request data
-                data = {
-                    'action': 'search',
-                    's[]': [f'term_{term}', prefix, f'days_{day}']
-                }
-
                 # Get the response
-                response = requests.post(url, headers=headers, data=data, timeout=5)
+                # response = requests.post(url, headers=headers, data=data, timeout=5)
+                response = make_course_request(session_id, term, prefix, day)
 
                 if response.status_code != 200:
                     print('Failed to get the data page')
@@ -306,9 +287,7 @@ def find_big_term_prefix(prefix, term, session_id):
                     raise Exception('Failed to find the report ID from the response')
                 report_id = matches[-1]
 
-                monkey_url = f'https://coursebook.utdallas.edu/reportmonkey/cb11-export/{report_id}/json'
-
-                monkey_response = requests.get(monkey_url, headers=monkey_headers)
+                monkey_response = make_monkey_request(report_id, session_id)
 
                 if monkey_response.status_code != 200:
                     print('Failed to get the report response')
