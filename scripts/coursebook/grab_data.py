@@ -24,12 +24,34 @@ def get_prefixes():
 
     return values
 
+def get_schools():
+    res = requests.get(base_url)
+
+    if res.status_code != 200:
+        print('Failed to get coursebook website (schools)')
+        print(res.text)
+        exit(1)
+
+    matches = re.findall(r'<select class="combobox search-phrase" id="combobox_col">.*?</select>', res.text, re.S)
+    if not matches:
+        print("Failed to find schools dropdown")
+        return []
+
+    raw_schools = matches[0]
+
+    values = re.findall(r'value="([^"]+)"', raw_schools)
+
+    values = [v for v in values if v.strip() and not v.lower().startswith("any")]
+
+    return values
 
 def scrape(session_id, term):
     # Keep track of all data
     all_data = []
 
     prefixes = get_prefixes()
+    schools = get_schools()
+    print(f'Found {len(prefixes)} prefixes and {len(schools)} schools')
 
     # Loop through all the classes
     for i,p in enumerate(prefixes):
