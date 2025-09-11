@@ -77,7 +77,7 @@ def make_course_request(session_id, term, prefix=None, school=None, day=None, le
         's[]': s_params
     }
     
-    response = requests.post(url, headers=headers, data=data, timeout=5)
+    response = requests.post(url, headers=headers, data=data, timeout=10)
     if response.status_code != 200:
         raise Exception(f"Failed course request: {response.text[:200]}")
 
@@ -437,7 +437,7 @@ def find_big_term_school(school, term, session_id, days):
 
 # If only one class is found, no report monkey thing
 # is generated, which means we have to MANUALLY find the data smh
-def get_single_class(data, term, prefix):
+def get_single_class(data, term, filter):
     # Parse the string as JSON to get the HTML part
     data_json = json.loads(data)
     html_content = data_json["sethtml"]["#sr"]
@@ -452,18 +452,29 @@ def get_single_class(data, term, prefix):
     schedule_time = get_text_or_none(soup.find_all('span', class_='clstbl__resultrow__time'))
     location = get_text_or_none(soup.find_all('div', class_='clstbl__resultrow__location'))
 
-    # Split the section string up
-    a = class_section.split(" ")
-    b = a[1].split(".") if len(a) >= 2 else a[0].split(".")
-    number = b[0]
-    section = b[1]
-    section_addr = class_section.replace(' ', '').lower() + '.' + term
+    # Parse prefix, number, section from class_section
+    # Example: "ACCT 2301.001"
+    prefix, number, section = '', '', ''
+    try:
+        parts = class_section.split()
+        if len(parts) == 2:
+            prefix = parts[0]
+            num_sec = parts[1].split('.')
+            if len(num_sec) == 2:
+                number = num_sec[0]
+                section = num_sec[1]
+    except Exception:
+        print(f"Failed to parse class section: {class_section}")
+
+    section_addr = f"{prefix.lower()}{number}.{section}{term}"
 
     # EDGE EDGE CASE
     # For all "utd" prefixes, the course number is always "STAB" even though it doesn't show in the UI...
-    if prefix == 'utd' and number == '':
+    if (filter == 'utd' or prefix == 'utd') and number == '':
         number = 'stab'
-        section_addr = 'utdstab' + section_addr
+        section_addr = f"utdstab.{section}{term}" # might be section_addr = 'utdstab' + section_addr
+
+    print(f"Parsed single class: {prefix} {number}.{section} - {class_title}")
 
     # Get the instructor netid
     instructor_netids, instructors = get_instructor_netids(data)
