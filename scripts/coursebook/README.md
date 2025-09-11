@@ -14,7 +14,7 @@ NETID=[Your netid]
 PASSWORD=[Your password]
 ```
 
-> For CLASS_TERM, we need to use the format specified by Coursebook. It should be a 2-digit year number followed by either 'f' or 's', for "fall" or "spring" (eg. 23f, 24s, 24f, 25s).
+> For CLASS_TERM, we need to use the format specified by Coursebook. It should be a 2-digit year number followed by either 'f', 's', or 'u' for "fall", "spring", "summer" (eg. 23f, 24s, 24u, 24f). Note that the terms can listed be in any order.
 
 Then, run the code with:
 
