@@ -39,11 +39,10 @@ def get_dropdown_options(dropdown_ids):
     return options_data
 
 
-def make_course_request(session_id, term, prefix, day=None):
+def make_course_request(session_id, term, prefix=None, school=None, day=None, level=None):
     """
-    Perform a POST to coursebook with given filters and return the response.
+    Perform a POST to coursebook with dynamically added filters.
     """
-
     headers = {
         'accept': '*/*',
         'accept-language': 'en-US,en;q=0.9',
@@ -62,17 +61,22 @@ def make_course_request(session_id, term, prefix, day=None):
         'x-requested-with': 'XMLHttpRequest',
     }
 
-    if day is None:
-        data = {
-            'action': 'search',
-            's[]': [f'term_{term}', prefix]
-        }
-    else: 
-        data = {
-            'action': 'search',
-            's[]': [f'term_{term}', prefix, day]
-        }
-
+    # dynamically build the list of filters to include in the request
+    s_params = [f'term_{term}']
+    if prefix:
+        s_params.append(prefix)
+    if school:
+        s_params.append(school)
+    if day:
+        s_params.append(day)
+    if level:
+        s_params.append(level)
+    
+    data = {
+        'action': 'search',
+        's[]': s_params
+    }
+    
     response = requests.post(url, headers=headers, data=data, timeout=5)
     if response.status_code != 200:
         raise Exception(f"Failed course request: {response.text[:200]}")
@@ -129,7 +133,7 @@ def scrape(session_id, term):
                 print(f'[{i+1}/{len(prefixes)}] Getting data for {term} prefix {p}')
 
                 # Get the response
-                response = make_course_request(session_id, term, p)
+                response = make_course_request(session_id, term, prefix=p)
 
                 if response.status_code != 200:
                     print('Failed to get the data page')
@@ -239,7 +243,7 @@ def scrape(session_id, term):
         while True:
             try:
                 print(f'Checking school {s}')
-                response = make_course_request(session_id, term, s)
+                response = make_course_request(session_id, term, school=s)
 
                 if '(no items found)' in response.text:
                     break
@@ -308,7 +312,7 @@ def find_big_term_prefix(prefix, term, session_id, days):
 
                 # Get the response
                 # response = requests.post(url, headers=headers, data=data, timeout=5)
-                response = make_course_request(session_id, term, prefix, day)
+                response = make_course_request(session_id, term, prefix=prefix, day=day)
 
                 if response.status_code != 200:
                     print('Failed to get the data page')
@@ -384,7 +388,7 @@ def find_big_term_school(school, term, session_id, days):
             try:
                 print(f'\t[{i+1}/{len(days)}] Getting data for school {school} ({day})')
 
-                response = make_course_request(session_id, term, school, day)
+                response = make_course_request(session_id, term, school=school, day=day)
 
                 if response.status_code != 200:
                     raise Exception('Failed to get the data page')
