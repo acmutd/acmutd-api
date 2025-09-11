@@ -38,12 +38,30 @@ def get_schools():
         return []
 
     raw_schools = matches[0]
-
     values = re.findall(r'value="([^"]+)"', raw_schools)
-
     values = [v for v in values if v.strip() and not v.lower().startswith("any")]
 
     return values
+
+def get_days():
+    res = requests.get(base_url)
+
+    if res.status_code != 200:
+        print('Failed to get coursebook website (days)')
+        print(res.text)
+        exit(1)
+
+    matches = re.findall(r'<select class="combobox search-phrase" id="combobox_days">.*?</select>', res.text, re.S)
+    if not matches:
+        print("Failed to find days dropdown")
+        return []
+
+    raw_days = matches[0]
+    values = re.findall(r'value="([^"]+)"', raw_days)
+    values = [v for v in values if v.strip() and not v.lower().startswith("any")]
+
+    return values
+
 
 def make_course_request(session_id, term, prefix, day=None):
     """
@@ -76,7 +94,7 @@ def make_course_request(session_id, term, prefix, day=None):
     else: 
         data = {
             'action': 'search',
-            's[]': [f'term_{term}', prefix, f'days_{day}']
+            's[]': [f'term_{term}', prefix, day]
         }
 
     response = requests.post(url, headers=headers, data=data, timeout=5)
@@ -113,7 +131,9 @@ def scrape(session_id, term):
 
     prefixes = get_prefixes()
     schools = get_schools()
-    print(f'Found {len(prefixes)} prefixes and {len(schools)} schools')
+    days = get_days()
+
+    print(f'Found {len(prefixes)} prefixes and {len(schools)} schools and {len(days)} days')
 
     seen_sections = set() # used to avoid duplicates when gathering from multiple filters
 
@@ -140,6 +160,8 @@ def scrape(session_id, term):
                 # If the "displaying maximum" text is found, need to do individual requests
                 # on the day modality to split up data
                 if 'displaying maximum' in response.text:
+                    print('\tCurrent term has more than 300 items, need to split up data query')
+                    new_data = find_big_term_prefix(p, term, session_id, days)
                     for d in new_data:
                         if d['section_address'] not in seen_sections:
                             all_data.append(d)
@@ -237,6 +259,16 @@ def scrape(session_id, term):
                 if '(no items found)' in response.text:
                     break
 
+                if 'displaying maximum' in response.text:
+                    print(f'\tSchool {s} query exceeds 300 items, splitting by days...')
+                    new_data = find_big_term_school(s, term, session_id, days)
+                    for d in new_data:
+                        if d['section_address'] not in seen_sections:
+                            print(f"\tAdding missing class {d['section_address']} from {s}")
+                            all_data.append(d)
+                            seen_sections.add(d['section_address'])
+                    break
+
                 items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
                 items = int(items[0]) if items else 0
                 if items == 0:
@@ -278,19 +310,16 @@ def scrape(session_id, term):
         json.dump(all_data, f, indent=4)
 
 
-# List of all possible day modalities for classes
-DAYS = ['m', 't', 'w', 'r', 'f', 's', 'mw', 'tr', 'wf', 'mwf', 'rfs', 'mtwr']
-
 # THIS IS FOR A STUPID EDGE CASE
 # Coursebook has a limit of 300 items per query
 # If the number of items is greater than 300, we need to split up the query
 # into individual days
-def find_big_term_prefix(prefix, term, session_id):
+def find_big_term_prefix(prefix, term, session_id, days):
     all_data = []
-    for i, day in enumerate(DAYS):
+    for i, day in enumerate(days):
         while True:
             try:
-                print(f'\t[{i+1}/{len(DAYS)}] Getting data for prefix {prefix} ({day})')
+                print(f'\t[{i+1}/{len(days)}] Getting data for prefix {prefix} ({day})')
 
                 # Get the response
                 # response = requests.post(url, headers=headers, data=data, timeout=5)
@@ -359,6 +388,59 @@ def find_big_term_prefix(prefix, term, session_id):
                 break
             except Exception as e:
                 print(f'Failed to get data for prefix {prefix}, day {day}: {e}')
+                print(f'Prompting for new token...')
+                session_id = get_cookie()
+    return all_data
+
+def find_big_term_school(school, term, session_id, days):
+    all_data = []
+    for i, day in enumerate(days):
+        while True:
+            try:
+                print(f'\t[{i+1}/{len(days)}] Getting data for school {school} ({day})')
+
+                response = make_course_request(session_id, term, school, day)
+
+                if response.status_code != 200:
+                    raise Exception('Failed to get the data page')
+
+                if '(no items found)' in response.text:
+                    print('\tNo items found')
+                    break
+
+                if 'displaying maximum' in response.text:
+                    print('ERROR: Query with term, school, and day still exceeds 300 items. This should not happen.')
+                    print(f'Term {term}, School {school}, Day {day}')
+                    exit(1)
+
+                items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
+                items = int(items[0]) if items else 0
+                if items == 0:
+                    break
+                elif items == 1:
+                    class_data = get_single_class(response.text, term, school)
+                    all_data.append(class_data)
+                    break
+
+                matches = re.findall(r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
+                if not matches:
+                    raise Exception('Failed to find report ID from the response')
+                report_id = matches[-1]
+
+                monkey_response = make_monkey_request(report_id, session_id)
+                if monkey_response.status_code != 200:
+                    raise Exception('Failed to get the report response')
+
+                new_data = monkey_response.json().get('report_data', [])
+                ids, names = get_instructor_netids(response.text)
+
+                for j, d in enumerate(new_data):
+                    d['instructors'] = names[j] if j < len(names) else ''
+                    d['instructor_ids'] = ids[j] if j < len(ids) else ''
+                    all_data.append(d)
+                break
+            except Exception as e:
+                print(f'Failed to get data for school {school}, day {day}: {e}')
                 print(f'Prompting for new token...')
                 session_id = get_cookie()
     return all_data
