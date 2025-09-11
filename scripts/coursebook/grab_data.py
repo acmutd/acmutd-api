@@ -8,59 +8,35 @@ base_url = 'https://coursebook.utdallas.edu'
 url = 'https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog'
 output = 'classes.json'
 
-def get_prefixes():
-    res = requests.get(base_url)
+def get_dropdown_options(dropdown_ids):
+    try:
+        res = requests.get(base_url, timeout=5)
+        res.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f'Failed to get coursebook website: {e}')
+        return {}
 
-    if res.status_code != 200:
-        print('Failed to get coursebook website')
-        print(res.text)
-        exit(1)
+    options_data = {}
 
-    matches = re.findall(r'\<option value="cp_acct.*\<\/select\>', res.text)
-    raw_pre = matches[0]
-    
-    # Use regex to extract all value fields
-    values = re.findall(r'value="([^"]+)"', raw_pre)
+    # for each dropdown id, match the <select> element and extract the options
+    for dropdown_id in dropdown_ids:
+        pattern = fr'<select .*?id="{re.escape(dropdown_id)}".*?>\s*(.*?)\s*</select>'
+        matches = re.findall(pattern, res.text, re.DOTALL)
+        
+        if not matches:
+            print(f"Warning: Failed to find dropdown with ID '{dropdown_id}'")
+            options_data[dropdown_id] = []
+            continue
 
-    return values
+        raw_options = matches[0]
+        values = re.findall(r'value="([^"]+)"', raw_options)
+        
+        # filter out empty and "any" values, i.e. "Any School" or "Any Level"
+        values = [v for v in values if v.strip() and not v.lower().startswith("any")]
+        
+        options_data[dropdown_id] = values
 
-def get_schools():
-    res = requests.get(base_url)
-
-    if res.status_code != 200:
-        print('Failed to get coursebook website (schools)')
-        print(res.text)
-        exit(1)
-
-    matches = re.findall(r'<select class="combobox search-phrase" id="combobox_col">.*?</select>', res.text, re.S)
-    if not matches:
-        print("Failed to find schools dropdown")
-        return []
-
-    raw_schools = matches[0]
-    values = re.findall(r'value="([^"]+)"', raw_schools)
-    values = [v for v in values if v.strip() and not v.lower().startswith("any")]
-
-    return values
-
-def get_days():
-    res = requests.get(base_url)
-
-    if res.status_code != 200:
-        print('Failed to get coursebook website (days)')
-        print(res.text)
-        exit(1)
-
-    matches = re.findall(r'<select class="combobox search-phrase" id="combobox_days">.*?</select>', res.text, re.S)
-    if not matches:
-        print("Failed to find days dropdown")
-        return []
-
-    raw_days = matches[0]
-    values = re.findall(r'value="([^"]+)"', raw_days)
-    values = [v for v in values if v.strip() and not v.lower().startswith("any")]
-
-    return values
+    return options_data
 
 
 def make_course_request(session_id, term, prefix, day=None):
@@ -129,11 +105,20 @@ def scrape(session_id, term):
     # Keep track of all data
     all_data = []
 
-    prefixes = get_prefixes()
-    schools = get_schools()
-    days = get_days()
+    # ids for each desired filtering dropdown
+    dropdown_ids = ['combobox_cp', 'combobox_col', 'combobox_days', 'combobox_clevel']
+    dropdown_options = get_dropdown_options(dropdown_ids)
 
-    print(f'Found {len(prefixes)} prefixes and {len(schools)} schools and {len(days)} days')
+    prefixes = dropdown_options.get('combobox_cp', [])
+    schools = dropdown_options.get('combobox_col', [])
+    days = dropdown_options.get('combobox_days', [])
+    levels = dropdown_options.get('combobox_clevel', [])
+
+    if not prefixes or not schools:
+        print("Could not retrieve all necessary dropdowns. Exiting.")
+        return
+
+    print(f'Found {len(prefixes)} prefixes, {len(schools)} schools, {len(days)} days, and {len(levels)} levels')
 
     seen_sections = set() # used to avoid duplicates when gathering from multiple filters
 
