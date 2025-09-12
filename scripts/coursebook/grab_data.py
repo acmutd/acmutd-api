@@ -8,6 +8,18 @@ base_url = 'https://coursebook.utdallas.edu'
 url = 'https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog'
 output = 'classes.json'
 
+DROPDOWN_PREFIX_ID = 'combobox_cp'
+DROPDOWN_SCHOOL_ID = 'combobox_col'
+DROPDOWN_DAYS_ID = 'combobox_days'
+DROPDOWN_LEVELS_ID = 'combobox_clevel'
+
+FILTER_TYPES_MAP = {
+    'prefix': DROPDOWN_PREFIX_ID,
+    'school': DROPDOWN_SCHOOL_ID,
+    'day': DROPDOWN_DAYS_ID,
+    'level': DROPDOWN_LEVELS_ID,
+}
+
 def get_dropdown_options(dropdown_ids):
     try:
         res = requests.get(base_url, timeout=5)
@@ -83,7 +95,7 @@ def make_course_request(session_id, term, prefix=None, school=None, day=None, le
 
     return response
 
-def make_monkey_request(report_id, session_id):
+def make_monkey_request(session_id, report_id):
     monkey_headers = {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'accept-language': 'en-US,en;q=0.9',
@@ -105,314 +117,30 @@ def make_monkey_request(report_id, session_id):
     monkey_response = requests.get(monkey_url, headers=monkey_headers)
     return monkey_response
 
-def scrape(session_id, term):
-    # Keep track of all data
-    all_data = {}
 
-    # ids for each desired filtering dropdown
-    dropdown_ids = ['combobox_cp', 'combobox_col', 'combobox_days', 'combobox_clevel']
-    dropdown_options = get_dropdown_options(dropdown_ids)
+def get_instructor_netids(data):
+    # Parse the string as JSON to get the HTML part
+    data_json = json.loads(data)
+    html_content = data_json["sethtml"]["#sr"]
 
-    prefixes = dropdown_options.get('combobox_cp', [])
-    schools = dropdown_options.get('combobox_col', [])
-    days = dropdown_options.get('combobox_days', [])
-    levels = dropdown_options.get('combobox_clevel', [])
+    # Parse the HTML using BeautifulSoup
+    soup = BeautifulSoup(html_content, 'html.parser')
 
-    if not prefixes or not schools:
-        print("Could not retrieve all necessary dropdowns. Exiting.")
-        return
-
-    print(f'Found {len(prefixes)} prefixes, {len(schools)} schools, {len(days)} days, and {len(levels)} levels')
-
-    # Loop through all the classes
-    for i,p in enumerate(prefixes):
-        while True:
-            try:
-                print(f'[{i+1}/{len(prefixes)}] Getting data for {term} prefix {p}')
-
-                # Get the response
-                response = make_course_request(session_id, term, prefix=p)
-
-                if response.status_code != 200:
-                    print('Failed to get the data page')
-                    print(response)
-                    print(response.text)
-                    raise Exception('Failed to get the data page')
-
-                # If 0 items
-                if '(no items found)' in response.text:
-                    print('\tNo items found')
-                    break
-
-                # If the "displaying maximum" text is found, need to do individual requests
-                # on the day modality to split up data
-                if 'displaying maximum' in response.text:
-                    print('\tCurrent term has more than 300 items, need to split up data query')
-                    find_big_term_prefix(p, term, session_id, days, all_data)
-                    break
-
-                # Get number of items
-                items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
-                if len(items) == 0:
-                    print('\tFailed to find number of items')
-                    raise Exception('Failed to find number of items')
-
-                items = int(items[0])
-                print(f"Number of classes detected in coursebook: {items}")
-
-                if items == 0:
-                    print('\tNo items found')
-                    break
-                elif items == 1:
-                    class_data = get_single_class(response.text, term, p)
-                    all_data[class_data['section_address']] = class_data
-                    break
-
-                # Use the regex to find the desired part of the response
-                matches = re.findall(r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
-
-                # Print the matched results
-                if len(matches) == 0:
-                    print('Failed to find the report ID from the response:')
-                    print(response.text)
-                    raise Exception('Failed to find the report ID from the response')
-                report_id = matches[-1]
-
-                monkey_response = make_monkey_request(report_id, session_id)
-
-                if monkey_response.status_code != 200:
-                    print('Failed to get the report response')
-                    print(monkey_response.text)
-                    raise Exception('Failed to get the report response')
-
-                new_data = monkey_response.json()
-
-                # Get the instructor netids
-                # and append the instructor ids to the data
-                ids, names = get_instructor_netids(response.text)
-                # Fallback: If report_data is missing or empty, manually extract each class
-                report_data = new_data.get('report_data', [])
-                if len(report_data) != items:
-                    print(f'\tWarning: Number of classes in report data ({len(report_data)}) does not match expected ({items})')
-                if not report_data:
-                    print('\tReport monkey returned no classes, manually extracting each class...')
-                    # Parse the HTML from response.text
-                    try:
-                        data_json = json.loads(response.text)
-                        html_content = data_json["sethtml"]["#sr"]
-                        soup = BeautifulSoup(html_content, 'html.parser')
-                        # Each course row typically has a clickable link with class 'stopbubble'
-                        course_links = soup.find_all('a', class_='stopbubble')
-                        for link in course_links:
-                            # For each course, get its HTML block and pass to get_single_class
-                            # Find the parent row (tr) and get its HTML
-                            parent_row = link.find_parent('tr')
-                            if parent_row:
-                                # Build a mini HTML table for this row
-                                mini_html = str(parent_row)
-                                # Wrap in the expected JSON structure for get_single_class
-                                mini_json = json.dumps({"sethtml": {"#sr": mini_html}})
-                                class_data = get_single_class(mini_json, term, p)
-                                all_data[class_data['section_address']] = class_data
-                    except Exception as e:
-                        print(f'Failed to manually extract classes: {e}')
-                else:
-                    for j, d in enumerate(report_data):
-                        d['instructors'] = names[j] if j < len(names) else ''
-                        d['instructor_ids'] = ids[j] if j < len(ids) else ''
-                        all_data[d['section_address']] = d
-                break
-            except Exception as e:
-                print(f'Failed to get data for prefix {p}: {e}')
-                print(f'Prompting for new token...')
-                session_id = get_cookie()
-
-
-    print(f"\nChecking {len(schools)} schools for missing classes...")
-    for s in schools:
-        while True:
-            try:
-                print(f'Checking school {s}')
-                response = make_course_request(session_id, term, school=s)
-
-                if '(no items found)' in response.text:
-                    break
-
-                if 'displaying maximum' in response.text:
-                    print(f'\tSchool {s} query exceeds 300 items, splitting by days...')
-                    find_big_term_school(s, term, session_id, all_data, days)
-                    break
-
-                items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
-                items = int(items[0]) if items else 0
-                if items == 0:
-                    break
-
-                elif items == 1:
-                    class_data = get_single_class(response.text, term, s)
-                    all_data[class_data['section_address']] = class_data
-                    break
-
-                matches = re.findall(r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
-                if not matches:
-                    break
-                report_id = matches[-1]
-                monkey_response = make_monkey_request(report_id, session_id)
-                report_data = monkey_response.json().get('report_data', [])
-
-                ids, names = get_instructor_netids(response.text)
-                for j, d in enumerate(report_data):
-                    d['instructors'] = names[j] if j < len(names) else ''
-                    d['instructor_ids'] = ids[j] if j < len(ids) else ''
-                    all_data[d['section_address']] = d
-                break
-
-            except Exception as e:
-                print(f'Failed to get data for school {s}: {e}')
-                session_id = get_cookie()
-
-
-    # Convert the set of unique JSON strings to a list of dictionaries
-    final_data = list(all_data.values())
-    print(f'\tGot {len(final_data)} unique classes for term {term}')
-
-    with open(f'classes_{term}.json', 'w') as f:
-        json.dump(final_data, f, indent=4)
-        print(f"Data saved to classes_{term}.json")
-
-
-# THIS IS FOR A STUPID EDGE CASE
-# Coursebook has a limit of 300 items per query
-# If the number of items is greater than 300, we need to split up the query
-# into individual days
-def find_big_term_prefix(prefix, term, session_id, all_data, days):
-    all_data = []
-    for i, day in enumerate(days):
-        while True:
-            try:
-                print(f'\t[{i+1}/{len(days)}] Getting data for prefix {prefix} ({day})')
-
-                # Get the response
-                # response = requests.post(url, headers=headers, data=data, timeout=5)
-                response = make_course_request(session_id, term, prefix=prefix, day=day)
-
-                if response.status_code != 200:
-                    print('Failed to get the data page')
-                    print(response)
-                    print(response.text)
-                    raise Exception('Failed to get the data page')
-
-                # If 0 items
-                if '(no items found)' in response.text:
-                    print('\tNo items found')
-                    break
-
-                # If the "displaying maximum" text is found, something is wrong...
-                if 'displaying maximum' in response.text:
-                    print('ERROR: Query with term, prefix, and day still exceeds 300 items. This should not happen.')
-                    print(f'Term {term}, Prefix {prefix}, Day {day}')
-                    exit(1)
-
-                # Get number of items
-                items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
-                if len(items) == 0:
-                    print('\tFailed to find number of items')
-                    raise Exception('Failed to find number of items')
-
-                items = int(items[0])
-
-                if items == 0:
-                    print('\tNo items found')
-                    break
-                elif items == 1:
-                    class_data = get_single_class(response.text, term, prefix)
-                    all_data[class_data['section_address']] = class_data
-                    break
-
-                # Use the regex to find the desired part of the response
-                matches = re.findall(r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
-
-                # Print the matched results
-                if len(matches) == 0:
-                    print('Failed to find the report ID from the response:')
-                    print(response.text)
-                    raise Exception('Failed to find the report ID from the response')
-                report_id = matches[-1]
-
-                monkey_response = make_monkey_request(report_id, session_id)
-
-                if monkey_response.status_code != 200:
-                    print('Failed to get the report response')
-                    print(monkey_response.text)
-                    raise Exception('Failed to get the report response')
-
-                new_data = monkey_response.json()
-
-                # Get the instructor netids
-                # and append the instructor ids to the data
-                ids, names = get_instructor_netids(response.text)
-                for i, d in enumerate(new_data['report_data']):
-                    d['instructors'] = names[i]
-                    d['instructor_ids'] = ids[i]
-                    all_data[d['section_address']] = d
-                break
-            except Exception as e:
-                print(f'Failed to get data for prefix {prefix}, day {day}: {e}')
-                print(f'Prompting for new token...')
-                session_id = get_cookie()
-    return all_data
-
-def find_big_term_school(school, term, session_id, all_data, days):
-    for i, day in enumerate(days):
-        while True:
-            try:
-                print(f'\t[{i+1}/{len(days)}] Getting data for school {school} ({day})')
-
-                response = make_course_request(session_id, term, school=school, day=day)
-
-                if response.status_code != 200:
-                    raise Exception('Failed to get the data page')
-
-                if '(no items found)' in response.text:
-                    print('\tNo items found')
-                    break
-
-                if 'displaying maximum' in response.text:
-                    print('ERROR: Query with term, school, and day still exceeds 300 items. This should not happen.')
-                    print(f'Term {term}, School {school}, Day {day}')
-                    exit(1)
-
-                items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
-                items = int(items[0]) if items else 0
-                if items == 0:
-                    break
-                elif items == 1:
-                    class_data = get_single_class(response.text, term, school)
-                    all_data[class_data['section_address']] = class_data
-                    break
-
-                matches = re.findall(r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
-                if not matches:
-                    raise Exception('Failed to find report ID from the response')
-                report_id = matches[-1]
-
-                monkey_response = make_monkey_request(report_id, session_id)
-                if monkey_response.status_code != 200:
-                    raise Exception('Failed to get the report response')
-
-                new_data = monkey_response.json().get('report_data', [])
-                ids, names = get_instructor_netids(response.text)
-
-                for j, d in enumerate(new_data):
-                    d['instructors'] = names[j] if j < len(names) else ''
-                    d['instructor_ids'] = ids[j] if j < len(ids) else ''
-                    all_data[d['section_address']] = d
-                break
-            except Exception as e:
-                print(f'Failed to get data for school {school}, day {day}: {e}')
-                print(f'Prompting for new token...')
-                session_id = get_cookie()
-    return all_data
+    # Extract the netid field
+    rows = soup.find_all('tr', class_='cb-row')
+    netids = []
+    names = []
+    for row in rows:
+        matches = re.findall(r'http:\/\/coursebook.utdallas.edu\/search\/(.*?)" title="(.*?)"', str(row))
+        if len(matches) == 0:
+            netids.append('')
+            names.append('')
+            continue
+        match_zipped = list(zip(*matches))
+        netids.append(', '.join(match_zipped[0]))
+        names.append(', '.join(match_zipped[1]))
+    
+    return netids, names
 
 
 # If only one class is found, no report monkey thing
@@ -454,7 +182,7 @@ def get_single_class(data, term, filter):
         number = 'stab'
         section_addr = f"utdstab.{section}{term}" # might be section_addr = 'utdstab' + section_addr
 
-    print(f"Parsed single class: {prefix} {number}.{section} - {class_title}")
+    print(f"Parsed single class: {prefix} {number}.{section}")
 
     # Get the instructor netid
     instructor_netids, instructors = get_instructor_netids(data)
@@ -478,32 +206,176 @@ def get_single_class(data, term, filter):
     }
 
 
-def get_instructor_netids(data):
-    # Parse the string as JSON to get the HTML part
-    data_json = json.loads(data)
-    html_content = data_json["sethtml"]["#sr"]
-
-    # Parse the HTML using BeautifulSoup
-    soup = BeautifulSoup(html_content, 'html.parser')
-
-    # Extract the netid field
-    rows = soup.find_all('tr', class_='cb-row')
-    netids = []
-    names = []
-    for row in rows:
-        matches = re.findall(r'http:\/\/coursebook.utdallas.edu\/search\/(.*?)" title="(.*?)"', str(row))
-        if len(matches) == 0:
-            netids.append('')
-            names.append('')
-            continue
-        match_zipped = list(zip(*matches))
-        netids.append(', '.join(match_zipped[0]))
-        names.append(', '.join(match_zipped[1]))
+def manually_parse_html_data(html_content, term, filter_value, all_data):
+    """
+    Manually extracts and processes class data from raw HTML content.
+    """
+    try:
+        data_json = json.loads(html_content)
+        html_content = data_json["sethtml"]["#sr"]
+    except json.JSONDecodeError:
+        pass
     
-    return netids, names
+    soup = BeautifulSoup(html_content, 'html.parser')
+    course_links = soup.find_all('a', class_='stopbubble')
+    for link in course_links:
+        parent_row = link.find_parent('tr')
+        if parent_row:
+            mini_html = str(parent_row)
+            mini_json = json.dumps({"sethtml": {"#sr": mini_html}})
+            class_data = get_single_class(mini_json, term, filter_value)
+            all_data[class_data['section_address']] = class_data
 
 
 def get_text_or_none(out):
     if not out:
         return ""
     return out[0].text.strip()
+
+
+def make_request_with_retry(request_func, session_id, *args, **kwargs):
+    """
+    Wraps a request function and retries on failure, refreshing the session ID.
+    """
+    max_retries = 3
+    retries = 0
+    current_session_id = session_id
+    
+    while retries < max_retries:
+        try:
+            response = request_func(current_session_id, *args, **kwargs)
+            return response, current_session_id
+        except (requests.exceptions.RequestException, Exception) as e:
+            print(f'An error occurred: {e}. Retrying with a new session token...')
+            retries += 1
+            current_session_id = get_cookie()
+            print(f'Attempt {retries}/{max_retries} with new session ID.')
+    
+    raise Exception(f'Failed to complete request after {max_retries} retries.')
+
+
+def process_filters(session_id, term, all_data, dropdown_options, filters, filter_order):
+    """
+    Recursively processes filters to scrape course data.
+    """
+
+    # base case: no more filters to apply
+    if not filter_order:
+        pass
+
+    else:
+        # get the next filter type and its options
+        current_filter_type = filter_order[0]
+        remaining_filter_order = filter_order[1:]
+        
+        options_key = FILTER_TYPES_MAP.get(current_filter_type)
+        options = dropdown_options.get(options_key, [])
+        
+        for i, option_value in enumerate(options):
+            new_filters = filters.copy()
+            new_filters[current_filter_type] = option_value
+            print(f"[{i+1}/{len(options)}] Processing {current_filter_type}: {option_value}")
+            
+            while True:
+                try:
+                    response, session_id = make_request_with_retry(
+                        make_course_request,
+                        session_id,
+                        term,
+                        prefix=new_filters.get('prefix'),
+                        school=new_filters.get('school'),
+                        day=new_filters.get('day'),
+                        level=new_filters.get('level')
+                    )
+
+                    if response.status_code != 200:
+                        raise Exception('Failed to get the data page')
+
+                    # if no items are found, continue to the next option
+                    if '(no items found)' in response.text:
+                        print('\tNo items found.')
+                        break
+                    
+                    # if the query is too large, we break it down with more filters recursively by moving down the filter order
+                    if 'displaying maximum' in response.text:
+                        print(f'\tQuery for {new_filters} results in more than 300 sections, splitting...')
+                        session_id = process_filters(session_id, term, all_data, dropdown_options, new_filters, remaining_filter_order)
+                        break
+
+                    # check if there is only one item (report monkey download link not generated) --> nvm i handled this with the if/else below
+                    items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
+                    items = int(items[0]) if items else 0
+
+                    # try to get the report monkey endpoint to get the JSON data
+                    print(f'\tFound {items} classes for filters {new_filters}. Attempting to get report...')
+                    matches = re.findall(r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
+                    report_data = []
+
+                    if matches:
+                        report_id = matches[-1]
+                        
+                        try:
+                            monkey_response, session_id = make_request_with_retry(make_monkey_request, session_id, report_id)
+                            new_data = monkey_response.json()
+                            report_data = new_data.get('report_data', [])
+                        
+                        except json.JSONDecodeError:
+                            print(f'\tFailed to get report monkey data for {new_filters}: Expecting value: line 1 column 1 (char 0). Falling back to HTML parsing.')
+
+                        # if the report data is empty or missing then we scrape the html from coursebook, happens for certain reports of size 2-3 sometimes
+                        if not report_data:
+                            print('\tReport monkey returned no classes, manually extracting each class from original HTML...')
+                            manually_parse_html_data(response.text, term, new_filters.get('prefix', new_filters.get('school')), all_data)
+                        else:
+                            # If the report data is valid, process it
+                            print(f'\tSuccessfully retrieved {len(report_data)} classes from report.')
+                            ids, names = get_instructor_netids(response.text)
+                            for j, d in enumerate(report_data):
+                                d['instructors'] = names[j] if j < len(names) else ''
+                                d['instructor_ids'] = ids[j] if j < len(ids) else ''
+                                all_data[d['section_address']] = d
+                    else:
+                        # if the report is missing, we have to manually scrape the html from coursebook, happens when there is only 1 class found
+                        print(f'\tFailed to find report ID from the response. Manually extracting...')
+                        manually_parse_html_data(response.text, term, new_filters.get('prefix', new_filters.get('school')), all_data)
+
+                    # Break the while loop if a valid response was processed
+                    break
+
+                except Exception as e:
+                    print(f'Failed to get data for filters {new_filters}: {e}')
+                    print('Attempting to get a new session token...')
+                    session_id = get_cookie()
+        return session_id
+
+
+def scrape(session_id, term):
+    all_data = {}
+    dropdown_ids = ['combobox_cp', 'combobox_col', 'combobox_days', 'combobox_clevel']
+    dropdown_options = get_dropdown_options(dropdown_ids)
+
+    dropdown_ids = [DROPDOWN_PREFIX_ID, DROPDOWN_SCHOOL_ID, DROPDOWN_DAYS_ID, DROPDOWN_LEVELS_ID]
+    dropdown_options = get_dropdown_options(dropdown_ids)
+
+    prefixes = dropdown_options.get(DROPDOWN_PREFIX_ID, [])
+    schools = dropdown_options.get(DROPDOWN_SCHOOL_ID, [])
+    days = dropdown_options.get(DROPDOWN_DAYS_ID, [])
+    levels = dropdown_options.get(DROPDOWN_LEVELS_ID, [])
+
+    if not prefixes or not schools:
+        print("Could not retrieve all necessary dropdowns. Exiting.")
+        return
+
+    print(f'Found {len(prefixes)} prefixes, {len(schools)} schools, {len(days)} days, and {len(levels)} levels')
+
+    print("processing prefixes")
+    session_id = process_filters(session_id, term, all_data, dropdown_options, {}, ['prefix', 'day', 'level'])
+    print("processing schools")
+    session_id = process_filters(session_id, term, all_data, dropdown_options, {}, ['school', 'day', 'level'])
+
+    final_data = list(all_data.values())
+    print(f'\tGot {len(final_data)} unique classes for term {term}')
+
+    with open(f'classes_{term}.json', 'w') as f:
+        json.dump(final_data, f, indent=4)
+        print(f"Data saved to classes_{term}.json")
