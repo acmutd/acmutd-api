@@ -77,7 +77,7 @@ def make_course_request(session_id, term, prefix=None, school=None, day=None, le
         's[]': s_params
     }
     
-    response = requests.post(url, headers=headers, data=data, timeout=10)
+    response = requests.post(url, headers=headers, data=data, timeout=12)
     if response.status_code != 200:
         raise Exception(f"Failed course request: {response.text[:200]}")
 
@@ -107,7 +107,7 @@ def make_monkey_request(report_id, session_id):
 
 def scrape(session_id, term):
     # Keep track of all data
-    all_data = []
+    all_data = {}
 
     # ids for each desired filtering dropdown
     dropdown_ids = ['combobox_cp', 'combobox_col', 'combobox_days', 'combobox_clevel']
@@ -123,8 +123,6 @@ def scrape(session_id, term):
         return
 
     print(f'Found {len(prefixes)} prefixes, {len(schools)} schools, {len(days)} days, and {len(levels)} levels')
-
-    seen_sections = set() # used to avoid duplicates when gathering from multiple filters
 
     # Loop through all the classes
     for i,p in enumerate(prefixes):
@@ -150,11 +148,7 @@ def scrape(session_id, term):
                 # on the day modality to split up data
                 if 'displaying maximum' in response.text:
                     print('\tCurrent term has more than 300 items, need to split up data query')
-                    new_data = find_big_term_prefix(p, term, session_id, days)
-                    for d in new_data:
-                        if d['section_address'] not in seen_sections:
-                            all_data.append(d)
-                            seen_sections.add(d['section_address'])
+                    find_big_term_prefix(p, term, session_id, days, all_data)
                     break
 
                 # Get number of items
@@ -171,9 +165,7 @@ def scrape(session_id, term):
                     break
                 elif items == 1:
                     class_data = get_single_class(response.text, term, p)
-                    if class_data['section_address'] not in seen_sections:
-                        all_data.append(class_data)
-                        seen_sections.add(class_data['section_address'])
+                    all_data[class_data['section_address']] = class_data
                     break
 
                 # Use the regex to find the desired part of the response
@@ -221,16 +213,14 @@ def scrape(session_id, term):
                                 # Wrap in the expected JSON structure for get_single_class
                                 mini_json = json.dumps({"sethtml": {"#sr": mini_html}})
                                 class_data = get_single_class(mini_json, term, p)
-                                all_data.append(class_data)
+                                all_data[class_data['section_address']] = class_data
                     except Exception as e:
                         print(f'Failed to manually extract classes: {e}')
                 else:
                     for j, d in enumerate(report_data):
                         d['instructors'] = names[j] if j < len(names) else ''
                         d['instructor_ids'] = ids[j] if j < len(ids) else ''
-                        if d['section_address'] not in seen_sections:
-                            all_data.append(d)
-                            seen_sections.add(d['section_address'])
+                        all_data[d['section_address']] = d
                 break
             except Exception as e:
                 print(f'Failed to get data for prefix {p}: {e}')
@@ -250,12 +240,7 @@ def scrape(session_id, term):
 
                 if 'displaying maximum' in response.text:
                     print(f'\tSchool {s} query exceeds 300 items, splitting by days...')
-                    new_data = find_big_term_school(s, term, session_id, days)
-                    for d in new_data:
-                        if d['section_address'] not in seen_sections:
-                            print(f"\tAdding missing class {d['section_address']} from {s}")
-                            all_data.append(d)
-                            seen_sections.add(d['section_address'])
+                    find_big_term_school(s, term, session_id, all_data, days)
                     break
 
                 items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
@@ -263,12 +248,9 @@ def scrape(session_id, term):
                 if items == 0:
                     break
 
-                if items == 1:
+                elif items == 1:
                     class_data = get_single_class(response.text, term, s)
-                    if class_data['section_address'] not in seen_sections:
-                        print(f"\tAdding missing class {class_data['section_address']} from {s}")
-                        all_data.append(class_data)
-                        seen_sections.add(class_data['section_address'])
+                    all_data[class_data['section_address']] = class_data
                     break
 
                 matches = re.findall(r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
@@ -282,10 +264,7 @@ def scrape(session_id, term):
                 for j, d in enumerate(report_data):
                     d['instructors'] = names[j] if j < len(names) else ''
                     d['instructor_ids'] = ids[j] if j < len(ids) else ''
-                    if d['section_address'] not in seen_sections:
-                        print(f"\tAdding missing class {d['section_address']} from {s}")
-                        all_data.append(d)
-                        seen_sections.add(d['section_address'])
+                    all_data[d['section_address']] = d
                 break
 
             except Exception as e:
@@ -293,17 +272,20 @@ def scrape(session_id, term):
                 session_id = get_cookie()
 
 
-    # Write the data to a file
-    print(f'\tGot {len(all_data)} classes for term {term}')
+    # Convert the set of unique JSON strings to a list of dictionaries
+    final_data = list(all_data.values())
+    print(f'\tGot {len(final_data)} unique classes for term {term}')
+
     with open(f'classes_{term}.json', 'w') as f:
-        json.dump(all_data, f, indent=4)
+        json.dump(final_data, f, indent=4)
+        print(f"Data saved to classes_{term}.json")
 
 
 # THIS IS FOR A STUPID EDGE CASE
 # Coursebook has a limit of 300 items per query
 # If the number of items is greater than 300, we need to split up the query
 # into individual days
-def find_big_term_prefix(prefix, term, session_id, days):
+def find_big_term_prefix(prefix, term, session_id, all_data, days):
     all_data = []
     for i, day in enumerate(days):
         while True:
@@ -344,7 +326,7 @@ def find_big_term_prefix(prefix, term, session_id, days):
                     break
                 elif items == 1:
                     class_data = get_single_class(response.text, term, prefix)
-                    all_data.append(class_data)
+                    all_data[class_data['section_address']] = class_data
                     break
 
                 # Use the regex to find the desired part of the response
@@ -372,8 +354,7 @@ def find_big_term_prefix(prefix, term, session_id, days):
                 for i, d in enumerate(new_data['report_data']):
                     d['instructors'] = names[i]
                     d['instructor_ids'] = ids[i]
-                
-                all_data.extend(new_data['report_data'])
+                    all_data[d['section_address']] = d
                 break
             except Exception as e:
                 print(f'Failed to get data for prefix {prefix}, day {day}: {e}')
@@ -381,8 +362,7 @@ def find_big_term_prefix(prefix, term, session_id, days):
                 session_id = get_cookie()
     return all_data
 
-def find_big_term_school(school, term, session_id, days):
-    all_data = []
+def find_big_term_school(school, term, session_id, all_data, days):
     for i, day in enumerate(days):
         while True:
             try:
@@ -408,7 +388,7 @@ def find_big_term_school(school, term, session_id, days):
                     break
                 elif items == 1:
                     class_data = get_single_class(response.text, term, school)
-                    all_data.append(class_data)
+                    all_data[class_data['section_address']] = class_data
                     break
 
                 matches = re.findall(r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
@@ -426,7 +406,7 @@ def find_big_term_school(school, term, session_id, days):
                 for j, d in enumerate(new_data):
                     d['instructors'] = names[j] if j < len(names) else ''
                     d['instructor_ids'] = ids[j] if j < len(ids) else ''
-                    all_data.append(d)
+                    all_data[d['section_address']] = d
                 break
             except Exception as e:
                 print(f'Failed to get data for school {school}, day {day}: {e}')
