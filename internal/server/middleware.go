@@ -26,11 +26,17 @@ func (api *Server) AuthMiddleware() gin.HandlerFunc {
 		// Check cache first
 		if apiKeyData, found := api.apiKeyCache.Get(key); found {
 			keyData := apiKeyData.(*types.APIKey)
-			if keyData.ExpiresAt.Before(time.Now()) {
+			if keyData.ExpiresAt.Before(time.Now()) && !keyData.IsAdmin {
 				api.apiKeyCache.Delete(key)
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key expired"})
 				return
 			}
+
+			go func(key string) {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				api.db.UpdateKeyUsage(ctx, key)
+			}(key)
 			c.Set("api_key", apiKeyData.(*types.APIKey))
 			c.Next()
 			return
@@ -46,6 +52,12 @@ func (api *Server) AuthMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid API key"})
 			return
 		}
+
+		go func(key string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			api.db.UpdateKeyUsage(ctx, key)
+		}(key)
 
 		// Cache the valid key
 		api.apiKeyCache.Set(key, apiKey, cache.DefaultExpiration)
