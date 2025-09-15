@@ -25,6 +25,7 @@ type Server struct {
 	apiKeyCache *cache.Cache
 	rateLimiter *RateLimiter
 	port        int
+	adminKey    string
 }
 
 func NewServer() *http.Server {
@@ -41,11 +42,43 @@ func NewServer() *http.Server {
 		log.Fatalf("error initializing firestore: %v\n", err)
 	}
 
+	// check for existing admin key by using reserved doc ID
+	ctx := context.Background()
+	var adminKey string
+	const adminKeyDocID = "admin"
+	adminKeyDoc, err := db.Client.Collection("api_keys").Doc(adminKeyDocID).Get(ctx)
+	if err == nil && adminKeyDoc.Exists() {
+		var adminKeyObj struct{ Key string }
+		if err := adminKeyDoc.DataTo(&adminKeyObj); err == nil {
+			adminKey = adminKeyObj.Key
+		}
+	}
+	if adminKey == "" {
+		// generate new admin key and add prefix
+		key, err := db.GenerateAPIKey(ctx, 0, 0, true, time.Time{})
+		if err != nil {
+			log.Fatalf("failed to generate admin key: %v", err)
+		}
+
+		adminKey = "admin-" + key
+		// store under reserved doc ID for admin
+		_, err = db.Client.Collection("api_keys").Doc(adminKeyDocID).Set(ctx, map[string]interface{}{
+			"key":        adminKey,
+			"is_admin":   true,
+			"created_at": time.Now(),
+		})
+		if err != nil {
+			log.Fatalf("failed to store admin key: %v", err)
+		}
+		log.Printf("[acmutd-api] Admin key generated: %s", adminKey)
+	}
+
 	newServer := &Server{
 		db:          db,
 		apiKeyCache: cache.New(apiKeyCacheTTL, 10*time.Minute),
 		rateLimiter: NewRateLimiter(),
 		port:        port,
+		adminKey:    adminKey,
 	}
 
 	return &http.Server{

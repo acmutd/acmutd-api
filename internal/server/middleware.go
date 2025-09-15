@@ -81,27 +81,23 @@ func (api *Server) RateLimitMiddleware() gin.HandlerFunc {
 
 func (api *Server) AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		keyData, exists := c.Get("api_key")
-		if !exists {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authenticate first"})
+		key := c.GetHeader("X-API-Key")
+		if key == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key required"})
 			return
 		}
 
-		apiKey := keyData.(*types.APIKey)
-
-		if apiKey != nil {
-			go func(key string) {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				api.db.UpdateKeyUsage(ctx, key)
-			}(apiKey.Key)
-		}
-
-		c.Next()
-		if !apiKey.IsAdmin {
+		// check if the provided api key is the admin key
+		if key != api.adminKey {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin access required"})
 			return
 		}
+
+		go func(key string) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			api.db.UpdateKeyUsage(ctx, key)
+		}(key)
 
 		c.Next()
 	}
