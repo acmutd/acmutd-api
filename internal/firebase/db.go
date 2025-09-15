@@ -313,3 +313,55 @@ func (c *Firestore) GetAPIKey(ctx context.Context, key string) (*types.APIKey, e
 
 	return &apiKey, nil
 }
+
+// DeleteAllAdminKeys deletes all existing admin keys from Firebase
+func (c *Firestore) DeleteAllAdminKeys(ctx context.Context) error {
+	// Query all documents in api_keys collection where is_admin is true
+	iter := c.Collection("api_keys").Where("is_admin", "==", true).Documents(ctx)
+
+	batch := c.BulkWriter(ctx)
+
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to iterate admin keys: %w", err)
+		}
+
+		batch.Delete(doc.Ref)
+	}
+
+	batch.End()
+	return nil
+}
+
+// GenerateAdminAPIKey generates a new admin API key with the "admin-" prefix
+func (c *Firestore) GenerateAdminAPIKey(ctx context.Context) (string, error) {
+	keyBytes := make([]byte, 16)
+	if _, err := rand.Read(keyBytes); err != nil {
+		return "", fmt.Errorf("failed to generate key: %w", err)
+	}
+	baseKey := hex.EncodeToString(keyBytes)
+	adminKey := "admin-" + baseKey
+
+	apiKey := types.APIKey{
+		Key:           adminKey,
+		RateLimit:     0, // No rate limit for admin
+		WindowSeconds: 0,
+		IsAdmin:       true,
+		CreatedAt:     time.Now(),
+		ExpiresAt:     time.Time{}, // Never expires
+		LastUsedAt:    time.Time{},
+		UsageCount:    0,
+	}
+
+	// Store with the full admin key as the document ID
+	_, err := c.Collection("api_keys").Doc(adminKey).Set(ctx, apiKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to store admin key: %w", err)
+	}
+
+	return adminKey, nil
+}

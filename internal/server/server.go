@@ -42,36 +42,21 @@ func NewServer() *http.Server {
 		log.Fatalf("error initializing firestore: %v\n", err)
 	}
 
-	// check for existing admin key by using reserved doc ID
+	// Delete all existing admin keys and generate a new one
 	ctx := context.Background()
-	var adminKey string
-	const adminKeyDocID = "admin"
-	adminKeyDoc, err := db.Client.Collection("api_keys").Doc(adminKeyDocID).Get(ctx)
-	if err == nil && adminKeyDoc.Exists() {
-		var adminKeyObj struct{ Key string }
-		if err := adminKeyDoc.DataTo(&adminKeyObj); err == nil {
-			adminKey = adminKeyObj.Key
-		}
-	}
-	if adminKey == "" {
-		// generate new admin key and add prefix
-		key, err := db.GenerateAPIKey(ctx, 0, 0, true, time.Time{})
-		if err != nil {
-			log.Fatalf("failed to generate admin key: %v", err)
-		}
 
-		adminKey = "admin-" + key
-		// store under reserved doc ID for admin
-		_, err = db.Client.Collection("api_keys").Doc(adminKeyDocID).Set(ctx, map[string]interface{}{
-			"key":        adminKey,
-			"is_admin":   true,
-			"created_at": time.Now(),
-		})
-		if err != nil {
-			log.Fatalf("failed to store admin key: %v", err)
-		}
-		log.Printf("[acmutd-api] Admin key generated: %s", adminKey)
+	// Delete any existing admin keys
+	if err := db.DeleteAllAdminKeys(ctx); err != nil {
+		log.Printf("[acmutd-api] Warning: failed to delete existing admin keys: %v", err)
 	}
+
+	// Generate a new admin key in memory and store it in Firebase
+	adminKey, err := db.GenerateAdminAPIKey(ctx)
+	if err != nil {
+		log.Fatalf("failed to generate admin key: %v", err)
+	}
+
+	log.Printf("[acmutd-api] New admin key generated: %s", adminKey)
 
 	newServer := &Server{
 		db:          db,
