@@ -3,6 +3,7 @@ output/
 .env
 __pycache__/
 *.json
+!manual_matches.json
 *.xlsx
 *.xlsb
 *.csv
