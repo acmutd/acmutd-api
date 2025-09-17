@@ -69,12 +69,16 @@ func (s *ScraperService) CheckAndRunScraper() error {
 // This function runs when we're inside the Docker container
 func (s *ScraperService) runPythonScraper() error {
 	// Check if the script exists
-	if _, err := os.Stat("/app/scripts/coursebook/main.py"); os.IsNotExist(err) {
-		return fmt.Errorf("main.py not found in /app/scripts/coursebook")
+	scraper := os.Getenv("SCRAPER")
+	if scraper == "" {
+		return fmt.Errorf("SCRAPER environment variable not set")
+	}
+	if _, err := os.Stat("/app/scripts/" + scraper + "/main.py"); os.IsNotExist(err) {
+		return fmt.Errorf("main.py not found in /app/scripts/%s", scraper)
 	}
 
 	cmd := exec.Command("python", "main.py")
-	cmd.Dir = "/app/scripts/coursebook"
+	cmd.Dir = "/app/scripts/" + scraper
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(), "PYTHONPATH=/app/scripts/coursebook")
