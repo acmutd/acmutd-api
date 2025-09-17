@@ -73,15 +73,15 @@ func (s *ScraperService) runPythonScraper() error {
 	if scraper == "" {
 		return fmt.Errorf("SCRAPER environment variable not set")
 	}
-	if _, err := os.Stat("/app/scripts/" + scraper + "/main.py"); os.IsNotExist(err) {
-		return fmt.Errorf("main.py not found in /app/scripts/%s", scraper)
+	if _, err := os.Stat("scripts/" + scraper + "/main.py"); os.IsNotExist(err) {
+		return fmt.Errorf("main.py not found in scripts/%s", scraper)
 	}
 
 	cmd := exec.Command("python", "main.py")
-	cmd.Dir = "/app/scripts/" + scraper
+	cmd.Dir = filepath.Join("scripts", scraper)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(), "PYTHONPATH=/app/scripts/coursebook")
+	cmd.Env = append(os.Environ(), "PYTHONPATH=/scripts/coursebook")
 
 	log.Println("Running Python scraper from directory:", cmd.Dir)
 	log.Println("Python command:", cmd.String())
