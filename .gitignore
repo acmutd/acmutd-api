@@ -3,3 +3,7 @@ output/
 .env
 __pycache__/
 *.json
+!scripts/grades/column_order.json
+*.xlsx
+*.xlsb
+*.csv
