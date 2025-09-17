@@ -48,8 +48,9 @@ def excel_to_csv(excel_path, csv_path):
     padded_rows = []
     for row in rows:
         row = trim_trailing_empty(row)
+        row = [str(int(v)) if isinstance(v, float) and v.is_integer() else v for v in row]
         if len(row) < header_len:
-            row = row + [""] * (header_len - len(row))
+            row = row + ["" for _ in range(header_len - len(row))]
         elif len(row) > header_len:
             row = row[:header_len]
         padded_rows.append(row)
