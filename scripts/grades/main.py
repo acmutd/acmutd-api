@@ -35,8 +35,8 @@ def main():
 		sys.exit(1)
 	excel_path = os.path.join(excel_dir, excel_files[0])
 
-	# Output CSV path in old format: "Fall 2024.csv"
-	output_csv = os.path.join(os.path.dirname(__file__), f"{term_name}.csv")
+	# Output CSV path in put-excel-here directory
+	output_csv = os.path.join(excel_dir, f"{term_name}.csv")
 
 	print(f"Converting {excel_path} to {output_csv} for term {term_name}")
 	excel_to_csv(excel_path, output_csv)
