@@ -3,3 +3,6 @@ output/
 .env
 __pycache__/
 *.json
+*.xlsx
+*.xlsb
+*.csv
