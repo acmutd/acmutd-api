@@ -3,11 +3,6 @@ import openpyxl
 import os
 import csv
 
-def convert_to_csv(lines, csv_path):
-    reader = csv.reader(lines)
-    rows = list(reader)
-    min_cols = 27
-
 def excel_to_csv(excel_path, csv_path):
     ext = os.path.splitext(excel_path)[1].lower()
     rows = []
@@ -43,7 +38,7 @@ def excel_to_csv(excel_path, csv_path):
     else:
         raise ValueError("Unsupported file type: " + ext)
 
-    min_cols = 27
+    min_cols = len(rows[0])
     padded_rows = []
     for row in rows:
         row = row + ["" for _ in range(min_cols - len(row))]
