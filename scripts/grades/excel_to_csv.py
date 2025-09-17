@@ -3,6 +3,11 @@ import openpyxl
 import os
 import csv
 
+def trim_trailing_empty(row):
+    while row and (row[-1] is None or row[-1] == ""):
+        row.pop()
+    return row
+
 def excel_to_csv(excel_path, csv_path):
     ext = os.path.splitext(excel_path)[1].lower()
     rows = []
@@ -38,10 +43,15 @@ def excel_to_csv(excel_path, csv_path):
     else:
         raise ValueError("Unsupported file type: " + ext)
 
-    min_cols = len(rows[0])
+    header = trim_trailing_empty(rows[0])
+    header_len = len(header)
     padded_rows = []
     for row in rows:
-        row = row + ["" for _ in range(min_cols - len(row))]
+        row = trim_trailing_empty(row)
+        if len(row) < header_len:
+            row = row + [""] * (header_len - len(row))
+        elif len(row) > header_len:
+            row = row[:header_len]
         padded_rows.append(row)
 
     with open(csv_path, "w", newline="") as f:
