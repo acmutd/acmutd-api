@@ -39,9 +39,12 @@ def main():
         print(f"No .xlsx or .xlsb files found in {excel_dir}")
         sys.exit(1)
 
-    # Create out directory if it doesn't exist
+    # create out directory if it doesn't exist and clear existing files
     if not os.path.exists("out"):
         os.makedirs("out")
+    else:
+        for f in os.listdir("out"):
+            os.remove(os.path.join("out", f))
 
     for excel_file in excel_files:
         excel_path = os.path.join(excel_dir, excel_file)
