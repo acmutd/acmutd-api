@@ -1,0 +1,9 @@
+blinker==1.7.0
+selenium-wire
+selenium
+requests
+beautifulsoup4
+aiohttp
+packaging
+setuptools
+fuzzywuzzy
