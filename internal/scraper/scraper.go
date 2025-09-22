@@ -18,6 +18,7 @@ import (
 
 type ScraperService struct {
 	firestoreClient *firebase.Firestore
+	cloudStorage    *firebase.CloudStorage
 	scraper         string // coursebook, professor, grades
 }
 
@@ -33,8 +34,14 @@ func NewScraperService(scraper string) *ScraperService {
 		log.Fatalf("error initializing firestore: %v\n", err)
 	}
 
+	cloudStorage, err := firebase.NewCloudStorage(context.Background(), app)
+	if err != nil {
+		log.Fatalf("error initializing cloud storage: %v\n", err)
+	}
+
 	return &ScraperService{
 		firestoreClient: firestoreClient,
+		cloudStorage:    cloudStorage,
 		scraper:         scraper,
 	}
 }
@@ -45,7 +52,18 @@ func (s *ScraperService) CheckAndRunScraper() error {
 		return err
 	}
 
-	data, err := s.GetScrapedData()
+	switch s.scraper {
+	case "coursebook":
+		return s.processCoursebookData()
+	case "grades":
+		return s.uploadGradesCSVFiles()
+	default:
+		return fmt.Errorf("unsupported scraper type: %s", s.scraper)
+	}
+}
+
+func (s *ScraperService) processCoursebookData() error {
+	data, err := s.getCoursebookData()
 	if err != nil {
 		return err
 	}
@@ -57,6 +75,7 @@ func (s *ScraperService) CheckAndRunScraper() error {
 		s.firestoreClient.InsertClassesWithIndexes(context.Background(), courses, term)
 	}
 
+	log.Printf("Successfully processed coursebook data for %d terms", len(data))
 	return nil
 }
 
@@ -101,7 +120,7 @@ func (s *ScraperService) isOutputEmpty(outputDir string) bool {
 	return len(entries) == 0
 }
 
-func (s *ScraperService) GetScrapedData() (map[string][]types.Course, error) {
+func (s *ScraperService) getCoursebookData() (map[string][]types.Course, error) {
 
 	if s.isOutputEmpty("./scripts/" + s.scraper + "/out") {
 		return nil, fmt.Errorf("no scraped data available. Run CheckAndRunScraper() first")
@@ -159,5 +178,52 @@ func (s *ScraperService) CleanupOutput() error {
 	}
 
 	log.Println("Output directory cleaned")
+	return nil
+}
+
+func (s *ScraperService) uploadGradesCSVFiles() error {
+	outputDir := "./scripts/" + s.scraper + "/out"
+
+	if s.isOutputEmpty(outputDir) {
+		return fmt.Errorf("no CSV files available in output directory")
+	}
+
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return fmt.Errorf("failed to read output directory: %w", err)
+	}
+
+	ctx := context.Background()
+	uploadCount := 0
+
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".csv") {
+			filePath := filepath.Join(outputDir, entry.Name())
+
+			// Read the CSV file
+			fileData, err := os.ReadFile(filePath)
+			if err != nil {
+				log.Printf("Warning: failed to read CSV file %s: %v", filePath, err)
+				continue
+			}
+
+			// Upload to cloud storage with path: grades/{filename}
+			cloudPath := fmt.Sprintf("grades/%s", entry.Name())
+			err = s.cloudStorage.UploadFile(ctx, cloudPath, fileData)
+			if err != nil {
+				log.Printf("Warning: failed to upload CSV file %s to cloud storage: %v", entry.Name(), err)
+				continue
+			}
+
+			log.Printf("Successfully uploaded CSV file: %s to cloud storage at path: %s", entry.Name(), cloudPath)
+			uploadCount++
+		}
+	}
+
+	if uploadCount == 0 {
+		return fmt.Errorf("no CSV files were successfully uploaded")
+	}
+
+	log.Printf("Successfully uploaded %d CSV files to cloud storage", uploadCount)
 	return nil
 }
