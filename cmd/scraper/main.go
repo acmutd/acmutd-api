@@ -9,20 +9,16 @@ import (
 )
 
 func init() {
-	if _, err := os.Stat("/.dockerenv"); os.IsNotExist(err) {
-		err := godotenv.Load()
-		if err != nil {
-			log.Fatalf("error loading .env file: %v\n", err)
-		}
-	} else {
-		log.Println("Running in Docker container, skipping .env file loading")
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("error loading .env file: %v\n", err)
 	}
 	log.SetPrefix("[acmutd-scraper] ")
 }
 
 func main() {
-	outputDir := os.Getenv("OUTPUT_DIR")
-	scraper := scraper.NewScraperService(outputDir)
+	scraperToRun := os.Getenv("SCRAPER")
+	scraper := scraper.NewScraperService(scraperToRun)
 	if err := scraper.CheckAndRunScraper(); err != nil {
 		log.Fatalf("error running scraper: %v\n", err)
 	}

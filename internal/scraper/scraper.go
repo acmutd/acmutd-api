@@ -18,10 +18,10 @@ import (
 
 type ScraperService struct {
 	firestoreClient *firebase.Firestore
-	outputDir       string
+	scraper         string // coursebook, professor, grades
 }
 
-func NewScraperService(outputDir string) *ScraperService {
+func NewScraperService(scraper string) *ScraperService {
 	sa := option.WithCredentialsFile(os.Getenv("FIREBASE_CONFIG"))
 	app, err := fb.NewApp(context.Background(), nil, sa)
 	if err != nil {
@@ -35,17 +35,11 @@ func NewScraperService(outputDir string) *ScraperService {
 
 	return &ScraperService{
 		firestoreClient: firestoreClient,
-		outputDir:       outputDir,
+		scraper:         scraper,
 	}
 }
 
 func (s *ScraperService) CheckAndRunScraper() error {
-
-	if !s.isOutputEmpty(s.outputDir) {
-		log.Println("Output directory contains data. Skipping scraper run.")
-		return nil
-	}
-
 	err := s.runPythonScraper()
 	if err != nil {
 		return err
@@ -66,7 +60,6 @@ func (s *ScraperService) CheckAndRunScraper() error {
 	return nil
 }
 
-// This function runs when we're inside the Docker container
 func (s *ScraperService) runPythonScraper() error {
 	// Check if the script exists
 	scraper := os.Getenv("SCRAPER")
@@ -79,7 +72,7 @@ func (s *ScraperService) runPythonScraper() error {
 
 	cmd := exec.Command("python", "main.py")
 	cmd.Dir = filepath.Join("scripts", scraper)
-	cmd.Stdout = os.Stdout
+	cmd.Stdout = log.Writer()
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(), "PYTHONPATH=/scripts/coursebook")
 
@@ -110,20 +103,20 @@ func (s *ScraperService) isOutputEmpty(outputDir string) bool {
 
 func (s *ScraperService) GetScrapedData() (map[string][]types.Course, error) {
 
-	if s.isOutputEmpty(s.outputDir) {
+	if s.isOutputEmpty("./scripts/" + s.scraper + "/out") {
 		return nil, fmt.Errorf("no scraped data available. Run CheckAndRunScraper() first")
 	}
 
 	data := make(map[string][]types.Course)
 
-	entries, err := os.ReadDir(s.outputDir)
+	entries, err := os.ReadDir("./scripts/" + s.scraper + "/out")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read output directory: %w", err)
 	}
 
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			filePath := filepath.Join(s.outputDir, entry.Name())
+			filePath := filepath.Join("./scripts/"+s.scraper+"/out", entry.Name())
 			fileData, err := os.ReadFile(filePath)
 			if err != nil {
 				log.Printf("Warning: failed to read file %s: %v", filePath, err)
@@ -145,7 +138,7 @@ func (s *ScraperService) GetScrapedData() (map[string][]types.Course, error) {
 }
 
 func (s *ScraperService) CleanupOutput() error {
-	outputDir := "/app/output"
+	outputDir := "./scripts/" + s.scraper + "/out"
 
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		return nil
