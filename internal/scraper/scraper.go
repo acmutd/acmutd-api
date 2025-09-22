@@ -74,7 +74,7 @@ func (s *ScraperService) runPythonScraper() error {
 	cmd.Dir = filepath.Join("scripts", scraper)
 	cmd.Stdout = log.Writer()
 	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(), "PYTHONPATH=/scripts/coursebook")
+	cmd.Env = append(os.Environ(), "PYTHONPATH=/scripts/"+scraper)
 
 	log.Println("Running Python scraper from directory:", cmd.Dir)
 	log.Println("Python command:", cmd.String())

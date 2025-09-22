@@ -3,10 +3,12 @@ import openpyxl
 import os
 import csv
 
+
 def trim_trailing_empty(row):
     while row and (row[-1] is None or row[-1] == ""):
         row.pop()
     return row
+
 
 def excel_to_csv(excel_path, csv_path):
     ext = os.path.splitext(excel_path)[1].lower()
@@ -28,7 +30,8 @@ def excel_to_csv(excel_path, csv_path):
         try:
             from pyxlsb import open_workbook
         except ImportError:
-            raise ImportError("pyxlsb is required for .xlsb support. Install with 'pip install pyxlsb'.")
+            raise ImportError(
+                "pyxlsb is required for .xlsb support. Install with 'pip install pyxlsb'.")
         with open_workbook(excel_path) as wb:
             ws = wb.get_sheet('GradeDist')
             for i, row in enumerate(ws.rows()):
@@ -48,12 +51,16 @@ def excel_to_csv(excel_path, csv_path):
     padded_rows = []
     for row in rows:
         row = trim_trailing_empty(row)
-        row = [str(int(v)) if isinstance(v, float) and v.is_integer() else v for v in row]
+        row = [str(int(v)) if isinstance(v, float)
+               and v.is_integer() else v for v in row]
         if len(row) < header_len:
             row = row + ["" for _ in range(header_len - len(row))]
         elif len(row) > header_len:
             row = row[:header_len]
         padded_rows.append(row)
+
+    if os.path.exists(csv_path):
+        os.remove(csv_path)
 
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
