@@ -89,6 +89,9 @@ func (s *ScraperService) runPythonScraper() error {
 		return fmt.Errorf("main.py not found in scripts/%s", scraper)
 	}
 
+	if _, err := os.Stat(".venv/bin/activate"); !os.IsNotExist(err) {
+		exec.Command("source", ".venv/bin/activate")
+	}
 	cmd := exec.Command("python", "main.py")
 	cmd.Dir = filepath.Join("scripts", scraper)
 	cmd.Stdout = log.Writer()

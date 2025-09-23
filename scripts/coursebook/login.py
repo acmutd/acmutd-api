@@ -9,6 +9,7 @@ import time
 
 url = 'https://coursebook.utdallas.edu'
 
+
 def get_cookie():
     # Set up Selenium to use Chrome
     driver = None
@@ -34,7 +35,7 @@ def get_cookie():
         # Wait for up to 10 seconds for the button to be clickable
         wait = WebDriverWait(driver, 10)
         button = wait.until(EC.element_to_be_clickable((By.ID, 'pauth_link')))
-        
+
         # Click the button once it's clickable
         button.click()
         print("Button with ID 'pauth_link' clicked.")
@@ -46,8 +47,10 @@ def get_cookie():
     try:
         # Wait for up to 10 seconds for the login form to be visible
         wait = WebDriverWait(driver, 10)
-        netid_input = wait.until(EC.visibility_of_element_located((By.ID, 'netid')))
-        password_input = wait.until(EC.visibility_of_element_located((By.ID, 'password')))
+        netid_input = wait.until(
+            EC.visibility_of_element_located((By.ID, 'netid')))
+        password_input = wait.until(
+            EC.visibility_of_element_located((By.ID, 'password')))
         print("Entering credentials...")
         netid_input.send_keys(environ['NETID'])
         password_input.send_keys(environ['PASSWORD'])
@@ -58,7 +61,8 @@ def get_cookie():
 
     # Click the login button
     try:
-        login_button = wait.until(EC.element_to_be_clickable((By.ID, 'login-button')))
+        login_button = wait.until(
+            EC.element_to_be_clickable((By.ID, 'login-button')))
         login_button.click()
         print("Login button clicked.")
     except Exception as e:
@@ -78,7 +82,9 @@ def get_cookie():
     driver.find_element(By.ID, 'combobox_cp').send_keys('cp_acct')
 
     # Click the button with the text "Search Classes"
-    driver.find_element(By.XPATH, '//button[text()="Search Classes"]').click()
+    button = driver.find_element(By.XPATH, '//button[text()="Search Classes"]')
+    driver.execute_script("arguments[0].scrollIntoView(true);", button)
+    button.click()
 
     # Reload window
     driver.refresh()
