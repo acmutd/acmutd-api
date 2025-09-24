@@ -47,19 +47,51 @@ func NewScraperService(scraper string) *ScraperService {
 }
 
 func (s *ScraperService) CheckAndRunScraper() error {
+	// Always clear output before running scraper
+	if err := s.CleanupOutput(); err != nil {
+		return fmt.Errorf("failed to clean output directory: %w", err)
+	}
+
+	// run the specified scraper
 	err := s.runPythonScraper()
 	if err != nil {
 		return err
 	}
 
+	// determine whether to save locally or upload to Firebase
+	// don't clear output if saving locally
+	saveEnv := strings.ToLower(os.Getenv("SAVE_ENVIRONMENT"))
+	if saveEnv != "prod" && saveEnv != "dev" {
+		log.Printf("SAVE_ENVIRONMENT=%s: Data dumped locally to /out, skipping Firebase upload.", saveEnv)
+		return nil
+	}
+	if saveEnv == "prod" {
+		log.Println("SAVE_ENVIRONMENT=prod: Data will be uploaded to Firebase.")
+	} else if saveEnv == "dev" {
+		log.Println("SAVE_ENVIRONMENT=dev: Data will be uploaded to Firebase (development environment).")
+	}
+
+	// if SAVE_ENVIRONMENT is not local, upload to Firebase
+	// can add dev/prod environments later
+	var uploadErr error
 	switch s.scraper {
 	case "coursebook":
-		return s.uploadCoursebookCSV()
+		uploadErr = s.uploadCoursebookCSV()
 	case "grades":
-		return s.uploadGradesCSVFiles()
+		uploadErr = s.uploadGradesCSVFiles()
 	default:
-		return fmt.Errorf("unsupported scraper type: %s", s.scraper)
+		uploadErr = fmt.Errorf("unsupported scraper type: %s", s.scraper)
 	}
+
+	// data is always saved to /scripts/{scraper}/out regardless, but we clear it if we are uploading to Firebase
+	cleanupErr := s.CleanupOutput()
+	if uploadErr != nil {
+		return uploadErr
+	}
+	if cleanupErr != nil {
+		return fmt.Errorf("upload succeeded but failed to clean output directory: %w", cleanupErr)
+	}
+	return nil
 }
 
 func (s *ScraperService) uploadCoursebookCSV() error {

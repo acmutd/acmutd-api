@@ -1,6 +1,7 @@
 import requests
 import re
 import json
+import os
 from bs4 import BeautifulSoup
 from login import get_cookie
 
@@ -405,6 +406,10 @@ def scrape(session_id, term):
     final_data = list(all_data.values())
     print(f'\tGot {len(final_data)} unique classes for term {term}')
 
-    with open(f'out/classes_{term}.json', 'w') as f:
+    out_dir = 'out'
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+
+    with open(f'{out_dir}/classes_{term}.json', 'w') as f:
         json.dump(final_data, f, indent=4)
-        print(f"Data saved to classes_{term}.json")
+        print(f"Data saved to {out_dir}/classes_{term}.json")
