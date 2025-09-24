@@ -1,6 +1,7 @@
 import requests
 import re
 import json
+import os
 from bs4 import BeautifulSoup
 from login import get_cookie
 
@@ -405,7 +406,6 @@ def scrape(session_id, term):
     final_data = list(all_data.values())
     print(f'\tGot {len(final_data)} unique classes for term {term}')
 
-    import os
     out_dir = 'out'
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
