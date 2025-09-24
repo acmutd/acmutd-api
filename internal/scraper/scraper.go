@@ -54,7 +54,7 @@ func (s *ScraperService) CheckAndRunScraper() error {
 
 	switch s.scraper {
 	case "coursebook":
-		return s.processCoursebookData()
+		return s.uploadCoursebookCSV()
 	case "grades":
 		return s.uploadGradesCSVFiles()
 	default:
@@ -62,20 +62,33 @@ func (s *ScraperService) CheckAndRunScraper() error {
 	}
 }
 
-func (s *ScraperService) processCoursebookData() error {
-	data, err := s.getCoursebookData()
+func (s *ScraperService) uploadCoursebookCSV() error {
+	outputDir := "scripts/" + s.scraper + "/out"
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		return fmt.Errorf("output directory not found: %s", outputDir)
+	}
+
+	entries, err := os.ReadDir(outputDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read output directory: %w", err)
 	}
 
-	terms := strings.Split(os.Getenv("CLASS_TERMS"), ",")
-	s.firestoreClient.InsertTerms(context.Background(), terms)
-
-	for term, courses := range data {
-		s.firestoreClient.InsertClassesWithIndexes(context.Background(), courses, term)
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+			filePath := filepath.Join(outputDir, entry.Name())
+			fileData, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("failed to read file: %w", err)
+			}
+			cloudPath := fmt.Sprintf("coursebook/%s", entry.Name())
+			err = s.cloudStorage.UploadFile(context.Background(), cloudPath, fileData)
+			if err != nil {
+				return fmt.Errorf("failed to upload file to cloud storage: %w", err)
+			}
+			log.Printf("Successfully uploaded file: %s to cloud storage at path: %s", entry.Name(), cloudPath)
+		}
 	}
 
-	log.Printf("Successfully processed coursebook data for %d terms", len(data))
 	return nil
 }
 

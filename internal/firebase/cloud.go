@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"strings"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/storage"
@@ -37,6 +38,14 @@ func (s *CloudStorage) UploadFile(ctx context.Context, path string, data []byte)
 
 	object := bucket.Object(path)
 	writer := object.NewWriter(ctx)
+
+	fileType := strings.Split(path, ".")[1]
+
+	if fileType == "csv" {
+		writer.ObjectAttrs.ContentType = "text/csv"
+	} else if fileType == "json" {
+		writer.ObjectAttrs.ContentType = "application/json"
+	}
 
 	writer.ObjectAttrs.Metadata = map[string]string{
 		"firebaseStorageDownloadTokens": uuid.New().String(),
