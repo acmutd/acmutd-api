@@ -7,3 +7,4 @@ __pycache__/
 *.xlsx
 *.xlsb
 *.csv
+venv

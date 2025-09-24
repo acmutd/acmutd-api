@@ -30,28 +30,67 @@ command_exists() {
 install_python() {
     echo "Checking Python installation..."
 
+    # Prefer python found in PATH
+    PYTHON_PATH=$(which python 2>/dev/null)
+    if [ -n "$PYTHON_PATH" ]; then
+        PYTHON_VERSION=$($PYTHON_PATH --version 2>&1)
+        echo "Detected python in PATH: $PYTHON_PATH ($PYTHON_VERSION)"
+        if [[ $PYTHON_VERSION == *"Python 3"* ]]; then
+            export PYTHON_CMD="$PYTHON_PATH"
+            return
+        fi
+    fi
+
+    # Allow manual override
+    if [ -n "$PYTHON_CMD" ]; then
+        echo "Using manually specified Python: $PYTHON_CMD"
+        PYTHON_VERSION=$($PYTHON_CMD --version 2>&1)
+        if [[ $PYTHON_VERSION != *"Python 3"* ]]; then
+            echo "ERROR: PYTHON_CMD does not point to Python 3: $PYTHON_VERSION"
+            exit 1
+        fi
+        return
+    fi
+
     if command_exists python3; then
-        PYTHON_CMD="python3"
+        export PYTHON_CMD="python3"
         echo "Python3 found: $(python3 --version)"
     elif command_exists python; then
         PYTHON_VERSION=$(python --version 2>&1)
         if [[ $PYTHON_VERSION == *"Python 3"* ]]; then
-            PYTHON_CMD="python"
+            export PYTHON_CMD="python"
             echo "Python found: $PYTHON_VERSION"
         else
             echo "ERROR: Python 3 is required but Python 2 was found"
             exit 1
         fi
+    elif [ "$OS" = "windows" ]; then
+        # Try common Windows install locations
+        WIN_PYTHON_PATHS=(
+            "/c/Users/$USERNAME/AppData/Local/Programs/Python/Python3*/python.exe"
+            "/c/Python3*/python.exe"
+            "/c/Program Files/Python3*/python.exe"
+        )
+        for pathglob in "${WIN_PYTHON_PATHS[@]}"; do
+            for pyexe in $(ls $pathglob 2>/dev/null); do
+                PYTHON_VERSION=$($pyexe --version 2>&1)
+                if [[ $PYTHON_VERSION == *"Python 3"* ]]; then
+                    export PYTHON_CMD="$pyexe"
+                    echo "Found Python 3 at $pyexe: $PYTHON_VERSION"
+                    return
+                fi
+            done
+        done
+        echo "ERROR: Python 3 not found in PATH or common install locations."
+        echo "You can manually set PYTHON_CMD to your python.exe path before running setup.sh."
+        echo "Example: export PYTHON_CMD='/c/Users/YourName/AppData/Local/Programs/Python/Python3x/python.exe'"
+        exit 1
     else
-        echo "ERROR: Python 3 not found. Please install Python 3 manually:"
+        echo "ERROR: Python 3 not found in your Bash/WSL environment."
         case $OS in
             macos)
                 echo "  - Install via Homebrew: brew install python3"
                 echo "  - Or download from: https://www.python.org/downloads/"
-                ;;
-            windows)
-                echo "  - Download from: https://www.python.org/downloads/"
-                echo "  - Or install via Chocolatey: choco install python3"
                 ;;
             linux)
                 echo "  - Ubuntu/Debian: sudo apt-get install python3 python3-pip python3-venv"
@@ -172,6 +211,22 @@ setup_env() {
 # Function to set up Python virtual environment
 setup_python() {
     echo "Setting up Python virtual environment..."
+
+    # Check if Python supports venv before creating
+    if ! $PYTHON_CMD -m venv --help >/dev/null 2>&1; then
+        echo "ERROR: $PYTHON_CMD does not support 'venv' or is not a valid Python 3 interpreter."
+        echo "Please ensure you have Python 3 installed and available in your PATH."
+        case $OS in
+            windows)
+                echo "If you are on Windows, try running this setup in PowerShell or CMD instead of Bash."
+                echo "Or add your Python installation to your Bash PATH."
+                ;;
+            *)
+                echo "Install Python 3 and ensure it is available as 'python3' or 'python' in your shell."
+                ;;
+        esac
+        exit 1
+    fi
 
     # Create virtual environment if it doesn't exist
     if [ ! -d "venv" ]; then
