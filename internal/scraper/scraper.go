@@ -2,17 +2,14 @@ package scraper
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	fb "firebase.google.com/go/v4"
 	"github.com/acmutd/acmutd-api/internal/firebase"
-	"github.com/acmutd/acmutd-api/internal/types"
 	"google.golang.org/api/option"
 )
 
@@ -53,7 +50,8 @@ func (s *ScraperService) CheckAndRunScraper() error {
 	}
 
 	// run the specified scraper
-	err := s.runPythonScraper()
+	runner := NewPythonRunner(s.scraper)
+	err := runner.Run()
 	if err != nil {
 		return err
 	}
@@ -65,9 +63,11 @@ func (s *ScraperService) CheckAndRunScraper() error {
 		log.Printf("SAVE_ENVIRONMENT=%s: Data dumped locally to /out, skipping Firebase upload.", saveEnv)
 		return nil
 	}
-	if saveEnv == "prod" {
+
+	switch saveEnv {
+	case "prod":
 		log.Println("SAVE_ENVIRONMENT=prod: Data will be uploaded to Firebase.")
-	} else if saveEnv == "dev" {
+	case "dev":
 		log.Println("SAVE_ENVIRONMENT=dev: Data will be uploaded to Firebase (development environment).")
 	}
 
@@ -76,9 +76,11 @@ func (s *ScraperService) CheckAndRunScraper() error {
 	var uploadErr error
 	switch s.scraper {
 	case "coursebook":
-		uploadErr = s.uploadCoursebookCSV()
+		handler := NewCoursebookHandler(s)
+		uploadErr = handler.Upload()
 	case "grades":
-		uploadErr = s.uploadGradesCSVFiles()
+		handler := NewGradesHandler(s)
+		uploadErr = handler.Upload()
 	default:
 		uploadErr = fmt.Errorf("unsupported scraper type: %s", s.scraper)
 	}
@@ -92,118 +94,6 @@ func (s *ScraperService) CheckAndRunScraper() error {
 		return fmt.Errorf("upload succeeded but failed to clean output directory: %w", cleanupErr)
 	}
 	return nil
-}
-
-func (s *ScraperService) uploadCoursebookCSV() error {
-	outputDir := "scripts/" + s.scraper + "/out"
-	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-		return fmt.Errorf("output directory not found: %s", outputDir)
-	}
-
-	entries, err := os.ReadDir(outputDir)
-	if err != nil {
-		return fmt.Errorf("failed to read output directory: %w", err)
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			filePath := filepath.Join(outputDir, entry.Name())
-			fileData, err := os.ReadFile(filePath)
-			if err != nil {
-				return fmt.Errorf("failed to read file: %w", err)
-			}
-			cloudPath := fmt.Sprintf("coursebook/%s", entry.Name())
-			err = s.cloudStorage.UploadFile(context.Background(), cloudPath, fileData)
-			if err != nil {
-				return fmt.Errorf("failed to upload file to cloud storage: %w", err)
-			}
-			log.Printf("Successfully uploaded file: %s to cloud storage at path: %s", entry.Name(), cloudPath)
-		}
-	}
-
-	return nil
-}
-
-func (s *ScraperService) runPythonScraper() error {
-	// Check if the script exists
-	scraper := os.Getenv("SCRAPER")
-	if scraper == "" {
-		return fmt.Errorf("SCRAPER environment variable not set")
-	}
-	if _, err := os.Stat("scripts/" + scraper + "/main.py"); os.IsNotExist(err) {
-		return fmt.Errorf("main.py not found in scripts/%s", scraper)
-	}
-
-	var cmd *exec.Cmd
-	if _, err := os.Stat("venv/bin/activate"); !os.IsNotExist(err) {
-		cmd = exec.Command("bash", "-c", "source venv/bin/activate && python main.py")
-	} else {
-		cmd = exec.Command("python", "main.py")
-	}
-	cmd.Dir = filepath.Join("scripts", scraper)
-	cmd.Stdout = log.Writer()
-	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(), "PYTHONPATH=/scripts/"+scraper)
-
-	log.Println("Running Python scraper from directory:", cmd.Dir)
-	log.Println("Python command:", cmd.String())
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to run Python scraper: %w", err)
-	}
-
-	log.Println("Python scraper completed successfully")
-	return nil
-}
-
-func (s *ScraperService) isOutputEmpty(outputDir string) bool {
-	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-		return true
-	}
-
-	entries, err := os.ReadDir(outputDir)
-	if err != nil {
-		log.Printf("Error reading output directory: %v", err)
-		return true
-	}
-
-	return len(entries) == 0
-}
-
-func (s *ScraperService) getCoursebookData() (map[string][]types.Course, error) {
-
-	if s.isOutputEmpty("./scripts/" + s.scraper + "/out") {
-		return nil, fmt.Errorf("no scraped data available. Run CheckAndRunScraper() first")
-	}
-
-	data := make(map[string][]types.Course)
-
-	entries, err := os.ReadDir("./scripts/" + s.scraper + "/out")
-	if err != nil {
-		return nil, fmt.Errorf("failed to read output directory: %w", err)
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			filePath := filepath.Join("./scripts/"+s.scraper+"/out", entry.Name())
-			fileData, err := os.ReadFile(filePath)
-			if err != nil {
-				log.Printf("Warning: failed to read file %s: %v", filePath, err)
-				continue
-			}
-
-			// Extract term from filename (e.g., "classes_24f.json" -> "24f")
-			term := strings.TrimSuffix(strings.TrimPrefix(entry.Name(), "classes_"), ".json")
-			var courses []types.Course
-			if err := json.Unmarshal(fileData, &courses); err != nil {
-				log.Printf("Warning: failed to unmarshal file %s: %v", filePath, err)
-				continue
-			}
-			data[term] = courses
-		}
-	}
-
-	return data, nil
 }
 
 func (s *ScraperService) CleanupOutput() error {
@@ -228,52 +118,5 @@ func (s *ScraperService) CleanupOutput() error {
 	}
 
 	log.Println("Output directory cleaned")
-	return nil
-}
-
-func (s *ScraperService) uploadGradesCSVFiles() error {
-	outputDir := "./scripts/" + s.scraper + "/out"
-
-	if s.isOutputEmpty(outputDir) {
-		return fmt.Errorf("no CSV files available in output directory")
-	}
-
-	entries, err := os.ReadDir(outputDir)
-	if err != nil {
-		return fmt.Errorf("failed to read output directory: %w", err)
-	}
-
-	ctx := context.Background()
-	uploadCount := 0
-
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".csv") {
-			filePath := filepath.Join(outputDir, entry.Name())
-
-			// Read the CSV file
-			fileData, err := os.ReadFile(filePath)
-			if err != nil {
-				log.Printf("Warning: failed to read CSV file %s: %v", filePath, err)
-				continue
-			}
-
-			// Upload to cloud storage with path: grades/{filename}
-			cloudPath := fmt.Sprintf("grades/%s", entry.Name())
-			err = s.cloudStorage.UploadFile(ctx, cloudPath, fileData)
-			if err != nil {
-				log.Printf("Warning: failed to upload CSV file %s to cloud storage: %v", entry.Name(), err)
-				continue
-			}
-
-			log.Printf("Successfully uploaded CSV file: %s to cloud storage at path: %s", entry.Name(), cloudPath)
-			uploadCount++
-		}
-	}
-
-	if uploadCount == 0 {
-		return fmt.Errorf("no CSV files were successfully uploaded")
-	}
-
-	log.Printf("Successfully uploaded %d CSV files to cloud storage", uploadCount)
 	return nil
 }
