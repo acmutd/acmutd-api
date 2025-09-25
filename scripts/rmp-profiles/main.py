@@ -17,7 +17,6 @@ def main():
 
     with open(f'{out_dir}/rmp_data.json', 'w') as f:
         json.dump(rmp_data, f, indent=4)
-        print(f"Data saved to {out_dir}/rmp_data.json")
 
 
 if __name__ == "__main__":

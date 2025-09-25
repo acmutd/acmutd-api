@@ -273,9 +273,6 @@ def scrape_rmp_data(university_id):
         print(f"Query RMP time: {query_rmp_time - get_headers_time:.2f} seconds")
 
         if professor_data:
-            with open("ratings/rmp_ratings.json", "w", encoding="utf-8") as f:
-                json.dump(professor_data, f, indent=4, ensure_ascii=False)
-            print("Data extraction and file writing complete.")
             end_time = time.time()
             print(f"Total execution time: {end_time - start_time:.2f} seconds")
             return professor_data
