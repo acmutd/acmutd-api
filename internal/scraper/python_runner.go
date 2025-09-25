@@ -26,7 +26,7 @@ Otherwise, it will use the python command to run the script.
 It will return the error if it fails.
 */
 func (r *PythonRunner) Run() error {
-	scraper := os.Getenv("SCRAPER")
+	scraper := r.scraper
 	if scraper == "" {
 		return fmt.Errorf("SCRAPER environment variable not set")
 	}
