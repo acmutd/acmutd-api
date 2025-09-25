@@ -1,0 +1,68 @@
+package scraper
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type CoursebookHandler struct {
+	service *ScraperService
+}
+
+func NewCoursebookHandler(service *ScraperService) *CoursebookHandler {
+	return &CoursebookHandler{
+		service: service,
+	}
+}
+
+// Upload uploads coursebook data to cloud storage
+func (h *CoursebookHandler) Upload() error {
+	outputDir := "scripts/" + h.service.scraper + "/out"
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		return fmt.Errorf("output directory not found: %s", outputDir)
+	}
+
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return fmt.Errorf("failed to read output directory: %w", err)
+	}
+
+	uploadCount := 0
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+			if err := h.uploadJSONFile(outputDir, entry.Name()); err != nil {
+				log.Printf("Warning: failed to upload JSON file %s: %v", entry.Name(), err)
+				continue
+			}
+			uploadCount++
+		}
+	}
+
+	if uploadCount == 0 {
+		return fmt.Errorf("no JSON files were successfully uploaded")
+	}
+
+	log.Printf("Successfully uploaded %d JSON files to cloud storage", uploadCount)
+	return nil
+}
+
+func (h *CoursebookHandler) uploadJSONFile(outputDir, fileName string) error {
+	filePath := filepath.Join(outputDir, fileName)
+	fileData, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	cloudPath := fmt.Sprintf("coursebook/%s", fileName)
+	err = h.service.cloudStorage.UploadFile(context.Background(), cloudPath, fileData)
+	if err != nil {
+		return fmt.Errorf("failed to upload file to cloud storage: %w", err)
+	}
+
+	log.Printf("Successfully uploaded file: %s to cloud storage at path: %s", fileName, cloudPath)
+	return nil
+}
