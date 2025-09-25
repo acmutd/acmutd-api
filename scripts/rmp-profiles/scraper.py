@@ -81,7 +81,7 @@ def get_headers(driver, school_id):
     url_filter = "ratemyprofessors.com/graphql"
     graphql_headers = {}
     for request in driver.requests:
-        if url_filter in request.url:
+        if request.response and url_filter in request.url:
             print(f"\n[REQUEST] {request.url}")
             request_body = request.body
             m = re.findall(r'schoolID":"(.*?)"', str(request_body))
