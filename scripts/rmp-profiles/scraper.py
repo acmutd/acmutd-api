@@ -20,7 +20,7 @@ def setup_driver(headless=True):
         if headless:
             chrome_options.add_argument("--headless")
         driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(2)
+        driver.set_page_load_timeout(5)
         return driver
     except Exception as e:
         print(f"Failed to start the Chrome driver: {e}")
@@ -44,8 +44,9 @@ def close_cookie_popup(driver):
 
 def get_headers(driver, school_id):
     """Gets the necessary headers and school ID from the GraphQL request."""
+    url = f'https://www.ratemyprofessors.com/search/professors/{school_id}?q=*'
     try:
-        driver.get(f'https://www.ratemyprofessors.com/search/professors/{school_id}?q=*')
+        driver.get(url)
     except TimeoutException:
         driver.execute_script("window.stop();")
         try:
@@ -69,12 +70,13 @@ def get_headers(driver, school_id):
         pagination_button = WebDriverWait(driver, 5).until(
             EC.element_to_be_clickable((By.CLASS_NAME, "PaginationButton__StyledPaginationButton-txi1dr-1"))
         )
+        driver.execute_script("arguments[0].scrollIntoView(true);", pagination_button)
         driver.execute_script("arguments[0].click();", pagination_button)
         print("Clicked on the pagination button.")
     except Exception as e:
         print(f"Failed to find or click the pagination button: {e}")
 
-    time.sleep(4)
+    time.sleep(5)
 
     url_filter = "ratemyprofessors.com/graphql"
     graphql_headers = {}
