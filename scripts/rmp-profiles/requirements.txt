@@ -1,0 +1,5 @@
+selenium-wire
+selenium
+requests
+beautifulsoup4
+aiohttp

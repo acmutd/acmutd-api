@@ -36,7 +36,7 @@ func (r *PythonRunner) Run() error {
 
 	var cmd *exec.Cmd
 	if _, err := os.Stat("venv/bin/activate"); !os.IsNotExist(err) {
-		cmd = exec.Command("bash", "-c", "source venv/bin/activate && python main.py")
+		cmd = exec.Command("bash", "-c", "source ../../venv/bin/activate && python main.py")
 	} else {
 		cmd = exec.Command("python", "main.py")
 	}
