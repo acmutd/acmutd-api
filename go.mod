@@ -4,6 +4,7 @@ go 1.24.2
 
 require (
 	cloud.google.com/go/firestore v1.18.0
+	cloud.google.com/go/storage v1.53.0
 	firebase.google.com/go/v4 v4.16.1
 	github.com/gin-gonic/gin v1.10.1
 	github.com/google/uuid v1.6.0
@@ -21,7 +22,6 @@ require (
 	cloud.google.com/go/iam v1.5.2 // indirect
 	cloud.google.com/go/longrunning v0.6.7 // indirect
 	cloud.google.com/go/monitoring v1.24.2 // indirect
-	cloud.google.com/go/storage v1.53.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.27.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.51.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.51.0 // indirect
