@@ -222,7 +222,7 @@ func (s *ScraperService) RescrapeStart() error {
 		log.Printf("SAVE_ENVIRONMENT=%s: Will only scrape locally, skipping upload", saveEnv)
 	}
 
-	log.Println("Phase 1: Running all scrapers concurrently...")
+	log.Println("Phase 1: Running all scrapers sequentially...")
 	if err := s.runAllScrapers(); err != nil {
 		return fmt.Errorf("scraping phase failed: %w", err)
 	}
@@ -242,70 +242,64 @@ func (s *ScraperService) RescrapeStart() error {
 }
 
 func (s *ScraperService) runAllScrapers() error {
-	type scraperJob struct {
-		name   string
-		runner *PythonRunner
-	}
+	scraperOrder := []string{"grades", "rmp-profiles", "coursebook"}
 
-	jobs := []scraperJob{
-		{"coursebook", NewPythonRunner("coursebook")},
-		{"grades", NewPythonRunner("grades")},
-		{"rmp-profiles", NewPythonRunner("rmp-profiles")},
-	}
-
-	var wg sync.WaitGroup
-	errorCh := make(chan error, len(jobs))
-	successCh := make(chan string, len(jobs))
-
-	for _, job := range jobs {
-		wg.Add(1)
-		go func(j scraperJob) {
-			defer wg.Done()
-
-			log.Printf("Starting scraper: %s", j.name)
-
-			if err := s.cleanScraperOutput(j.name); err != nil {
-				errorCh <- fmt.Errorf("failed to clean output for %s: %w", j.name, err)
-				return
-			}
-
-			if err := j.runner.Run(); err != nil {
-				errorCh <- fmt.Errorf("failed to run %s scraper: %w", j.name, err)
-				return
-			}
-
-			successCh <- j.name
-			log.Printf("Successfully completed scraper: %s", j.name)
-		}(job)
-	}
-
-	wg.Wait()
-	close(errorCh)
-	close(successCh)
-
-	var errors []error
 	var successes []string
+	var errors []error
 
-	for err := range errorCh {
-		if err != nil {
+	for _, scraperName := range scraperOrder {
+		log.Printf("Starting scraper %d/%d: %s", len(successes)+1, len(scraperOrder), scraperName)
+
+		if err := s.cleanScraperOutput(scraperName); err != nil {
+			err = fmt.Errorf("failed to clean output for %s: %w", scraperName, err)
+			log.Printf("Scraping error: %v", err)
 			errors = append(errors, err)
+			continue
 		}
-	}
 
-	for success := range successCh {
-		successes = append(successes, success)
+		runner := NewPythonRunner(scraperName)
+		if err := runner.Run(); err != nil {
+			err = fmt.Errorf("failed to run %s scraper: %w", scraperName, err)
+			log.Printf("Scraping error: %v", err)
+			errors = append(errors, err)
+			continue
+		}
+
+		successes = append(successes, scraperName)
+		log.Printf("Successfully completed scraper %d/%d: %s", len(successes), len(scraperOrder), scraperName)
+
 	}
 
 	if len(errors) > 0 {
 		log.Printf("Scraping completed with %d errors, %d successes", len(errors), len(successes))
-		for _, err := range errors {
-			log.Printf("Scraping error: %v", err)
+		log.Printf("Failed scrapers: %v", s.getFailedScrapers(scraperOrder, successes))
+		log.Printf("Successful scrapers: %v", successes)
+
+		if len(successes) == 0 {
+			return fmt.Errorf("all scrapers failed, first error: %w", errors[0])
 		}
-		return fmt.Errorf("scraping failed with %d errors, first error: %w", len(errors), errors[0])
+
+		log.Printf("Warning: %d scrapers failed, but %d succeeded. Continuing with available data.", len(errors), len(successes))
 	}
 
-	log.Printf("All scrapers completed successfully (%d scrapers)", len(successes))
+	log.Printf("Scraper execution completed: %d/%d successful", len(successes), len(scraperOrder))
 	return nil
+}
+
+func (s *ScraperService) getFailedScrapers(allScrapers, successfulScrapers []string) []string {
+	successMap := make(map[string]bool)
+	for _, success := range successfulScrapers {
+		successMap[success] = true
+	}
+
+	var failed []string
+	for _, scraper := range allScrapers {
+		if !successMap[scraper] {
+			failed = append(failed, scraper)
+		}
+	}
+
+	return failed
 }
 
 func (s *ScraperService) uploadAllScrapers() error {
@@ -382,7 +376,7 @@ func (s *ScraperService) cleanScraperOutput(scraperName string) error {
 	outputDir := filepath.Join("scripts", scraperName, "out")
 
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-		log.Printf("Warning: output directory %s does not exist, skipping %s", outputDir, scraperName)
+		log.Printf("Output directory %s does not exist for %s, nothing to clean", outputDir, scraperName)
 		return nil
 	}
 
