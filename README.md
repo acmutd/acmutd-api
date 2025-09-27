@@ -39,7 +39,6 @@ This project consists of several key components:
 2. **Run the setup script**
 
    ```bash
-   chmod +x setup.sh
    ./setup.sh
    ```
 
