@@ -15,15 +15,15 @@ This project consists of several key components:
 
 - **Coursebook** - UTD's official course catalog and scheduling system
 - **Grade Distributions** - Historical grade data from UTD
-- **Rate My Professor** - Professor ratings and reviews
+- **RMP** - Professor ratings and reviews
 - **Integration Service** - Combines data from multiple sources
 
 ## Quick Start
 
 ### Prerequisites
 
-- **Go+** - [Download here](https://golang.org/dl/)
-- **Python+** - [Download here](https://www.python.org/downloads/)
+- **Go** - [Download here](https://golang.org/dl/)
+- **Python** - [Download here](https://www.python.org/downloads/)
 - **Firebase Project** - Set up a Firebase project with Firestore and Storage. You will need to set up a service account and download the service account key.
 - **Chrome/ChromeDriver** - Required for web scraping. This should be handled by the scripts
 
