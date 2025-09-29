@@ -3,12 +3,14 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.common.exceptions import TimeoutException
 import re
 import time
 import json
 import datetime
 import requests
+
 
 def setup_driver(headless=True):
     """Sets up and returns a Selenium WebDriver."""
@@ -17,10 +19,11 @@ def setup_driver(headless=True):
         chrome_options = Options()
         chrome_options.add_argument("--log-level=3")
         chrome_options.add_argument("--ignore-certificate-errors")
-        if headless:
-            chrome_options.add_argument("--headless")
+        # if headless:
+        #     chrome_options.add_argument("--headless")
+
+        chrome_options.page_load_strategy = 'none'
         driver = webdriver.Chrome(options=chrome_options)
-        driver.set_page_load_timeout(5)
         return driver
     except Exception as e:
         print(f"Failed to start the Chrome driver: {e}")
@@ -32,57 +35,43 @@ def close_cookie_popup(driver):
     """Closes the cookie popup if it exists."""
     try:
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2"))
+            EC.presence_of_element_located(
+                (By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2"))
         )
-        close_button = driver.find_element(By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2")
+        close_button = driver.find_element(
+            By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2")
         driver.execute_script("arguments[0].click();", close_button)
         print("Cookie popup closed.")
         time.sleep(2)
     except Exception as e:
         print("No cookie popup found or issue clicking it:", e)
+
+
+def click_pagination_button(driver):
+    """Clicks the pagination button."""
+    pagination_button = WebDriverWait(driver, 10).until(
+        EC.element_to_be_clickable(
+            (By.CLASS_NAME, "PaginationButton__StyledPaginationButton-txi1dr-1"))
+    )
+    time.sleep(1)
+    driver.execute_script("window.stop();")
+    pagination_button.click()
+    print("Clicked on the pagination button.")
 
 
 def get_headers(driver, school_id):
     """Gets the necessary headers and school ID from the GraphQL request."""
     url = f'https://www.ratemyprofessors.com/search/professors/{school_id}?q=*'
-    try:
-        driver.get(url)
-    except TimeoutException:
-        driver.execute_script("window.stop();")
-        try:
-            driver.refresh()
-        except TimeoutException:
-            driver.execute_script("window.stop();")
-        time.sleep(2)
-
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2"))
-        )
-        close_button = driver.find_element(By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2")
-        driver.execute_script("arguments[0].click();", close_button)
-        print("Cookie popup closed.")
-        time.sleep(2)
-    except Exception as e:
-        print("No cookie popup found or issue clicking it:", e)
-
-    try:
-        pagination_button = WebDriverWait(driver, 5).until(
-            EC.element_to_be_clickable((By.CLASS_NAME, "PaginationButton__StyledPaginationButton-txi1dr-1"))
-        )
-        driver.execute_script("arguments[0].scrollIntoView(true);", pagination_button)
-        driver.execute_script("arguments[0].click();", pagination_button)
-        print("Clicked on the pagination button.")
-    except Exception as e:
-        print(f"Failed to find or click the pagination button: {e}")
+    driver.get(url)
+    click_pagination_button(driver)
 
     time.sleep(5)
 
     url_filter = "ratemyprofessors.com/graphql"
     graphql_headers = {}
     for request in driver.requests:
+        print(f"\n[REQUEST] {request.url}")
         if request.response and url_filter in request.url:
-            print(f"\n[REQUEST] {request.url}")
             request_body = request.body
             m = re.findall(r'schoolID":"(.*?)"', str(request_body))
             if m:
@@ -198,7 +187,8 @@ def query_rmp(headers, school_id):
     more = True
     while more:
         more = False
-        res = requests.post('https://www.ratemyprofessors.com/graphql', headers=headers, json=req_data)
+        res = requests.post(
+            'https://www.ratemyprofessors.com/graphql', headers=headers, json=req_data)
 
         if res.status_code != 200:
             print(f"HTTP Error: {res.status_code}. Aborting.")
@@ -211,10 +201,12 @@ def query_rmp(headers, school_id):
 
                 tags = []
                 if dn['teacherRatingTags']:
-                    sorted_tags = sorted(dn['teacherRatingTags'], key=lambda x: x['tagCount'], reverse=True)
+                    sorted_tags = sorted(
+                        dn['teacherRatingTags'], key=lambda x: x['tagCount'], reverse=True)
                     tags = [tag['tagName'] for tag in sorted_tags[:5]]
 
-                courses = [normalize_course_name(course['courseName']) for course in dn['courseCodes']]
+                courses = [normalize_course_name(
+                    course['courseName']) for course in dn['courseCodes']]
                 courses = list(set(courses))
 
                 profile_link = f"https://www.ratemyprofessors.com/professor/{dn['legacyId']}" if dn['legacyId'] else None
@@ -265,14 +257,16 @@ def scrape_rmp_data(university_id):
 
     headers, school_id = get_headers(driver, university_id)
     get_headers_time = time.time()
-    print(f"Get headers time: {get_headers_time - setup_driver_time:.2f} seconds")
+    print(
+        f"Get headers time: {get_headers_time - setup_driver_time:.2f} seconds")
 
     driver.quit()
 
     if headers and school_id:
         professor_data = query_rmp(headers, school_id)
         query_rmp_time = time.time()
-        print(f"Query RMP time: {query_rmp_time - get_headers_time:.2f} seconds")
+        print(
+            f"Query RMP time: {query_rmp_time - get_headers_time:.2f} seconds")
 
         if professor_data:
             end_time = time.time()
@@ -288,8 +282,6 @@ def scrape_rmp_data(university_id):
         end_time = time.time()
         print(f"Total execution time: {end_time - start_time:.2f} seconds")
         return None
-
-
 
 
 # old webscrape implementation, it seems the graphql api is much faster but has a tendency to occasionally not return all the data, such as courses, tags, and the would_take_again values, might still need this
