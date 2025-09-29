@@ -19,8 +19,8 @@ def setup_driver(headless=True):
         chrome_options = Options()
         chrome_options.add_argument("--log-level=3")
         chrome_options.add_argument("--ignore-certificate-errors")
-        # if headless:
-        #     chrome_options.add_argument("--headless")
+        if headless:
+            chrome_options.add_argument("--headless")
 
         chrome_options.page_load_strategy = 'none'
         driver = webdriver.Chrome(options=chrome_options)
@@ -70,8 +70,8 @@ def get_headers(driver, school_id):
     url_filter = "ratemyprofessors.com/graphql"
     graphql_headers = {}
     for request in driver.requests:
-        print(f"\n[REQUEST] {request.url}")
         if request.response and url_filter in request.url:
+            print(f"\n[REQUEST] {request.url}")
             request_body = request.body
             m = re.findall(r'schoolID":"(.*?)"', str(request_body))
             if m:
