@@ -77,13 +77,13 @@ func (s *ScraperService) CheckAndRunScraper() error {
 	switch s.scraper {
 	case "coursebook":
 		handler := NewCoursebookHandler(s)
-		uploadErr = handler.Upload()
+		uploadErr = handler.Upload(s.scraper)
 	case "grades":
 		handler := NewGradesHandler(s)
-		uploadErr = handler.Upload()
+		uploadErr = handler.Upload(s.scraper)
 	case "rmp-profiles":
 		handler := NewRMPProfilesHandler(s)
-		uploadErr = handler.Upload()
+		uploadErr = handler.Upload(s.scraper)
 	default:
 		uploadErr = fmt.Errorf("unsupported scraper type: %s", s.scraper)
 	}

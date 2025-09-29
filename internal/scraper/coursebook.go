@@ -20,8 +20,8 @@ func NewCoursebookHandler(service *ScraperService) *CoursebookHandler {
 }
 
 // Upload uploads coursebook data to cloud storage
-func (h *CoursebookHandler) Upload() error {
-	outputDir := "scripts/" + h.service.scraper + "/out"
+func (h *CoursebookHandler) Upload(scraper string) error {
+	outputDir := "scripts/" + scraper + "/out"
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		return fmt.Errorf("output directory not found: %s", outputDir)
 	}

@@ -19,8 +19,8 @@ func NewRMPProfilesHandler(service *ScraperService) *RMPProfilesHandler {
 	}
 }
 
-func (h *RMPProfilesHandler) Upload() error {
-	outputDir := "scripts/" + h.service.scraper + "/out"
+func (h *RMPProfilesHandler) Upload(scraper string) error {
+	outputDir := "scripts/" + scraper + "/out"
 	fmt.Println(outputDir)
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		return fmt.Errorf("output directory not found: %s", outputDir)

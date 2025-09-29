@@ -243,19 +243,22 @@ func (s *ScraperService) RescrapeStart() error {
 
 func (s *ScraperService) runAllScrapers() error {
 	scraperOrder := []string{"grades", "rmp-profiles", "coursebook"}
+	ctx := context.Background()
+
+	saveEnv := strings.ToLower(os.Getenv("SAVE_ENVIRONMENT"))
+	if saveEnv == "prod" || saveEnv == "dev" {
+		// We need to grab all existing terms for coursebook
+		err := s.downloadFromFolder(ctx, "coursebook", "scripts/coursebook/out")
+		if err != nil {
+			return fmt.Errorf("failed to download coursebook files: %w", err)
+		}
+	}
 
 	var successes []string
 	var errors []error
 
 	for _, scraperName := range scraperOrder {
 		log.Printf("Starting scraper %d/%d: %s", len(successes)+1, len(scraperOrder), scraperName)
-
-		if err := s.cleanScraperOutput(scraperName); err != nil {
-			err = fmt.Errorf("failed to clean output for %s: %w", scraperName, err)
-			log.Printf("Scraping error: %v", err)
-			errors = append(errors, err)
-			continue
-		}
 
 		runner := NewPythonRunner(scraperName)
 		if err := runner.Run(); err != nil {
@@ -309,9 +312,9 @@ func (s *ScraperService) uploadAllScrapers() error {
 	}
 
 	jobs := []uploadJob{
-		{"coursebook", func() error { return NewCoursebookHandler(s).Upload() }},
-		{"grades", func() error { return NewGradesHandler(s).Upload() }},
-		{"rmp-profiles", func() error { return NewRMPProfilesHandler(s).Upload() }},
+		{"coursebook", func() error { return NewCoursebookHandler(s).Upload("coursebook") }},
+		{"grades", func() error { return NewGradesHandler(s).Upload("grades") }},
+		{"rmp-profiles", func() error { return NewRMPProfilesHandler(s).Upload("rmp-profiles") }},
 	}
 
 	var wg sync.WaitGroup
