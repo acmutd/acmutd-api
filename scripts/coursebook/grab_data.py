@@ -13,6 +13,7 @@ DROPDOWN_PREFIX_ID = 'combobox_cp'
 DROPDOWN_SCHOOL_ID = 'combobox_col'
 DROPDOWN_DAYS_ID = 'combobox_days'
 DROPDOWN_LEVELS_ID = 'combobox_clevel'
+DROPDOWN_TERM_ID = 'combobox_term'
 
 FILTER_TYPES_MAP = {
     'prefix': DROPDOWN_PREFIX_ID,
@@ -20,6 +21,27 @@ FILTER_TYPES_MAP = {
     'day': DROPDOWN_DAYS_ID,
     'level': DROPDOWN_LEVELS_ID,
 }
+
+
+def get_latest_term():
+    try:
+        res = requests.get(base_url, timeout=5)
+        res.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f'Failed to get coursebook website: {e}')
+        return {}
+
+    pattern = fr'<select .*?id="{re.escape(DROPDOWN_TERM_ID)}".*?>\s*(.*?)\s*</select>'
+    matches = re.findall(pattern, res.text, re.DOTALL)
+    if not matches:
+        print(f"Warning: Failed to find dropdown with ID '{DROPDOWN_TERM_ID}'")
+        return {}
+
+    raw_options = matches[0]
+    values = re.findall(r'value="([^"]+)"', raw_options)
+
+    latest_term = values[2]
+    return latest_term.split('_')[1]
 
 
 def get_dropdown_options(dropdown_ids):
@@ -384,6 +406,10 @@ def scrape(session_id, term):
     dropdown_ids = [DROPDOWN_PREFIX_ID, DROPDOWN_SCHOOL_ID,
                     DROPDOWN_DAYS_ID, DROPDOWN_LEVELS_ID]
     dropdown_options = get_dropdown_options(dropdown_ids)
+
+    if term == 'latest':
+        term = get_latest_term()
+        print(f'Using latest term: {term}')
 
     prefixes = dropdown_options.get(DROPDOWN_PREFIX_ID, [])
     schools = dropdown_options.get(DROPDOWN_SCHOOL_ID, [])
