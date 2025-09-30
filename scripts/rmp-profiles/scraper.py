@@ -14,16 +14,14 @@ import requests
 
 def setup_driver(headless=True):
     """Sets up and returns a Selenium WebDriver."""
-    driver = None
     try:
         chrome_options = Options()
         chrome_options.add_argument("--log-level=3")
         chrome_options.add_argument("--ignore-certificate-errors")
         if headless:
             chrome_options.add_argument("--headless")
-
-        chrome_options.page_load_strategy = 'none'
         driver = webdriver.Chrome(options=chrome_options)
+        driver.set_page_load_timeout(5)
         return driver
     except Exception as e:
         print(f"Failed to start the Chrome driver: {e}")
@@ -34,39 +32,52 @@ def setup_driver(headless=True):
 def close_cookie_popup(driver):
     """Closes the cookie popup if it exists."""
     try:
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located(
-                (By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2"))
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2"))
         )
-        close_button = driver.find_element(
-            By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2")
+        close_button = driver.find_element(By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2")
         driver.execute_script("arguments[0].click();", close_button)
         print("Cookie popup closed.")
         time.sleep(2)
     except Exception as e:
         print("No cookie popup found or issue clicking it:", e)
 
-
 def click_pagination_button(driver):
-    """Clicks the pagination button."""
-    pagination_button = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable(
-            (By.CLASS_NAME, "PaginationButton__StyledPaginationButton-txi1dr-1"))
-    )
-    time.sleep(1)
-    driver.execute_script("window.stop();")
-    pagination_button.click()
-    print("Clicked on the pagination button.")
+    """Clicks the pagination button to load more professors."""
+    try:
+        pagination_button = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.CLASS_NAME, "PaginationButton__StyledPaginationButton-txi1dr-1"))
+        )
+        driver.execute_script("arguments[0].scrollIntoView(true);", pagination_button)
+        driver.execute_script("arguments[0].click();", pagination_button)
+        print("Clicked on the pagination button.")
+        time.sleep(5)
+    except Exception as e:
+        print(f"Failed to find or click the pagination button: {e}")
 
 
 def get_headers(driver, school_id):
     """Gets the necessary headers and school ID from the GraphQL request."""
     url = f'https://www.ratemyprofessors.com/search/professors/{school_id}?q=*'
-    driver.get(url)
+
+    # go to the rmp page for UTD
+    try:
+        driver.get(url)
+    except TimeoutException:
+        driver.execute_script("window.stop();")
+        try:
+            driver.refresh()
+        except TimeoutException:
+            driver.execute_script("window.stop();")
+        time.sleep(2)
+
+    # close cookie popup if it exists
+    close_cookie_popup(driver)
+
+    # click on the "show more professors" button to trigger the graphql request
     click_pagination_button(driver)
 
-    time.sleep(5)
-
+    # find graphql headers from the request
     url_filter = "ratemyprofessors.com/graphql"
     graphql_headers = {}
     for request in driver.requests:
@@ -98,8 +109,8 @@ def normalize_professor_name(name):
     return " ".join(name.lower().split())
 
 
-def query_rmp(headers, school_id):
-    """Queries the RMP GraphQL API to retrieve professor data."""
+def query_rmp(headers, school_id, max_retries=3):
+    """Queries the internal RMP GraphQL API to retrieve professor data."""
     # thank you Michael Zhao for this idea
     req_data = {
         "query": """query TeacherSearchPaginationQuery( $count: Int!  $cursor: String $query: TeacherSearchQuery!) { search: newSearch { ...TeacherSearchPagination_search_1jWD3d } }
@@ -187,101 +198,148 @@ def query_rmp(headers, school_id):
     more = True
     while more:
         more = False
-        res = requests.post(
-            'https://www.ratemyprofessors.com/graphql', headers=headers, json=req_data)
+        
+        # send graphql request and parse response with retries
+        for attempt in range(max_retries):
+            try:
+                res = requests.post(
+                    'https://www.ratemyprofessors.com/graphql', 
+                    headers=headers, 
+                    json=req_data,
+                    timeout=30
+                )
 
-        if res.status_code != 200:
-            print(f"HTTP Error: {res.status_code}. Aborting.")
-            return all_professors
+                if res.status_code != 200:
+                    print(f"HTTP Error: {res.status_code} on attempt {attempt + 1}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2)
+                        continue
+                    else:
+                        print("Failed after all HTTP retries. Aborting.")
+                        return all_professors
 
-        try:
-            data = res.json()['data']['search']['teachers']['edges']
-            for d in data:
-                dn = d['node']
+                data = res.json()['data']['search']['teachers']['edges']
+                
+                for d in data:
+                    dn = d['node']
 
-                tags = []
-                if dn['teacherRatingTags']:
-                    sorted_tags = sorted(
-                        dn['teacherRatingTags'], key=lambda x: x['tagCount'], reverse=True)
-                    tags = [tag['tagName'] for tag in sorted_tags[:5]]
+                    tags = []
+                    if dn['teacherRatingTags']:
+                        sorted_tags = sorted(
+                            dn['teacherRatingTags'], key=lambda x: x['tagCount'], reverse=True)
+                        tags = [tag['tagName'] for tag in sorted_tags[:5]]
 
-                courses = [normalize_course_name(
-                    course['courseName']) for course in dn['courseCodes']]
-                courses = list(set(courses))
+                    courses = [normalize_course_name(
+                        course['courseName']) for course in dn['courseCodes']]
+                    courses = list(set(courses))
 
-                profile_link = f"https://www.ratemyprofessors.com/professor/{dn['legacyId']}" if dn['legacyId'] else None
+                    profile_link = f"https://www.ratemyprofessors.com/professor/{dn['legacyId']}" if dn['legacyId'] else None
 
-                professor_data = {
-                    'department': dn['department'],
-                    'url': profile_link,
-                    'quality_rating': dn['avgRating'],
-                    'difficulty_rating': dn['avgDifficulty'],
-                    'would_take_again': round(dn['wouldTakeAgainPercent']),
-                    'original_rmp_format': f"{dn['firstName']} {dn['lastName']}",
-                    'last_updated': datetime.datetime.now().isoformat(),
-                    'ratings_count': dn['numRatings'],
-                    'courses': courses,
-                    'tags': tags,
-                    'rmp_id': str(dn['legacyId'])
-                }
+                    professor_data = {
+                        'department': dn['department'],
+                        'url': profile_link,
+                        'quality_rating': dn['avgRating'],
+                        'difficulty_rating': dn['avgDifficulty'],
+                        'would_take_again': round(dn['wouldTakeAgainPercent']),
+                        'original_rmp_format': f"{dn['firstName']} {dn['lastName']}",
+                        'last_updated': datetime.datetime.now().isoformat(),
+                        'ratings_count': dn['numRatings'],
+                        'courses': courses,
+                        'tags': tags,
+                        'rmp_id': str(dn['legacyId'])
+                    }
 
-                professor_name = f"{dn['firstName']} {dn['lastName']}"
-                key = normalize_professor_name(professor_name)
+                    professor_name = f"{dn['firstName']} {dn['lastName']}"
+                    key = normalize_professor_name(professor_name)
 
-                if key in all_professors:
-                    all_professors[key].append(professor_data)
-                    print(f"Duplicate RMP professor name found: {key}")
+                    if key in all_professors:
+                        all_professors[key].append(professor_data)
+                        print(f"Duplicate RMP professor name found: {key}")
+                    else:
+                        all_professors[key] = [professor_data]
+
+                if len(data) == 1000:
+                    req_data['variables']['cursor'] = data[len(data) - 1]['cursor']
+                    more = True
+                break
+                
+            except (json.JSONDecodeError, KeyError, requests.exceptions.RequestException) as e:
+                print(f"Error in GraphQL request (attempt {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    print("Retrying GraphQL request...")
+                    time.sleep(2)
                 else:
-                    all_professors[key] = [professor_data]
-
-            if len(data) == 1000:
-                req_data['variables']['cursor'] = data[len(data) - 1]['cursor']
-                more = True
-        except json.JSONDecodeError:
-            print("Invalid JSON response. Aborting.")
-            return all_professors
-        except KeyError as e:
-            print(f"Missing Key in JSON: {e}. Aborting.")
-            return all_professors
+                    print("Failed after all GraphQL retries. Aborting.")
+                    return all_professors
 
     return all_professors
 
 
-def scrape_rmp_data(university_id):
-    """Scrapes professor data from RateMyProfessors."""
-    start_time = time.time()  # Start time tracking
+def scrape_rmp_data_attempt(university_id):
+    start_time = time.time()
 
     driver = setup_driver()
     setup_driver_time = time.time()
     print(f"Driver setup time: {setup_driver_time - start_time:.2f} seconds")
 
-    headers, school_id = get_headers(driver, university_id)
-    get_headers_time = time.time()
-    print(
-        f"Get headers time: {get_headers_time - setup_driver_time:.2f} seconds")
-
-    driver.quit()
-
-    if headers and school_id:
-        professor_data = query_rmp(headers, school_id)
-        query_rmp_time = time.time()
+    try:
+        headers, school_id = get_headers(driver, university_id)
+        get_headers_time = time.time()
         print(
-            f"Query RMP time: {query_rmp_time - get_headers_time:.2f} seconds")
+            f"Get headers time: {get_headers_time - setup_driver_time:.2f} seconds")
 
-        if professor_data:
-            end_time = time.time()
-            print(f"Total execution time: {end_time - start_time:.2f} seconds")
-            return professor_data
+        if headers and school_id:
+            professor_data = query_rmp(headers, school_id)
+            query_rmp_time = time.time()
+            print(
+                f"Query RMP time: {query_rmp_time - get_headers_time:.2f} seconds")
+
+            if professor_data:
+                end_time = time.time()
+                print(f"Attempt execution time: {end_time - start_time:.2f} seconds")
+                return professor_data
+            else:
+                print("Data extraction failed. GraphQL API returned no data.")
+                return None
         else:
-            print("Data extraction failed. GraphQL API returned no data.")
-            end_time = time.time()
-            print(f"Total execution time: {end_time - start_time:.2f} seconds")
+            print("Failed to retrieve headers or school ID. Data extraction aborted.")
             return None
-    else:
-        print("Failed to retrieve headers or school ID. Data extraction aborted.")
-        end_time = time.time()
-        print(f"Total execution time: {end_time - start_time:.2f} seconds")
-        return None
+    finally:
+        driver.quit()
+
+
+def scrape_rmp_data(university_id, max_retries=3):
+    """Scrapes professor data from RateMyProfessors with retry logic."""
+    overall_start_time = time.time()
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"\n=== Scraping attempt {attempt + 1}/{max_retries} ===")
+            
+            result = scrape_rmp_data_attempt(university_id)
+            
+            if result:
+                overall_end_time = time.time()
+                print(f"Total execution time (including retries): {overall_end_time - overall_start_time:.2f} seconds")
+                return result
+            else:
+                if attempt < max_retries - 1:
+                    print(f"Attempt {attempt + 1} failed. Retrying in 3 seconds...")
+                    time.sleep(3)
+                else:
+                    print(f"All {max_retries} attempts failed.")
+                    
+        except Exception as e:
+            print(f"Exception occurred on attempt {attempt + 1}: {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying in 3 seconds...")
+                time.sleep(3)
+            else:
+                print(f"All {max_retries} attempts failed due to exceptions.")
+    
+    overall_end_time = time.time()
+    print(f"Total execution time (including failed retries): {overall_end_time - overall_start_time:.2f} seconds")
+    return {}
 
 
 # old webscrape implementation, it seems the graphql api is much faster but has a tendency to occasionally not return all the data, such as courses, tags, and the would_take_again values, might still need this
