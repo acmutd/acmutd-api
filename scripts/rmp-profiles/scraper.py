@@ -109,82 +109,155 @@ def normalize_professor_name(name):
     return " ".join(name.lower().split())
 
 
+def build_graphql_query():
+    """Builds the GraphQL query for retrieving professor data."""
+    return """query TeacherSearchPaginationQuery( $count: Int!  $cursor: String $query: TeacherSearchQuery!) { search: newSearch { ...TeacherSearchPagination_search_1jWD3d } }
+        fragment TeacherSearchPagination_search_1jWD3d on newSearch {
+            teachers(query: $query, first: $count, after: $cursor) {
+                didFallback
+                edges {
+                    cursor
+                    node {
+                        ...TeacherCard_teacher
+                        id
+                        __typename
+                    }
+                }
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
+                resultCount
+                filters {
+                    field
+                    options {
+                        value
+                        id
+                    }
+                }
+            }
+        }
+        fragment TeacherCard_teacher on Teacher {
+            id
+            legacyId
+            avgRating
+            numRatings
+            courseCodes {
+                courseName
+                courseCount
+            }
+            ...CardFeedback_teacher
+            ...CardSchool_teacher
+            ...CardName_teacher
+            ...TeacherBookmark_teacher
+            ...TeacherTags_teacher
+        }
+        fragment CardFeedback_teacher on Teacher {
+            wouldTakeAgainPercent
+            avgDifficulty
+        }
+        fragment CardSchool_teacher on Teacher {
+            department
+            school {
+                name
+                id
+            }
+        }
+        fragment CardName_teacher on Teacher {
+            firstName
+            lastName
+        }
+        fragment TeacherBookmark_teacher on Teacher {
+            id
+            isSaved
+        }
+        fragment TeacherTags_teacher on Teacher {
+            lastName
+            teacherRatingTags {
+                legacyId
+                tagCount
+                tagName
+                id
+            }
+        }
+    """
+
+
+def transform_professor_data(professor_node):
+    """Transforms a single professor node from GraphQL response into our data format."""
+    dn = professor_node['node']
+    
+    # Extract and sort tags
+    tags = []
+    if dn['teacherRatingTags']:
+        sorted_tags = sorted(dn['teacherRatingTags'], key=lambda x: x['tagCount'], reverse=True)
+        tags = [tag['tagName'] for tag in sorted_tags[:5]]
+    
+    # Extract and normalize courses
+    courses = [normalize_course_name(course['courseName']) for course in dn['courseCodes']]
+    courses = list(set(courses))
+    
+    # Build profile URL
+    profile_link = f"https://www.ratemyprofessors.com/professor/{dn['legacyId']}" if dn['legacyId'] else None
+    
+    return {
+        'department': dn['department'],
+        'url': profile_link,
+        'quality_rating': dn['avgRating'],
+        'difficulty_rating': dn['avgDifficulty'],
+        'would_take_again': round(dn['wouldTakeAgainPercent']),
+        'original_rmp_format': f"{dn['firstName']} {dn['lastName']}",
+        'last_updated': datetime.datetime.now().isoformat(),
+        'ratings_count': dn['numRatings'],
+        'courses': courses,
+        'tags': tags,
+        'rmp_id': str(dn['legacyId'])
+    }
+
+
+def execute_graphql_request(headers, req_data, max_retries=3):
+    """Executes a single GraphQL request with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            res = requests.post(
+                'https://www.ratemyprofessors.com/graphql', 
+                headers=headers, 
+                json=req_data,
+                timeout=30
+            )
+
+            if res.status_code != 200:
+                print(f"HTTP Error: {res.status_code} on attempt {attempt + 1}")
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                else:
+                    print("Failed after all HTTP retries.")
+                    return None
+
+            return res.json()['data']['search']['teachers']['edges']
+            
+        except (json.JSONDecodeError, KeyError, requests.exceptions.RequestException) as e:
+            print(f"Error in GraphQL request (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                print("Retrying GraphQL request...")
+                time.sleep(2)
+            else:
+                print("Failed after all GraphQL retries.")
+                return None
+    
+    return None
+
+
 def query_rmp(headers, school_id, max_retries=3):
     """Queries the internal RMP GraphQL API to retrieve professor data."""
     # thank you Michael Zhao for this idea
+    max_prof_count = 1000  # maximum number of professors per request
+
     req_data = {
-        "query": """query TeacherSearchPaginationQuery( $count: Int!  $cursor: String $query: TeacherSearchQuery!) { search: newSearch { ...TeacherSearchPagination_search_1jWD3d } }
-            fragment TeacherSearchPagination_search_1jWD3d on newSearch {
-                teachers(query: $query, first: $count, after: $cursor) {
-                    didFallback
-                    edges {
-                        cursor
-                        node {
-                            ...TeacherCard_teacher
-                            id
-                            __typename
-                        }
-                    }
-                    pageInfo {
-                        hasNextPage
-                        endCursor
-                    }
-                    resultCount
-                    filters {
-                        field
-                        options {
-                            value
-                            id
-                        }
-                    }
-                }
-            }
-            fragment TeacherCard_teacher on Teacher {
-                id
-                legacyId
-                avgRating
-                numRatings
-                courseCodes {
-                    courseName
-                    courseCount
-                }
-                ...CardFeedback_teacher
-                ...CardSchool_teacher
-                ...CardName_teacher
-                ...TeacherBookmark_teacher
-                ...TeacherTags_teacher
-            }
-            fragment CardFeedback_teacher on Teacher {
-                wouldTakeAgainPercent
-                avgDifficulty
-            }
-            fragment CardSchool_teacher on Teacher {
-                department
-                school {
-                    name
-                    id
-                }
-            }
-            fragment CardName_teacher on Teacher {
-                firstName
-                lastName
-            }
-            fragment TeacherBookmark_teacher on Teacher {
-                id
-                isSaved
-            }
-            fragment TeacherTags_teacher on Teacher {
-                lastName
-                teacherRatingTags {
-                    legacyId
-                    tagCount
-                    tagName
-                    id
-                }
-            }
-        """,
+        "query": build_graphql_query(),
         "variables": {
-            "count": 1000,
+            "count": max_prof_count,
             "cursor": "",
             "query": {
                 "text": "",
@@ -196,81 +269,30 @@ def query_rmp(headers, school_id, max_retries=3):
 
     all_professors = {}
     more = True
+    
     while more:
         more = False
         
-        # send graphql request and parse response with retries
-        for attempt in range(max_retries):
-            try:
-                res = requests.post(
-                    'https://www.ratemyprofessors.com/graphql', 
-                    headers=headers, 
-                    json=req_data,
-                    timeout=30
-                )
+        data = execute_graphql_request(headers, req_data, max_retries)
+        if not data:
+            break
+            
+        # process each professor in the response
+        for professor_node in data:
+            professor_data = transform_professor_data(professor_node)
+            professor_name = f"{professor_node['node']['firstName']} {professor_node['node']['lastName']}"
+            key = normalize_professor_name(professor_name)
 
-                if res.status_code != 200:
-                    print(f"HTTP Error: {res.status_code} on attempt {attempt + 1}")
-                    if attempt < max_retries - 1:
-                        time.sleep(2)
-                        continue
-                    else:
-                        print("Failed after all HTTP retries. Aborting.")
-                        return all_professors
+            if key in all_professors:
+                all_professors[key].append(professor_data)
+                print(f"Duplicate RMP professor name found: {key}")
+            else:
+                all_professors[key] = [professor_data]
 
-                data = res.json()['data']['search']['teachers']['edges']
-                
-                for d in data:
-                    dn = d['node']
-
-                    tags = []
-                    if dn['teacherRatingTags']:
-                        sorted_tags = sorted(
-                            dn['teacherRatingTags'], key=lambda x: x['tagCount'], reverse=True)
-                        tags = [tag['tagName'] for tag in sorted_tags[:5]]
-
-                    courses = [normalize_course_name(
-                        course['courseName']) for course in dn['courseCodes']]
-                    courses = list(set(courses))
-
-                    profile_link = f"https://www.ratemyprofessors.com/professor/{dn['legacyId']}" if dn['legacyId'] else None
-
-                    professor_data = {
-                        'department': dn['department'],
-                        'url': profile_link,
-                        'quality_rating': dn['avgRating'],
-                        'difficulty_rating': dn['avgDifficulty'],
-                        'would_take_again': round(dn['wouldTakeAgainPercent']),
-                        'original_rmp_format': f"{dn['firstName']} {dn['lastName']}",
-                        'last_updated': datetime.datetime.now().isoformat(),
-                        'ratings_count': dn['numRatings'],
-                        'courses': courses,
-                        'tags': tags,
-                        'rmp_id': str(dn['legacyId'])
-                    }
-
-                    professor_name = f"{dn['firstName']} {dn['lastName']}"
-                    key = normalize_professor_name(professor_name)
-
-                    if key in all_professors:
-                        all_professors[key].append(professor_data)
-                        print(f"Duplicate RMP professor name found: {key}")
-                    else:
-                        all_professors[key] = [professor_data]
-
-                if len(data) == 1000:
-                    req_data['variables']['cursor'] = data[len(data) - 1]['cursor']
-                    more = True
-                break
-                
-            except (json.JSONDecodeError, KeyError, requests.exceptions.RequestException) as e:
-                print(f"Error in GraphQL request (attempt {attempt + 1}): {e}")
-                if attempt < max_retries - 1:
-                    print("Retrying GraphQL request...")
-                    time.sleep(2)
-                else:
-                    print("Failed after all GraphQL retries. Aborting.")
-                    return all_professors
+        # check if there are more pages (only 1000 results max per page, query again if we have the max results)
+        if len(data) == max_prof_count:
+            req_data['variables']['cursor'] = data[len(data) - 1]['cursor']
+            more = True
 
     return all_professors
 
