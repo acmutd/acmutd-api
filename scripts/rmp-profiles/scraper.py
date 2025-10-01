@@ -200,7 +200,10 @@ def build_graphql_query():
 
 def transform_professor_data(professor_node):
     """Transforms a single professor node from GraphQL response into our data format."""
-    dn = professor_node['node']
+    dn = professor_node.get('node')
+    if dn is None:
+        print("Warning: 'node' key missing in professor_node.")
+        return None
     
     # Extract and sort tags
     tags = []
@@ -250,7 +253,18 @@ def execute_graphql_request(headers, req_data, max_retries=3):
                     print("Failed after all HTTP retries.")
                     return None
 
-            return res.json()['data']['search']['teachers']['edges']
+            resp_json = res.json()
+            edges = (
+                resp_json.get('data', {})
+                .get('search', {})
+                .get('teachers', {})
+                .get('edges', None)
+            )
+            if edges is None:
+                print(f"Unexpected response structure on attempt {attempt + 1}: {resp_json}")
+                # Do not retry if the structure is wrong
+                return None
+            return edges
             
         except (json.JSONDecodeError, KeyError, requests.exceptions.RequestException) as e:
             print(f"Error in GraphQL request (attempt {attempt + 1}): {e}")
@@ -295,7 +309,9 @@ def query_rmp(headers, school_id, max_retries=3):
         # process each professor in the response
         for professor_node in data:
             professor_data = transform_professor_data(professor_node)
-            professor_name = f"{professor_node['node']['firstName']} {professor_node['node']['lastName']}"
+            first_name = professor_node['node'].get('firstName', '')
+            last_name = professor_node['node'].get('lastName', '')
+            professor_name = f"{first_name} {last_name}".strip()
             key = normalize_professor_name(professor_name)
 
             if key in all_professors:
