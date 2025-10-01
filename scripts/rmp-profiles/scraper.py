@@ -1,3 +1,4 @@
+from lib2to3.pgen2 import driver
 from seleniumwire import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -56,12 +57,24 @@ def click_pagination_button(driver):
         print(f"Failed to find or click the pagination button: {e}")
 
 
+def wait_for_graphql_request(driver, timeout):
+    url_filter = "ratemyprofessors.com/graphql"
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        for request in driver.requests:
+            if request.response and url_filter in request.url and b"schoolID" in request.body:
+                return request
+        time.sleep(0.5)
+    return None
+
+
 def get_headers(driver, school_id):
     """Gets the necessary headers and school ID from the GraphQL request."""
     url = f'https://www.ratemyprofessors.com/search/professors/{school_id}?q=*'
 
     # go to the rmp page for UTD
     try:
+        driver.requests.clear()
         driver.get(url)
     except TimeoutException:
         driver.execute_script("window.stop();")
@@ -78,25 +91,29 @@ def get_headers(driver, school_id):
     click_pagination_button(driver)
 
     # find graphql headers from the request
-    url_filter = "ratemyprofessors.com/graphql"
-    graphql_headers = {}
-    for request in driver.requests:
-        if request.response and url_filter in request.url:
-            print(f"\n[REQUEST] {request.url}")
-            request_body = request.body
-            m = re.findall(r'schoolID":"(.*?)"', str(request_body))
-            if m:
-                print(f"\tschoolID: {m[0]}")
-            else:
-                print("schoolID not found in request body.")
-                return None, None
-            print("Headers:")
-            graphql_headers = request.headers
-            for header, value in request.headers.items():
-                print(f"\t{header}: {value}")
-            print("-" * 50)
-            return graphql_headers, m[0]
-    return None, None
+    request = wait_for_graphql_request(driver, timeout=10)
+    if not request:
+        print("No GraphQL request found within timeout.")
+        return None, None
+
+    # parse the request body for the schoolID
+    request_body = request.body
+    m = re.findall(r'schoolID":"(.*?)"', str(request_body))
+    if not m:
+        print("schoolID not found in request body.")
+        return None, None
+
+    school_id = m[0]
+    print(f"\n[REQUEST] {request.url}")
+    print(f"\tschoolID: {school_id}")
+    print("Headers:")
+
+    headers = request.headers
+    for header, value in headers.items():
+        print(f"\t{header}: {value}")
+    print("-" * 50)
+
+    return headers, school_id
 
 
 def normalize_course_name(course_name):
