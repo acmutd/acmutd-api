@@ -10,9 +10,9 @@ import json
 import datetime
 import requests
 
+
 def setup_driver(headless=True):
     """Sets up and returns a Selenium WebDriver."""
-    driver = None
     try:
         chrome_options = Options()
         chrome_options.add_argument("--log-level=3")
@@ -31,7 +31,7 @@ def setup_driver(headless=True):
 def close_cookie_popup(driver):
     """Closes the cookie popup if it exists."""
     try:
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, 5).until(
             EC.presence_of_element_located((By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2"))
         )
         close_button = driver.find_element(By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2")
@@ -41,11 +41,38 @@ def close_cookie_popup(driver):
     except Exception as e:
         print("No cookie popup found or issue clicking it:", e)
 
+def click_pagination_button(driver):
+    """Clicks the pagination button to load more professors."""
+    try:
+        pagination_button = WebDriverWait(driver, 5).until(
+            EC.element_to_be_clickable((By.CLASS_NAME, "PaginationButton__StyledPaginationButton-txi1dr-1"))
+        )
+        driver.execute_script("arguments[0].scrollIntoView(true);", pagination_button)
+        driver.execute_script("arguments[0].click();", pagination_button)
+        print("Clicked on the pagination button.")
+        time.sleep(5)
+    except Exception as e:
+        print(f"Failed to find or click the pagination button: {e}")
+
+
+def wait_for_graphql_request(driver, timeout):
+    url_filter = "ratemyprofessors.com/graphql"
+    end_time = time.time() + timeout
+    while time.time() < end_time:
+        for request in driver.requests:
+            if request.response and url_filter in request.url and b"schoolID" in request.body:
+                return request
+        time.sleep(0.5)
+    return None
+
 
 def get_headers(driver, school_id):
     """Gets the necessary headers and school ID from the GraphQL request."""
     url = f'https://www.ratemyprofessors.com/search/professors/{school_id}?q=*'
+
+    # go to the rmp page for UTD
     try:
+        driver.requests.clear()
         driver.get(url)
     except TimeoutException:
         driver.execute_script("window.stop();")
@@ -55,48 +82,36 @@ def get_headers(driver, school_id):
             driver.execute_script("window.stop();")
         time.sleep(2)
 
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2"))
-        )
-        close_button = driver.find_element(By.CLASS_NAME, "CCPAModal__StyledCloseButton-sc-10x9kq-2")
-        driver.execute_script("arguments[0].click();", close_button)
-        print("Cookie popup closed.")
-        time.sleep(2)
-    except Exception as e:
-        print("No cookie popup found or issue clicking it:", e)
+    # close cookie popup if it exists
+    close_cookie_popup(driver)
 
-    try:
-        pagination_button = WebDriverWait(driver, 5).until(
-            EC.element_to_be_clickable((By.CLASS_NAME, "PaginationButton__StyledPaginationButton-txi1dr-1"))
-        )
-        driver.execute_script("arguments[0].scrollIntoView(true);", pagination_button)
-        driver.execute_script("arguments[0].click();", pagination_button)
-        print("Clicked on the pagination button.")
-    except Exception as e:
-        print(f"Failed to find or click the pagination button: {e}")
+    # click on the "show more professors" button to trigger the graphql request
+    click_pagination_button(driver)
 
-    time.sleep(5)
+    # find graphql headers from the request
+    request = wait_for_graphql_request(driver, timeout=10)
+    if not request:
+        print("No GraphQL request found within timeout.")
+        return None, None
 
-    url_filter = "ratemyprofessors.com/graphql"
-    graphql_headers = {}
-    for request in driver.requests:
-        if request.response and url_filter in request.url:
-            print(f"\n[REQUEST] {request.url}")
-            request_body = request.body
-            m = re.findall(r'schoolID":"(.*?)"', str(request_body))
-            if m:
-                print(f"\tschoolID: {m[0]}")
-            else:
-                print("schoolID not found in request body.")
-                return None, None
-            print("Headers:")
-            graphql_headers = request.headers
-            for header, value in request.headers.items():
-                print(f"\t{header}: {value}")
-            print("-" * 50)
-            return graphql_headers, m[0]
-    return None, None
+    # parse the request body for the schoolID
+    request_body = request.body
+    m = re.findall(r'schoolID":"(.*?)"', str(request_body))
+    if not m:
+        print("schoolID not found in request body.")
+        return None, None
+
+    school_id = m[0]
+    print(f"\n[REQUEST] {request.url}")
+    print(f"\tschoolID: {school_id}")
+    print("Headers:")
+
+    headers = request.headers
+    for header, value in headers.items():
+        print(f"\t{header}: {value}")
+    print("-" * 50)
+
+    return headers, school_id
 
 
 def normalize_course_name(course_name):
@@ -109,82 +124,169 @@ def normalize_professor_name(name):
     return " ".join(name.lower().split())
 
 
-def query_rmp(headers, school_id):
-    """Queries the RMP GraphQL API to retrieve professor data."""
-    # thank you Michael Zhao for this idea
-    req_data = {
-        "query": """query TeacherSearchPaginationQuery( $count: Int!  $cursor: String $query: TeacherSearchQuery!) { search: newSearch { ...TeacherSearchPagination_search_1jWD3d } }
-            fragment TeacherSearchPagination_search_1jWD3d on newSearch {
-                teachers(query: $query, first: $count, after: $cursor) {
-                    didFallback
-                    edges {
-                        cursor
-                        node {
-                            ...TeacherCard_teacher
-                            id
-                            __typename
-                        }
+def build_graphql_query():
+    """Builds the GraphQL query for retrieving professor data."""
+    return """query TeacherSearchPaginationQuery( $count: Int!  $cursor: String $query: TeacherSearchQuery!) { search: newSearch { ...TeacherSearchPagination_search_1jWD3d } }
+        fragment TeacherSearchPagination_search_1jWD3d on newSearch {
+            teachers(query: $query, first: $count, after: $cursor) {
+                didFallback
+                edges {
+                    cursor
+                    node {
+                        ...TeacherCard_teacher
+                        id
+                        __typename
                     }
-                    pageInfo {
-                        hasNextPage
-                        endCursor
-                    }
-                    resultCount
-                    filters {
-                        field
-                        options {
-                            value
-                            id
-                        }
+                }
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
+                resultCount
+                filters {
+                    field
+                    options {
+                        value
+                        id
                     }
                 }
             }
-            fragment TeacherCard_teacher on Teacher {
+        }
+        fragment TeacherCard_teacher on Teacher {
+            id
+            legacyId
+            avgRating
+            numRatings
+            courseCodes {
+                courseName
+                courseCount
+            }
+            ...CardFeedback_teacher
+            ...CardSchool_teacher
+            ...CardName_teacher
+            ...TeacherBookmark_teacher
+            ...TeacherTags_teacher
+        }
+        fragment CardFeedback_teacher on Teacher {
+            wouldTakeAgainPercent
+            avgDifficulty
+        }
+        fragment CardSchool_teacher on Teacher {
+            department
+            school {
+                name
                 id
+            }
+        }
+        fragment CardName_teacher on Teacher {
+            firstName
+            lastName
+        }
+        fragment TeacherBookmark_teacher on Teacher {
+            id
+            isSaved
+        }
+        fragment TeacherTags_teacher on Teacher {
+            lastName
+            teacherRatingTags {
                 legacyId
-                avgRating
-                numRatings
-                courseCodes {
-                    courseName
-                    courseCount
-                }
-                ...CardFeedback_teacher
-                ...CardSchool_teacher
-                ...CardName_teacher
-                ...TeacherBookmark_teacher
-                ...TeacherTags_teacher
-            }
-            fragment CardFeedback_teacher on Teacher {
-                wouldTakeAgainPercent
-                avgDifficulty
-            }
-            fragment CardSchool_teacher on Teacher {
-                department
-                school {
-                    name
-                    id
-                }
-            }
-            fragment CardName_teacher on Teacher {
-                firstName
-                lastName
-            }
-            fragment TeacherBookmark_teacher on Teacher {
+                tagCount
+                tagName
                 id
-                isSaved
             }
-            fragment TeacherTags_teacher on Teacher {
-                lastName
-                teacherRatingTags {
-                    legacyId
-                    tagCount
-                    tagName
-                    id
-                }
-            }
-        """,
+        }
+    """
+
+
+def transform_professor_data(professor_node):
+    """Transforms a single professor node from GraphQL response into our data format."""
+    dn = professor_node.get('node')
+    if dn is None:
+        print("Warning: 'node' key missing in professor_node.")
+        return None
+    
+    # Extract and sort tags
+    tags = []
+    if dn['teacherRatingTags']:
+        sorted_tags = sorted(dn['teacherRatingTags'], key=lambda x: x['tagCount'], reverse=True)
+        tags = [tag['tagName'] for tag in sorted_tags[:5]]
+    
+    # Extract and normalize courses
+    courses = [normalize_course_name(course['courseName']) for course in dn['courseCodes']]
+    courses = list(set(courses))
+    
+    # Build profile URL
+    profile_link = f"https://www.ratemyprofessors.com/professor/{dn['legacyId']}" if dn['legacyId'] else None
+    
+    return {
+        'department': dn['department'],
+        'url': profile_link,
+        'quality_rating': dn['avgRating'],
+        'difficulty_rating': dn['avgDifficulty'],
+        'would_take_again': round(dn['wouldTakeAgainPercent']),
+        'original_rmp_format': f"{dn['firstName']} {dn['lastName']}",
+        'last_updated': datetime.datetime.now().isoformat(),
+        'ratings_count': dn['numRatings'],
+        'courses': courses,
+        'tags': tags,
+        'rmp_id': str(dn['legacyId'])
+    }
+
+
+def execute_graphql_request(headers, req_data, max_retries=3):
+    """Executes a single GraphQL request with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            res = requests.post(
+                'https://www.ratemyprofessors.com/graphql', 
+                headers=headers, 
+                json=req_data,
+                timeout=30
+            )
+
+            if res.status_code != 200:
+                print(f"HTTP Error: {res.status_code} on attempt {attempt + 1}")
+                if attempt < max_retries - 1:
+                    time.sleep(2)
+                    continue
+                else:
+                    print("Failed after all HTTP retries.")
+                    return None
+
+            resp_json = res.json()
+            edges = (
+                resp_json.get('data', {})
+                .get('search', {})
+                .get('teachers', {})
+                .get('edges', None)
+            )
+            if edges is None:
+                print(f"Unexpected response structure on attempt {attempt + 1}: {resp_json}")
+                # Do not retry if the structure is wrong
+                return None
+            return edges
+            
+        except (json.JSONDecodeError, KeyError, requests.exceptions.RequestException) as e:
+            print(f"Error in GraphQL request (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                print("Retrying GraphQL request...")
+                time.sleep(2)
+            else:
+                print("Failed after all GraphQL retries.")
+                return None
+    
+    return None
+
+
+def query_rmp(headers, school_id, max_retries=3):
+    """Queries the internal RMP GraphQL API to retrieve professor data."""
+    # thank you Michael Zhao for this idea
+    max_prof_count = 1000  # maximum number of professors per request
+
+    req_data = {
+        "query": build_graphql_query(),
         "variables": {
-            "count": 1000,
+            "count": max_prof_count,
             "cursor": "",
             "query": {
                 "text": "",
@@ -196,100 +298,105 @@ def query_rmp(headers, school_id):
 
     all_professors = {}
     more = True
+    
     while more:
         more = False
-        res = requests.post('https://www.ratemyprofessors.com/graphql', headers=headers, json=req_data)
+        
+        data = execute_graphql_request(headers, req_data, max_retries)
+        if not data:
+            break
+            
+        # process each professor in the response
+        for professor_node in data:
+            professor_data = transform_professor_data(professor_node)
+            first_name = professor_node['node'].get('firstName', '')
+            last_name = professor_node['node'].get('lastName', '')
+            professor_name = f"{first_name} {last_name}".strip()
+            key = normalize_professor_name(professor_name)
 
-        if res.status_code != 200:
-            print(f"HTTP Error: {res.status_code}. Aborting.")
-            return all_professors
+            if key in all_professors:
+                all_professors[key].append(professor_data)
+                print(f"Duplicate RMP professor name found: {key}")
+            else:
+                all_professors[key] = [professor_data]
 
-        try:
-            data = res.json()['data']['search']['teachers']['edges']
-            for d in data:
-                dn = d['node']
-
-                tags = []
-                if dn['teacherRatingTags']:
-                    sorted_tags = sorted(dn['teacherRatingTags'], key=lambda x: x['tagCount'], reverse=True)
-                    tags = [tag['tagName'] for tag in sorted_tags[:5]]
-
-                courses = [normalize_course_name(course['courseName']) for course in dn['courseCodes']]
-                courses = list(set(courses))
-
-                profile_link = f"https://www.ratemyprofessors.com/professor/{dn['legacyId']}" if dn['legacyId'] else None
-
-                professor_data = {
-                    'department': dn['department'],
-                    'url': profile_link,
-                    'quality_rating': dn['avgRating'],
-                    'difficulty_rating': dn['avgDifficulty'],
-                    'would_take_again': round(dn['wouldTakeAgainPercent']),
-                    'original_rmp_format': f"{dn['firstName']} {dn['lastName']}",
-                    'last_updated': datetime.datetime.now().isoformat(),
-                    'ratings_count': dn['numRatings'],
-                    'courses': courses,
-                    'tags': tags,
-                    'rmp_id': str(dn['legacyId'])
-                }
-
-                professor_name = f"{dn['firstName']} {dn['lastName']}"
-                key = normalize_professor_name(professor_name)
-
-                if key in all_professors:
-                    all_professors[key].append(professor_data)
-                    print(f"Duplicate RMP professor name found: {key}")
-                else:
-                    all_professors[key] = [professor_data]
-
-            if len(data) == 1000:
-                req_data['variables']['cursor'] = data[len(data) - 1]['cursor']
+        # check if there are more pages (only 1000 results max per page, query again if we have the max results)
+        if len(data) == max_prof_count:
+            last_item = data[-1]
+            if 'cursor' in last_item:
+                req_data['variables']['cursor'] = last_item['cursor']
                 more = True
-        except json.JSONDecodeError:
-            print("Invalid JSON response. Aborting.")
-            return all_professors
-        except KeyError as e:
-            print(f"Missing Key in JSON: {e}. Aborting.")
-            return all_professors
+            else:
+                print("Last item in data does not contain 'cursor' key. Stopping pagination.")
 
     return all_professors
 
 
-def scrape_rmp_data(university_id):
-    """Scrapes professor data from RateMyProfessors."""
-    start_time = time.time()  # Start time tracking
+def scrape_rmp_data_attempt(university_id):
+    start_time = time.time()
 
     driver = setup_driver()
     setup_driver_time = time.time()
     print(f"Driver setup time: {setup_driver_time - start_time:.2f} seconds")
 
-    headers, school_id = get_headers(driver, university_id)
-    get_headers_time = time.time()
-    print(f"Get headers time: {get_headers_time - setup_driver_time:.2f} seconds")
+    try:
+        headers, school_id = get_headers(driver, university_id)
+        get_headers_time = time.time()
+        print(
+            f"Get headers time: {get_headers_time - setup_driver_time:.2f} seconds")
 
-    driver.quit()
+        if headers and school_id:
+            professor_data = query_rmp(headers, school_id)
+            query_rmp_time = time.time()
+            print(
+                f"Query RMP time: {query_rmp_time - get_headers_time:.2f} seconds")
 
-    if headers and school_id:
-        professor_data = query_rmp(headers, school_id)
-        query_rmp_time = time.time()
-        print(f"Query RMP time: {query_rmp_time - get_headers_time:.2f} seconds")
-
-        if professor_data:
-            end_time = time.time()
-            print(f"Total execution time: {end_time - start_time:.2f} seconds")
-            return professor_data
+            if professor_data:
+                end_time = time.time()
+                print(f"Attempt execution time: {end_time - start_time:.2f} seconds")
+                return professor_data
+            else:
+                print("Data extraction failed. GraphQL API returned no data.")
+                return None
         else:
-            print("Data extraction failed. GraphQL API returned no data.")
-            end_time = time.time()
-            print(f"Total execution time: {end_time - start_time:.2f} seconds")
+            print("Failed to retrieve headers or school ID. Data extraction aborted.")
             return None
-    else:
-        print("Failed to retrieve headers or school ID. Data extraction aborted.")
-        end_time = time.time()
-        print(f"Total execution time: {end_time - start_time:.2f} seconds")
-        return None
+    finally:
+        driver.quit()
 
 
+def scrape_rmp_data(university_id, max_retries=3):
+    """Scrapes professor data from RateMyProfessors with retry logic."""
+    overall_start_time = time.time()
+    
+    for attempt in range(max_retries):
+        try:
+            print(f"\n=== Scraping attempt {attempt + 1}/{max_retries} ===")
+            
+            result = scrape_rmp_data_attempt(university_id)
+            
+            if result:
+                overall_end_time = time.time()
+                print(f"Total execution time (including retries): {overall_end_time - overall_start_time:.2f} seconds")
+                return result
+            else:
+                if attempt < max_retries - 1:
+                    print(f"Attempt {attempt + 1} failed. Retrying in 3 seconds...")
+                    time.sleep(3)
+                else:
+                    print(f"All {max_retries} attempts failed.")
+                    
+        except Exception as e:
+            print(f"Exception occurred on attempt {attempt + 1}: {e}")
+            if attempt < max_retries - 1:
+                print(f"Retrying in 3 seconds...")
+                time.sleep(3)
+            else:
+                print(f"All {max_retries} attempts failed due to exceptions.")
+    
+    overall_end_time = time.time()
+    print(f"Total execution time (including failed retries): {overall_end_time - overall_start_time:.2f} seconds")
+    return {}
 
 
 # old webscrape implementation, it seems the graphql api is much faster but has a tendency to occasionally not return all the data, such as courses, tags, and the would_take_again values, might still need this
