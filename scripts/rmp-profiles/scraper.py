@@ -322,8 +322,12 @@ def query_rmp(headers, school_id, max_retries=3):
 
         # check if there are more pages (only 1000 results max per page, query again if we have the max results)
         if len(data) == max_prof_count:
-            req_data['variables']['cursor'] = data[len(data) - 1]['cursor']
-            more = True
+            last_item = data[-1]
+            if 'cursor' in last_item:
+                req_data['variables']['cursor'] = last_item['cursor']
+                more = True
+            else:
+                print("Last item in data does not contain 'cursor' key. Stopping pagination.")
 
     return all_professors
 
