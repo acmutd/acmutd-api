@@ -246,11 +246,17 @@ func (s *ScraperService) runAllScrapers() error {
 	ctx := context.Background()
 
 	saveEnv := strings.ToLower(os.Getenv("SAVE_ENVIRONMENT"))
+	// We need to grab all existing terms for coursebook and grades (if not local)
+	// Do not do this for rmp-profiles because it is not a term-based scraper
 	if saveEnv == "prod" || saveEnv == "dev" {
-		// We need to grab all existing terms for coursebook
 		err := s.downloadFromFolder(ctx, "coursebook", "scripts/coursebook/out")
 		if err != nil {
 			return fmt.Errorf("failed to download coursebook files: %w", err)
+		}
+
+		err = s.downloadFromFolder(ctx, "grades", "scripts/grades/out")
+		if err != nil {
+			return fmt.Errorf("failed to download grades files: %w", err)
 		}
 	}
 
