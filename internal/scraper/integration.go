@@ -18,8 +18,31 @@ var (
 
 func (s *ScraperService) IntegrationStart() error {
 	integrationMode := strings.ToLower(os.Getenv("INTEGRATION_MODE"))
+	integrationRescrape := strings.ToLower(os.Getenv("INTEGRATION_RESCRAPE"))
+
+	shouldRescrape := false
+	if integrationRescrape != "" {
+		switch integrationRescrape {
+		case "true":
+			shouldRescrape = true
+		case "false":
+			shouldRescrape = false
+		default:
+			return fmt.Errorf("invalid INTEGRATION_RESCRAPE: %s (must be 'true' or 'false')", integrationRescrape)
+		}
+	}
 
 	var err error
+
+	if shouldRescrape {
+		log.Println("INTEGRATION_RESCRAPE=true: Running scrapers before data processing...")
+		err = s.RescrapeStart()
+		if err != nil {
+			return fmt.Errorf("rescrape failed: %w", err)
+		}
+	}
+
+	// Then handle data source based on INTEGRATION_MODE
 	switch integrationMode {
 	case "local":
 		err = s.LocalStart()
@@ -27,10 +50,11 @@ func (s *ScraperService) IntegrationStart() error {
 		fallthrough
 	case "prod":
 		err = s.FirebaseStart()
-	case "rescrape":
-		err = s.RescrapeStart()
+	case "":
+		log.Println("No INTEGRATION_MODE specified, defaulting to 'local'")
+		err = s.LocalStart()
 	default:
-		return fmt.Errorf("invalid INTEGRATION_MODE: %s", integrationMode)
+		return fmt.Errorf("invalid INTEGRATION_MODE: %s (must be 'local', 'dev', or 'prod')", integrationMode)
 	}
 
 	// TODO: Run the integration scraper
@@ -222,15 +246,13 @@ func (s *ScraperService) RescrapeStart() error {
 		log.Printf("SAVE_ENVIRONMENT=%s: Will only scrape locally, skipping upload", saveEnv)
 	}
 
-	log.Println("Phase 1: Running all scrapers sequentially...")
+	log.Println("Running all scrapers sequentially...")
 	if err := s.runAllScrapers(); err != nil {
 		return fmt.Errorf("scraping phase failed: %w", err)
 	}
 
-	s.LocalStart()
-
 	if shouldUpload {
-		log.Println("Phase 2: Uploading all data concurrently...")
+		log.Println("Uploading all data concurrently...")
 		if err := s.uploadAllScrapers(); err != nil {
 			return fmt.Errorf("upload phase failed: %w", err)
 		}

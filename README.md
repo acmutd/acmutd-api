@@ -62,7 +62,8 @@ This project consists of several key components:
    SCRAPER=coursebook  # Options: coursebook, grades, rmp-profiles, integration
    SAVE_ENVIRONMENT=development
 
-   INTEGRATION_MODE=local # local, dev, prod, rescrape
+   INTEGRATION_MODE=local # local, dev, prod
+   INTEGRATION_RESCRAPE=false # true, false
 
    # UTD Credentials (for coursebook scraper)
    NETID=your_netid
@@ -83,7 +84,7 @@ The API will be available at `http://localhost:8080`
 
     The scraper will run depending on the `SCRAPER` environment variable.
     Depending on the `SAVE_ENVIRONMENT` environment variable, the data will be saved locally or uploaded to Firebase.
-    When running the integration scraper, the `INTEGRATION_MODE` environment variable will determine whether to pull the data from Firebase, grab the data from local files, or rerun all the scrapers.
+    When running the integration scraper, the `INTEGRATION_MODE` environment variable determines the data source (local files, dev Firebase, or prod Firebase), and `INTEGRATION_RESCRAPE` determines whether to run scrapers first before processing the data.
 
    ```bash
    go run cmd/scraper/main.go
@@ -156,7 +157,8 @@ acm-api/
 | `NETID` | UTD NetID for coursebook access | Yes (for coursebook) | - |
 | `PASSWORD` | UTD password for coursebook access | Yes (for coursebook) | - |
 | `CLASS_TERMS` | Comma-separated terms to scrape | Yes (for scrapers) | - |
-| `INTEGRATION_MODE` | Mode for integration scraper | Yes (for integration) | - |
+| `INTEGRATION_MODE` | Data source for integration scraper (local/dev/prod) | Yes (for integration) | - |
+| `INTEGRATION_RESCRAPE` | Whether to run scrapers before integration (true/false) | No | false |
 
 ### Term Format
 
