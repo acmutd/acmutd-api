@@ -20,7 +20,14 @@ type ScraperService struct {
 }
 
 func NewScraperService(scraper string) *ScraperService {
-	sa := option.WithCredentialsFile(os.Getenv("FIREBASE_CONFIG"))
+	configName := os.Getenv("FB_CONFIG")
+	if os.Getenv("SAVE_ENVIRONMENT") == "dev" || os.Getenv("SAVE_ENVIRONMENT") == "local" {
+		configName = "dev." + configName
+	} else if os.Getenv("SAVE_ENVIRONMENT") == "prod" {
+		configName = "prod." + configName
+	}
+	log.Printf("Final config filename: %s", configName)
+	sa := option.WithCredentialsFile(configName)
 	app, err := fb.NewApp(context.Background(), nil, sa)
 	if err != nil {
 		log.Fatalf("error initializing firebase app: %v\n", err)
