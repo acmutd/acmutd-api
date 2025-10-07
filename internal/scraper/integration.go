@@ -17,7 +17,7 @@ var (
 )
 
 func (s *ScraperService) IntegrationStart() error {
-	integrationMode := strings.ToLower(os.Getenv("INTEGRATION_MODE"))
+	integrationMode := strings.ToLower(os.Getenv("INTEGRATION_SOURCE"))
 	integrationRescrape := strings.ToLower(os.Getenv("INTEGRATION_RESCRAPE"))
 
 	shouldRescrape := false
@@ -42,7 +42,7 @@ func (s *ScraperService) IntegrationStart() error {
 		}
 	}
 
-	// Then handle data source based on INTEGRATION_MODE
+	// Then handle data source based on INTEGRATION_SOURCE
 	switch integrationMode {
 	case "local":
 		err = s.LocalStart()
@@ -51,10 +51,10 @@ func (s *ScraperService) IntegrationStart() error {
 	case "prod":
 		err = s.FirebaseStart()
 	case "":
-		log.Println("No INTEGRATION_MODE specified, defaulting to 'local'")
+		log.Println("No INTEGRATION_SOURCE specified, defaulting to 'local'")
 		err = s.LocalStart()
 	default:
-		return fmt.Errorf("invalid INTEGRATION_MODE: %s (must be 'local', 'dev', or 'prod')", integrationMode)
+		return fmt.Errorf("invalid INTEGRATION_SOURCE: %s (must be 'local', 'dev', or 'prod')", integrationMode)
 	}
 
 	// TODO: Run the integration scraper

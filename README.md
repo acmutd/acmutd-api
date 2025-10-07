@@ -157,7 +157,7 @@ acm-api/
 | `NETID` | UTD NetID for coursebook access | Yes (for coursebook) | - |
 | `PASSWORD` | UTD password for coursebook access | Yes (for coursebook) | - |
 | `CLASS_TERMS` | Comma-separated terms to scrape | Yes (for scrapers) | - |
-| `INTEGRATION_MODE` | Data source for integration scraper (local/dev/prod) | Yes (for integration) | - |
+| `INTEGRATION_SOURCE` | Data source for integration scraper (local/dev/prod) | Yes (for integration) | - |
 | `INTEGRATION_RESCRAPE` | Whether to run scrapers before integration (true/false) | No | false |
 
 ### Term Format
