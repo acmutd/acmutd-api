@@ -3,6 +3,8 @@ Matcher module for fuzzy matching RMP data with professor ratings.
 Handles direct matches, fuzzy matching, and course overlap validation.
 """
 
+import json
+import os
 from fuzzywuzzy import fuzz
 from utils import normalize_name, generate_name_variations, check_course_overlap
 
@@ -49,6 +51,56 @@ def remove_matched_entries(matched_ratings_entry, matched_rmp_entry, ratings, rm
             del rmp_data[rmp_key]
 
 
+def apply_manual_matches(ratings, rmp_data, matched_data, normalized_ratings, normalized_rmp_data):
+    """Applies manual matches from a JSON file, normalizing names before matching."""
+    manual_matches_file = "manual_matches.json"
+    
+    if not os.path.exists(manual_matches_file):
+        print(f"{manual_matches_file} not found. Manual matches will be skipped.")
+        return
+
+    try:
+        with open(manual_matches_file, "r", encoding="utf-8") as f:
+            manual_matches = json.load(f)
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        print(f"Error loading manual matches: {e}. Manual matches will be skipped.")
+        return
+
+    print(f"Applying {len(manual_matches)} manual matches...")
+    
+    for match in manual_matches:
+        ratings_name = normalize_name(match["ratings_name"])
+        rmp_name = normalize_name(match["rmp_name"])
+
+        if ratings_name in normalized_ratings and rmp_name in normalized_rmp_data:
+            original_ratings_name, ratings_list = normalized_ratings[ratings_name]
+            rmp_list = normalized_rmp_data[rmp_name]
+
+            matched_entry = process_direct_match(ratings_list, rmp_list)
+
+            if matched_entry:
+                if original_ratings_name not in matched_data:
+                    matched_data[original_ratings_name] = []
+                matched_data[original_ratings_name].append(matched_entry)
+                
+                # Find original RMP name
+                original_rmp_name = None
+                for original_name, norm_data in rmp_data.items():
+                    if normalize_name(original_name) == rmp_name:
+                        original_rmp_name = original_name
+                        break
+
+                if original_ratings_name in ratings and original_rmp_name in rmp_data:
+                    remove_matched_entries(matched_entry, matched_entry, ratings, rmp_data)
+                    print(f"Manual match applied: {original_ratings_name} -> {original_rmp_name}")
+                else:
+                    print(f"Manual match failed: Could not find entries in source dictionaries.")
+            else:
+                print(f"Manual match failed: No matching courses found for {ratings_name} -> {rmp_name}")
+        else:
+            print(f"Manual match failed: {ratings_name} or {rmp_name} not found.")
+
+
 def match_professor_names(ratings, rmp_data, fuzzy_threshold=80):
     """Matches professor data using direct and fuzzy matching with name variations."""
     matched_data = {}
@@ -60,6 +112,9 @@ def match_professor_names(ratings, rmp_data, fuzzy_threshold=80):
     total_ratings_entries = sum(len(data_list) for _, data_list in normalized_ratings.values())
     total_rmp_entries = sum(len(rmp_list) for _, rmp_list in normalized_rmp_data.items())
     print(f"Matching {total_ratings_entries} grade ratings entries to {total_rmp_entries} RateMyProfessors entries...")
+
+    # Apply manual matches before other processing
+    apply_manual_matches(ratings, rmp_data, matched_data, normalized_ratings, normalized_rmp_data)
 
     direct_match_count = 0
 

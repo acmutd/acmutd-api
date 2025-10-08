@@ -42,6 +42,22 @@ in/
 - **Coursebook Data**: JSON array with section objects containing `instructor_ids`, `instructors`, `course_prefix`, `course_number`, `section_number`
 - **Grades Data**: CSV files with columns: `Subject`, `Catalog Nbr`, `Section`, `Instructor 1`, grade distributions (`A+`, `A`, `B+`, etc.)
 - **RMP Data**: JSON object with professor names as keys, arrays of professor profile objects as values
+- **Manual Matches** (optional): `manual_matches.json` file with explicit name mappings for edge cases
+
+### Manual Matching
+
+For cases where professors have different names in grades vs RMP data, create a `manual_matches.json` file:
+
+```json
+[
+    {
+        "ratings_name": "Yu Chung Ng",
+        "rmp_name": "Vincent Ng"
+    }
+]
+```
+
+This ensures professors with name discrepancies are still properly matched.
 
 ## Output Data
 
@@ -69,10 +85,11 @@ The enhanced grades CSV includes all original grade data plus:
 - Converts to lowercase for consistent matching
 
 ### Fuzzy Matching Process
-1. **Direct Matches** - Exact normalized name matches
-2. **Name Variations** - Generates first/last name combinations
-3. **Course Overlap Validation** - Ensures matched professors teach similar courses
-4. **Fuzzy Threshold** - Uses 80% similarity threshold for name matching
+1. **Manual Matches** - Applies predefined name mappings from `manual_matches.json`
+2. **Direct Matches** - Exact normalized name matches
+3. **Name Variations** - Generates first/last name combinations
+4. **Course Overlap Validation** - Ensures matched professors teach similar courses
+5. **Fuzzy Threshold** - Uses 80% similarity threshold for name matching
 
 ## Usage
 
