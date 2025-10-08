@@ -55,7 +55,7 @@ def load_input_data():
    return coursebook_data, grades_files, rmp_data
 
 
-def save_output_data(matched_professor_data):
+def save_output_data(matched_professor_data, enhanced_grades, instructor_by_id):
    """Save all output data to the /out directory."""
    print("Saving output files...")
    
@@ -64,21 +64,21 @@ def save_output_data(matched_professor_data):
    os.makedirs("out/grades", exist_ok=True)
 
    # Save matched professor data (by name)
-   with open("out/professors/matched_professor_data.json", "w", encoding="utf-8") as f:
+   with open("out/professors/matched_professor_data_names.json", "w", encoding="utf-8") as f:
       json.dump(matched_professor_data, f, indent=4, ensure_ascii=False)
    
-   # # Save instructor lookup (by ID)
-   # with open("out/instructor_by_id.json", "w", encoding="utf-8") as f:
-   #    json.dump(instructor_by_id, f, indent=4, ensure_ascii=False)
+   # Save instructor lookup (by ID)
+   with open("out/professors/matched_professor_data_ids.json", "w", encoding="utf-8") as f:
+      json.dump(instructor_by_id, f, indent=4, ensure_ascii=False)
    
-   # # Save enhanced grades with instructor IDs
-   # with open("out/enhanced_grades.csv", "w", encoding="utf-8", newline="") as f:
-   #    if enhanced_grades:
-   #       writer = csv.DictWriter(f, fieldnames=enhanced_grades[0].keys())
-   #       writer.writeheader()
-   #       writer.writerows(enhanced_grades)
+   # Save enhanced grades with instructor IDs
+   with open("out/grades/enhanced_grades.csv", "w", encoding="utf-8", newline="") as f:
+      if enhanced_grades:
+         writer = csv.DictWriter(f, fieldnames=enhanced_grades[0].keys())
+         writer.writeheader()
+         writer.writerows(enhanced_grades)
    
-   return len(matched_professor_data)#, len(instructor_by_id), len(enhanced_grades)
+   return len(matched_professor_data), len(instructor_by_id), len(enhanced_grades)
 
 
 def generate_stats(coursebook_data, matched_professor_data, instructor_by_id, enhanced_grades):
@@ -115,34 +115,34 @@ def main():
    matched_professor_data = match_professor_names(professor_ratings, rmp_data)
    
    # 4. Map grades to instructor IDs
-   # print("Mapping grades to instructor IDs...")
-   # enhanced_grades = map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data)
+   print("Mapping grades to instructor IDs...")
+   enhanced_grades = map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data)
    
    # 5. Create instructor ID lookup
-   # print("Creating instructor ID lookup...")
-   # instructor_by_id = create_instructor_id_lookup(matched_professor_data)
+   print("Creating instructor ID lookup...")
+   instructor_by_id = create_instructor_id_lookup(matched_professor_data)
    
    # 6. Save output files
-   matched_count = save_output_data(
-      matched_professor_data, # instructor_by_id, enhanced_grades
+   matched_count, instructor_count, grades_count = save_output_data(
+      matched_professor_data, instructor_by_id, enhanced_grades
    )
 
    print(f"Saved data for {matched_count} matched professors.")
    
    # 7. Generate and save statistics
-   # stats = generate_stats(coursebook_data, enhanced_grades, matched_professor_data, instructor_by_id)
+   stats = generate_stats(coursebook_data, enhanced_grades, matched_professor_data, instructor_by_id)
    
    # 8. Print summary
-   # end_time = time.time()
-   # print(f"\nIntegration complete in {end_time - start_time:.2f} seconds!")
-   # print(f"Results saved to /out directory:")
-   # print(f"  - matched_professor_data.json: {matched_count} professors")
-   # print(f"  - instructor_by_id.json: {instructor_count} instructors by ID")
-   # print(f"  - enhanced_grades.csv: {grades_count} grade entries")
-   # print(f"  - integration_stats.json: Summary statistics")
-   # print(f"\nMapping results:")
-   # print(f"  - Grades with instructor IDs: {stats['grades_with_instructor_ids']}")
-   # print(f"  - Grades with RMP data: {stats['grades_with_rmp_data']}")
+   end_time = time.time()
+   print(f"\nIntegration complete in {end_time - start_time:.2f} seconds!")
+   print(f"Results saved to /out directory:")
+   print(f"  - matched_professor_data.json: {matched_count} professors")
+   print(f"  - instructor_by_id.json: {instructor_count} instructors by ID")
+   print(f"  - enhanced_grades.csv: {grades_count} grade entries")
+   print(f"  - integration_stats.json: Summary statistics")
+   print(f"\nMapping results:")
+   print(f"  - Grades with instructor IDs: {stats['grades_with_instructor_ids']}")
+   print(f"  - Grades with RMP data: {stats['grades_with_rmp_data']}")
 
 
 if __name__ == "__main__":
