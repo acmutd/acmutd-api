@@ -55,7 +55,7 @@ def load_input_data():
    return coursebook_data, grades_files, rmp_data
 
 
-def save_output_data(matched_professor_data, enhanced_grades, instructor_by_id):
+def save_output_data(matched_professor_data, enhanced_grades_by_file, instructor_by_id):
    """Save all output data to the /out directory."""
    print("Saving output files...")
    
@@ -71,25 +71,40 @@ def save_output_data(matched_professor_data, enhanced_grades, instructor_by_id):
    with open("out/professors/matched_professor_data_ids.json", "w", encoding="utf-8") as f:
       json.dump(instructor_by_id, f, indent=4, ensure_ascii=False)
    
-   # Save enhanced grades with instructor IDs
-   with open("out/grades/enhanced_grades.csv", "w", encoding="utf-8", newline="") as f:
-      if enhanced_grades:
-         writer = csv.DictWriter(f, fieldnames=enhanced_grades[0].keys())
-         writer.writeheader()
-         writer.writerows(enhanced_grades)
+   # Save enhanced grades files individually
+   total_grades = 0
+   for filepath, enhanced_grades in enhanced_grades_by_file.items():
+      if enhanced_grades:  # Only save if we have data
+         # Extract semester from original filename (e.g., "grades_25s.csv" -> "25s")
+         basename = os.path.basename(filepath)
+         semester = basename.replace("grades_", "").replace(".csv", "")
+         output_filename = f"out/grades/enhanced_grades_{semester}.csv"
+         
+         with open(output_filename, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=enhanced_grades[0].keys())
+            writer.writeheader()
+            writer.writerows(enhanced_grades)
+         
+         total_grades += len(enhanced_grades)
+         print(f"  Saved enhanced_grades_{semester}.csv with {len(enhanced_grades)} entries")
    
-   return len(matched_professor_data), len(instructor_by_id), len(enhanced_grades)
+   return len(matched_professor_data), len(instructor_by_id), total_grades
 
 
-def generate_stats(coursebook_data, matched_professor_data, instructor_by_id, enhanced_grades):
+def generate_stats(coursebook_data, matched_professor_data, instructor_by_id, enhanced_grades_by_file):
    """Generate and save summary statistics."""
+   # Flatten all enhanced grades into a single list for stats
+   all_enhanced_grades = []
+   for enhanced_grades in enhanced_grades_by_file.values():
+      all_enhanced_grades.extend(enhanced_grades)
+   
    stats = {
       "total_coursebook_sections": len(coursebook_data),
-      "total_grade_entries": len(enhanced_grades),
+      "total_grade_entries": len(all_enhanced_grades),
       "matched_professors": len(matched_professor_data),
       "instructors_by_id": len(instructor_by_id),
-      "grades_with_instructor_ids": len([g for g in enhanced_grades if g["instructor_id"]]),
-      "grades_with_rmp_data": len([g for g in enhanced_grades if g["has_rmp_data"]])
+      "grades_with_instructor_ids": len([g for g in all_enhanced_grades if g["instructor_id"]]),
+      "grades_with_rmp_data": len([g for g in all_enhanced_grades if g["has_rmp_data"]])
    }
    
    with open("out/integration_stats.json", "w", encoding="utf-8") as f:
@@ -116,7 +131,7 @@ def main():
    
    # 4. Map grades to instructor IDs
    print("Mapping grades to instructor IDs...")
-   enhanced_grades = map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data)
+   enhanced_grades_by_file = map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data)
    
    # 5. Create instructor ID lookup
    print("Creating instructor ID lookup...")
@@ -124,13 +139,13 @@ def main():
    
    # 6. Save output files
    matched_count, instructor_count, grades_count = save_output_data(
-      matched_professor_data, instructor_by_id, enhanced_grades
+      matched_professor_data, enhanced_grades_by_file, instructor_by_id
    )
 
    print(f"Saved data for {matched_count} matched professors.")
    
    # 7. Generate and save statistics
-   stats = generate_stats(coursebook_data, enhanced_grades, matched_professor_data, instructor_by_id)
+   stats = generate_stats(coursebook_data, matched_professor_data, instructor_by_id, enhanced_grades_by_file)
    
    # 8. Print summary
    end_time = time.time()

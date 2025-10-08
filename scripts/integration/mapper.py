@@ -50,7 +50,7 @@ def create_instructor_id_lookup(matched_professor_data):
 def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data):
     """Maps grade CSV rows to coursebook sections and extracts instructor IDs."""
     section_lookup = create_section_lookup(coursebook_data)
-    enhanced_grades = []
+    enhanced_grades_by_file = {}
     
     # Stats tracking
     total_grades = 0
@@ -67,6 +67,7 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                 instructor_by_id[instructor_id] = professor_entry
 
     for filepath in grades_files:
+        enhanced_grades = []
         with open(filepath, "r", encoding="utf-8-sig") as csvfile:
             print(f"Mapping grades in {os.path.basename(filepath)}...")
             reader = csv.DictReader(csvfile)
@@ -130,6 +131,9 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                     no_matches += 1
                 
                 enhanced_grades.append(enhanced_row)
+        
+        # Store enhanced grades for this file
+        enhanced_grades_by_file[filepath] = enhanced_grades
     
     # Print mapping statistics
     print(f"\n--- Instructor Mapping Statistics ---")
@@ -139,4 +143,4 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
     print(f"No matches found: {no_matches} ({no_matches/total_grades*100:.1f}%)")
     print(f"Total matched: {section_matches + fallback_matches} ({(section_matches + fallback_matches)/total_grades*100:.1f}%)")
     
-    return enhanced_grades
+    return enhanced_grades_by_file
