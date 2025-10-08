@@ -22,9 +22,15 @@ type CloudStorage struct {
 	*storage.Client
 }
 
-const (
-	defaultBucketName = "acmutd-api.firebasestorage.app"
-)
+func GetDefaultBucketName() string {
+	saveEnvironment := os.Getenv("SAVE_ENVIRONMENT")
+	if saveEnvironment == "local" || saveEnvironment == "dev" {
+		return "acmutd-api-dev.firebasestorage.app"
+	} else if saveEnvironment == "prod" {
+		return "acmutd-api.firebasestorage.app"
+	}
+	return ""
+}
 
 func NewCloudStorage(ctx context.Context, app *firebase.App) (*CloudStorage, error) {
 	client, err := app.Storage(ctx)
@@ -42,7 +48,7 @@ func (s *CloudStorage) UploadFile(ctx context.Context, path string, data []byte)
 		return fmt.Errorf("upload validation failed: %w", err)
 	}
 
-	bucketName := s.getBucketName()
+	bucketName := GetDefaultBucketName()
 	bucket, err := s.Bucket(bucketName)
 	if err != nil {
 		return fmt.Errorf("failed to get storage bucket '%s': %w", bucketName, err)
@@ -68,7 +74,7 @@ func (s *CloudStorage) UploadFile(ctx context.Context, path string, data []byte)
 }
 
 func (s *CloudStorage) DownloadFromFolder(ctx context.Context, folderPath, outputDir string) (int, error) {
-	bucketName := s.getBucketName()
+	bucketName := GetDefaultBucketName()
 	bucket, err := s.Bucket(bucketName)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get storage bucket '%s': %w", bucketName, err)
@@ -245,11 +251,4 @@ func (s *CloudStorage) downloadSingleFile(ctx context.Context, bucket *goStorage
 	}
 
 	return nil
-}
-
-func (s *CloudStorage) getBucketName() string {
-	if bucketName := os.Getenv("FIREBASE_STORAGE_BUCKET"); bucketName != "" {
-		return bucketName
-	}
-	return defaultBucketName
 }
