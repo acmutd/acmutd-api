@@ -22,12 +22,13 @@ def create_section_lookup(coursebook_data):
 
 def find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section):
     """Finds instructor ID using section address matching (more reliable approach)."""
-    # Build section key: e.g., ACCT2301.002 (case-insensitive)
+    # build section key: e.g., acct2301.002
     key = f"{subject}{catalog_nbr}.{section}".lower()
     
-    # Look for section address that starts with our key
+    # find the section for our given key in the coursebook data
     for section_address, section_data in section_lookup.items():
         if section_address.startswith(key):
+            # retrieve the id of the instructor for this section
             instructor_ids = section_data.get('instructor_ids', '').split(',')
             return instructor_ids[0].strip() if instructor_ids and instructor_ids[0].strip() else ''
     
@@ -42,7 +43,10 @@ def create_instructor_id_lookup(matched_professor_data):
         for professor_entry in professor_list:
             instructor_id = professor_entry.get("instructor_id")
             if instructor_id:
-                instructor_lookup[instructor_id] = professor_entry
+                # make normalized coursebook name a property of the instructor since the id is becoming the key
+                enhanced_entry = dict(professor_entry)
+                enhanced_entry["normalized_coursebook_name"] = professor_name
+                instructor_lookup[instructor_id] = enhanced_entry
     
     return instructor_lookup
 
@@ -52,7 +56,6 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
     section_lookup = create_section_lookup(coursebook_data)
     enhanced_grades_by_file = {}
     
-    # Stats tracking
     total_grades = 0
     section_matches = 0
     fallback_matches = 0
@@ -85,7 +88,6 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                 enhanced_row = dict(row)
                 enhanced_row["instructor_id"] = ""
                 enhanced_row["instructor_name_normalized"] = ""
-                enhanced_row["has_rmp_data"] = False
                 
                 # Try section address lookup (more reliable method)
                 instructor_id = find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section)
@@ -98,7 +100,6 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                     enhanced_row["instructor_name_normalized"] = normalize_name(
                         instructor_data.get("original_rmp_format", "")
                     )
-                    enhanced_row["has_rmp_data"] = True
                 elif not instructor_id:
                     # Fallback: Try to match by instructor name if no section address match found
                     instructor_1 = row.get("Instructor 1", "").strip()
@@ -113,7 +114,6 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                                 if professor_list and len(professor_list) > 0:
                                     fallback_instructor_id = professor_list[0].get("instructor_id", "")
                                     enhanced_row["instructor_id"] = fallback_instructor_id
-                                    enhanced_row["has_rmp_data"] = True
                                     matched_fallback = True
                                     fallback_matches += 1
                                     break
@@ -127,7 +127,6 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                     enhanced_row["instructor_name_normalized"] = normalize_name(
                         row.get("Instructor 1", "")
                     )
-                    enhanced_row["has_rmp_data"] = False
                     no_matches += 1
                 
                 enhanced_grades.append(enhanced_row)

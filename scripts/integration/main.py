@@ -68,7 +68,7 @@ def save_output_data(matched_professor_data, enhanced_grades_by_file, instructor
       json.dump(matched_professor_data, f, indent=4, ensure_ascii=False)
    
    # Save instructor lookup (by ID)
-   with open("out/professors/matched_professor_data_ids.json", "w", encoding="utf-8") as f:
+   with open("out/professors/matched_professor_data.json", "w", encoding="utf-8") as f:
       json.dump(instructor_by_id, f, indent=4, ensure_ascii=False)
    
    # Save enhanced grades files individually
@@ -103,12 +103,8 @@ def generate_stats(coursebook_data, matched_professor_data, instructor_by_id, en
       "total_grade_entries": len(all_enhanced_grades),
       "matched_professors": len(matched_professor_data),
       "instructors_by_id": len(instructor_by_id),
-      "grades_with_instructor_ids": len([g for g in all_enhanced_grades if g["instructor_id"]]),
-      "grades_with_rmp_data": len([g for g in all_enhanced_grades if g["has_rmp_data"]])
+      "grades_with_instructor_ids": len([g for g in all_enhanced_grades if g["instructor_id"]])
    }
-   
-   with open("out/integration_stats.json", "w", encoding="utf-8") as f:
-      json.dump(stats, f, indent=4, ensure_ascii=False)
    
    return stats
 
@@ -157,7 +153,6 @@ def main():
    print(f"  - integration_stats.json: Summary statistics")
    print(f"\nMapping results:")
    print(f"  - Grades with instructor IDs: {stats['grades_with_instructor_ids']}")
-   print(f"  - Grades with RMP data: {stats['grades_with_rmp_data']}")
 
 
 if __name__ == "__main__":
