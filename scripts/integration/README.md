@@ -67,7 +67,6 @@ out/
 ├── matched_professor_data.json    # Professors with RMP data (indexed by name)
 ├── instructor_by_id.json         # Instructors indexed by ID
 ├── enhanced_grades.csv           # Grades with instructor IDs and RMP flags
-└── integration_stats.json       # Summary statistics
 ```
 
 ### Enhanced Grades CSV
@@ -75,7 +74,6 @@ out/
 The enhanced grades CSV includes all original grade data plus:
 - `instructor_id` - UTD instructor ID from coursebook
 - `instructor_name_normalized` - Normalized instructor name
-- `has_rmp_data` - Boolean flag indicating RMP data availability
 
 ## Matching Logic
 

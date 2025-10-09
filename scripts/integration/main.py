@@ -93,7 +93,6 @@ def save_output_data(matched_professor_data, enhanced_grades_by_file, instructor
 
 def generate_stats(coursebook_data, matched_professor_data, instructor_by_id, enhanced_grades_by_file):
    """Generate and save summary statistics."""
-   # Flatten all enhanced grades into a single list for stats
    all_enhanced_grades = []
    for enhanced_grades in enhanced_grades_by_file.values():
       all_enhanced_grades.extend(enhanced_grades)
@@ -101,9 +100,10 @@ def generate_stats(coursebook_data, matched_professor_data, instructor_by_id, en
    stats = {
       "total_coursebook_sections": len(coursebook_data),
       "total_grade_entries": len(all_enhanced_grades),
-      "matched_professors": len(matched_professor_data),
-      "instructors_by_id": len(instructor_by_id),
-      "grades_with_instructor_ids": len([g for g in all_enhanced_grades if g["instructor_id"]])
+      "matched_professor_names": len(matched_professor_data),
+      "matched_professor_ids": len(instructor_by_id),
+      "grades_with_instructor_ids": len([g for g in all_enhanced_grades if g["instructor_id"]]),
+      "grades_without_instructor_ids": len([g for g in all_enhanced_grades if not g["instructor_id"]])
    }
    
    return stats
@@ -147,12 +147,13 @@ def main():
    end_time = time.time()
    print(f"\nIntegration complete in {end_time - start_time:.2f} seconds!")
    print(f"Results saved to /out directory:")
-   print(f"  - matched_professor_data.json: {matched_count} professors")
-   print(f"  - instructor_by_id.json: {instructor_count} instructors by ID")
-   print(f"  - enhanced_grades.csv: {grades_count} grade entries")
-   print(f"  - integration_stats.json: Summary statistics")
+   print(f"  - matched_professor_data_names.json: {stats['matched_professor_names']} professors by name")
+   print(f"  - matched_professor_data.json: {stats['matched_professor_ids']} professors by ID")
+   print(f"  - total grade distributions: {grades_count} grade entries")
+   print(f" NOTE: professor data keyed by names vs ids has a length discrepancy due to cases of duplicate names with different ids")
    print(f"\nMapping results:")
    print(f"  - Grades with instructor IDs: {stats['grades_with_instructor_ids']}")
+   print(f"  - Grades without instructor IDs: {stats['grades_without_instructor_ids']}")
 
 
 if __name__ == "__main__":
