@@ -11,6 +11,13 @@ import json
 import csv
 import os
 import time
+import dotenv
+
+dotenv_path = dotenv.find_dotenv()
+if dotenv_path:
+   dotenv.load_dotenv(dotenv_path)
+else:
+   dotenv.load_dotenv()
 
 from aggregator import calculate_professor_ratings_from_grades
 from professor_matcher import match_professor_names
@@ -24,26 +31,29 @@ def load_input_data():
    # load all coursebook data
    coursebook_data = []
    coursebook_dir = "in/coursebook"
+   print(f"Loading coursebook data from {coursebook_dir}...")
    if os.path.exists(coursebook_dir):
       for filename in os.listdir(coursebook_dir):
          if filename.endswith(".json"):
             filepath = os.path.join(coursebook_dir, filename)
-            print(f"Loading coursebook file: {filename}")
+            # print(f"Loading coursebook file: {filename}")
             with open(filepath, "r", encoding="utf-8") as f:
                coursebook_data.extend(json.load(f))
     
    # load all grades data
    grades_files = []
    grades_dir = "in/grades"
+   print(f"Loading grades data from {grades_dir}...")
    if os.path.exists(grades_dir):
       for filename in os.listdir(grades_dir):
          if filename.endswith(".csv"):
-               print(f"Loading grades file: {filename}")
+               # print(f"Loading grades file: {filename}")
                grades_files.append(os.path.join(grades_dir, filename))
    
    # load rmp data
    rmp_filepath = "in/rmp-profiles/rmp_data.json"
    rmp_data = {}
+   print(f"Loading RMP data from {rmp_filepath}...")
    if os.path.exists(rmp_filepath):
       with open(rmp_filepath, "r", encoding="utf-8") as f:
          rmp_data = json.load(f)
@@ -53,6 +63,17 @@ def load_input_data():
    print(f"Loaded {len(rmp_data)} RMP professor entries")
    
    return coursebook_data, grades_files, rmp_data
+
+def get_target_semesters():
+   """Read CLASS_TERMS from env and return a set of semesters (or empty set to indicate all)."""
+   class_terms_env = os.environ.get("CLASS_TERMS", "")
+   print(f"CLASS_TERMS env variable: '{class_terms_env}'")
+   if class_terms_env:
+      target_semesters = {t.strip() for t in class_terms_env.split(',') if t.strip()}
+      print(f"CLASS_TERMS specified, only enhancing semesters: {target_semesters}")
+      return target_semesters
+   print("CLASS_TERMS not specified, enhancing all semesters by default")
+   return set()
 
 
 def save_output_data(matched_professor_data, enhanced_grades_by_file, instructor_by_id):
@@ -127,7 +148,8 @@ def main():
    
    # 4. Map grades to instructor IDs
    print("Mapping grades to instructor IDs...")
-   enhanced_grades_by_file = map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data)
+   target_semesters = get_target_semesters()
+   enhanced_grades_by_file = map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data, target_semesters)
    
    # 5. Create instructor ID lookup
    print("Creating instructor ID lookup...")

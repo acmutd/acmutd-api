@@ -51,7 +51,7 @@ def create_instructor_id_lookup(matched_professor_data):
     return instructor_lookup
 
 
-def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data):
+def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data, target_semesters=None):
     """Maps grade CSV rows to coursebook sections and extracts instructor IDs."""
     section_lookup = create_section_lookup(coursebook_data)
     enhanced_grades_by_file = {}
@@ -71,28 +71,41 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
 
     for filepath in grades_files:
         enhanced_grades = []
+        # Determine semester tag from filename, e.g., grades_25s.csv -> 25s
+        basename = os.path.basename(filepath)
+        semester = basename.replace("grades_", "").replace(".csv", "")
+        should_enhance = True
+        if target_semesters and len(target_semesters) > 0:
+            should_enhance = semester in target_semesters
+
+        if not should_enhance:
+            print(f"Skipping enhancement for {basename} (not in target semesters)")
+            # still include an empty entry so caller knows the file was considered
+            enhanced_grades_by_file[filepath] = []
+            continue
+
         with open(filepath, "r", encoding="utf-8-sig") as csvfile:
             print(f"Mapping grades in {os.path.basename(filepath)}...")
             reader = csv.DictReader(csvfile)
-            
+
             for row in reader:
                 total_grades += 1
-                
+
                 # Extract grade data fields
                 subject = row.get("Subject", "").strip().upper()
                 catalog_nbr = row.get('"Catalog Nbr"') or row.get("Catalog Nbr", "")
                 catalog_nbr = catalog_nbr.strip()
                 section = row.get("Section", "").strip()
-                
+
                 # Enhanced row with instructor information
                 enhanced_row = dict(row)
                 enhanced_row["instructor_id"] = ""
                 enhanced_row["instructor_name_normalized"] = ""
-                
+
                 # Try section address lookup (more reliable method)
                 instructor_id = find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section)
                 enhanced_row["instructor_id"] = instructor_id
-                
+
                 # Check if we have professor data for this instructor
                 if instructor_id and instructor_id in instructor_by_id:
                     section_matches += 1
@@ -106,7 +119,7 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                     if instructor_1:
                         normalized_instructor = normalize_name(instructor_1)
                         enhanced_row["instructor_name_normalized"] = normalized_instructor
-                        
+
                         # Try to find in matched professor data
                         matched_fallback = False
                         for professor_name, professor_list in matched_professor_data.items():
@@ -117,7 +130,7 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                                     matched_fallback = True
                                     fallback_matches += 1
                                     break
-                        
+
                         if not matched_fallback:
                             no_matches += 1
                     else:
@@ -128,10 +141,10 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                         row.get("Instructor 1", "")
                     )
                     no_matches += 1
-                
+
                 enhanced_grades.append(enhanced_row)
-        
-        # Store enhanced grades for this file
+
+        # Store enhanced grades for this file (now correctly inside the loop)
         enhanced_grades_by_file[filepath] = enhanced_grades
     
     # Print mapping statistics

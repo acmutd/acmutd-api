@@ -60,9 +60,10 @@ def calculate_professor_ratings_from_grades(grades_files, coursebook_data):
     }
 
     try:
+        print("Aggregating grade data from files...")
         for filepath in grades_files:
             with open(filepath, "r", encoding="utf-8-sig") as csvfile:
-                print(f"Aggregating {os.path.basename(filepath)}...")
+                # print(f"Aggregating {os.path.basename(filepath)}...")
                 reader = csv.DictReader(csvfile)
                 for row in reader:
                     instructor = normalize_name(row.get("Instructor 1", ""))
