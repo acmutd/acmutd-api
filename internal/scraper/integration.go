@@ -16,7 +16,17 @@ var (
 	outputDir = "scripts/integration/in"
 )
 
-func (s *ScraperService) IntegrationStart() error {
+type IntegrationHandler struct {
+	service *ScraperService
+}
+
+func NewIntegrationHandler(service *ScraperService) *IntegrationHandler {
+	return &IntegrationHandler{
+		service: service,
+	}
+}
+
+func (s *IntegrationHandler) IntegrationStart() error {
 	integrationMode := strings.ToLower(os.Getenv("INTEGRATION_SOURCE"))
 	integrationRescrape := strings.ToLower(os.Getenv("INTEGRATION_RESCRAPE"))
 
@@ -58,11 +68,26 @@ func (s *ScraperService) IntegrationStart() error {
 	}
 
 	// TODO: Run the integration scraper
+	runner := NewPythonRunner("integration")
+	if err := runner.Run(); err != nil {
+		return fmt.Errorf("failed to run integration scraper: %w", err)
+	}
 
+	shouldUpload := strings.ToLower(os.Getenv("SAVE_ENVIRONMENT"))
+	if shouldUpload != "prod" && shouldUpload != "dev" {
+		log.Printf("SAVE_ENVIRONMENT=%s: Data dumped locally to /out, skipping Firebase upload.", shouldUpload)
+		return nil
+	}
+
+	if err := s.handleUploads(); err != nil {
+		return fmt.Errorf("failed to handle uploads: %w", err)
+	}
+
+	log.Println("Integration scraper completed successfully")
 	return err
 }
 
-func (s *ScraperService) LocalStart() error {
+func (s *IntegrationHandler) LocalStart() error {
 	localOutBasePath := "scripts/"
 
 	for _, scraper := range scrapers {
@@ -108,7 +133,7 @@ func (s *ScraperService) LocalStart() error {
 	return nil
 }
 
-func (s *ScraperService) processLocalScraperFiles(sourceDir, destDir, scraperName string) error {
+func (s *IntegrationHandler) processLocalScraperFiles(sourceDir, destDir, scraperName string) error {
 	if _, err := os.Stat(sourceDir); os.IsNotExist(err) {
 		log.Printf("Warning: source directory %s does not exist, skipping %s", sourceDir, scraperName)
 		return nil
@@ -155,7 +180,7 @@ func (s *ScraperService) processLocalScraperFiles(sourceDir, destDir, scraperNam
 	return nil
 }
 
-func (s *ScraperService) copyFile(src, dst string) error {
+func (s *IntegrationHandler) copyFile(src, dst string) error {
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
@@ -180,7 +205,7 @@ func (s *ScraperService) copyFile(src, dst string) error {
 	return nil
 }
 
-func (s *ScraperService) FirebaseStart() error {
+func (s *IntegrationHandler) FirebaseStart() error {
 	ctx := context.Background()
 	for _, scraper := range scrapers {
 		dir := filepath.Join(outputDir, scraper)
@@ -220,12 +245,12 @@ func (s *ScraperService) FirebaseStart() error {
 	return nil
 }
 
-func (s *ScraperService) downloadFromFolder(ctx context.Context, folderPath, outputDir string) error {
+func (s *IntegrationHandler) downloadFromFolder(ctx context.Context, folderPath, outputDir string) error {
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		return fmt.Errorf("output directory not found: %s", outputDir)
 	}
 
-	fileCount, err := s.cloudStorage.DownloadFromFolder(ctx, folderPath, outputDir)
+	fileCount, err := s.service.cloudStorage.DownloadFromFolder(ctx, folderPath, outputDir)
 	if err != nil {
 		return fmt.Errorf("failed to download from folder %s: %w", folderPath, err)
 	}
@@ -234,7 +259,7 @@ func (s *ScraperService) downloadFromFolder(ctx context.Context, folderPath, out
 	return nil
 }
 
-func (s *ScraperService) RescrapeStart() error {
+func (s *IntegrationHandler) RescrapeStart() error {
 	log.Println("Starting rescrape operation for all scrapers...")
 
 	saveEnv := strings.ToLower(os.Getenv("SAVE_ENVIRONMENT"))
@@ -263,7 +288,7 @@ func (s *ScraperService) RescrapeStart() error {
 	return nil
 }
 
-func (s *ScraperService) runAllScrapers() error {
+func (s *IntegrationHandler) runAllScrapers() error {
 	scraperOrder := []string{"grades", "rmp-profiles", "coursebook"}
 	ctx := context.Background()
 
@@ -317,7 +342,7 @@ func (s *ScraperService) runAllScrapers() error {
 	return nil
 }
 
-func (s *ScraperService) getFailedScrapers(allScrapers, successfulScrapers []string) []string {
+func (s *IntegrationHandler) getFailedScrapers(allScrapers, successfulScrapers []string) []string {
 	successMap := make(map[string]bool)
 	for _, success := range successfulScrapers {
 		successMap[success] = true
@@ -333,16 +358,16 @@ func (s *ScraperService) getFailedScrapers(allScrapers, successfulScrapers []str
 	return failed
 }
 
-func (s *ScraperService) uploadAllScrapers() error {
+func (s *IntegrationHandler) uploadAllScrapers() error {
 	type uploadJob struct {
 		name    string
 		handler func() error
 	}
 
 	jobs := []uploadJob{
-		{"coursebook", func() error { return NewCoursebookHandler(s).Upload("coursebook") }},
-		{"grades", func() error { return NewGradesHandler(s).Upload("grades") }},
-		{"rmp-profiles", func() error { return NewRMPProfilesHandler(s).Upload("rmp-profiles") }},
+		{"coursebook", func() error { return NewCoursebookHandler(s.service).Upload("coursebook") }},
+		{"grades", func() error { return NewGradesHandler(s.service).Upload("grades") }},
+		{"rmp-profiles", func() error { return NewRMPProfilesHandler(s.service).Upload("rmp-profiles") }},
 	}
 
 	var wg sync.WaitGroup
@@ -403,7 +428,7 @@ func (s *ScraperService) uploadAllScrapers() error {
 	return nil
 }
 
-func (s *ScraperService) cleanScraperOutput(scraperName string) error {
+func (s *IntegrationHandler) cleanScraperOutput(scraperName string) error {
 	outputDir := filepath.Join("scripts", scraperName, "out")
 
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
@@ -431,5 +456,71 @@ func (s *ScraperService) cleanScraperOutput(scraperName string) error {
 	if fileCount > 0 {
 		log.Printf("Cleaned %d files from output directory: %s", fileCount, outputDir)
 	}
+	return nil
+}
+
+func (s *IntegrationHandler) handleUploads() error {
+	// Integration scraper outputs a grades and professors folder
+	// Upload both folders to Firebase
+	gradesDir := filepath.Join("scripts", "integration", "out", "grades")
+	professorsDir := filepath.Join("scripts", "integration", "out", "professors")
+
+	// Upload grades directory
+	if err := s.uploadDirectory(gradesDir, "grades"); err != nil {
+		return fmt.Errorf("failed to upload grades directory: %w", err)
+	}
+
+	// Upload professors directory
+	if err := s.uploadDirectory(professorsDir, "professors"); err != nil {
+		return fmt.Errorf("failed to upload professors directory: %w", err)
+	}
+
+	log.Println("Successfully uploaded both grades and professors directories to cloud storage")
+	return nil
+}
+
+func (s *IntegrationHandler) uploadDirectory(outputDir, cloudFolder string) error {
+	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
+		return fmt.Errorf("output directory not found: %s", outputDir)
+	}
+
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return fmt.Errorf("failed to read output directory: %w", err)
+	}
+
+	uploadCount := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			if err := s.uploadFile(outputDir, entry.Name(), cloudFolder); err != nil {
+				log.Printf("Warning: failed to upload file %s: %v", entry.Name(), err)
+				continue
+			}
+			uploadCount++
+		}
+	}
+
+	if uploadCount == 0 {
+		return fmt.Errorf("no files were successfully uploaded from %s", outputDir)
+	}
+
+	log.Printf("Successfully uploaded %d files from %s to cloud storage", uploadCount, outputDir)
+	return nil
+}
+
+func (s *IntegrationHandler) uploadFile(outputDir, fileName, cloudFolder string) error {
+	filePath := filepath.Join(outputDir, fileName)
+	fileData, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	cloudPath := fmt.Sprintf("%s/%s", cloudFolder, fileName)
+	err = s.service.cloudStorage.UploadFile(context.Background(), cloudPath, fileData)
+	if err != nil {
+		return fmt.Errorf("failed to upload file to cloud storage: %w", err)
+	}
+
+	log.Printf("Successfully uploaded file: %s to cloud storage at path: %s", fileName, cloudPath)
 	return nil
 }

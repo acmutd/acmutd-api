@@ -25,16 +25,17 @@ func main() {
 	log.Println("Make sure you have the correct .env file set up before running the scraper.")
 	log.Println("Make sure you have activated the correct virtual environment before running the scraper (source venv/bin/activate).")
 
-	scraper := scraper.NewScraperService(scraperToRun)
+	handler := scraper.NewScraperService(scraperToRun)
 	if scraperToRun != "integration" {
-		err := scraper.CheckAndRunScraper()
+		err := handler.CheckAndRunScraper()
 
 		if err != nil {
 			log.Fatalf("error running scraper: %v\n", err)
 		}
 	} else {
 		log.Println("Integration scraper running, pulling data from Firebase.")
-		err := scraper.IntegrationStart()
+		integration := scraper.NewIntegrationHandler(handler)
+		err := integration.IntegrationStart()
 		if err != nil {
 			log.Fatalf("error running integration scraper: %v\n", err)
 		}
