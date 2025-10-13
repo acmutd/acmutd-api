@@ -64,16 +64,74 @@ def load_input_data():
    
    return coursebook_data, grades_files, rmp_data
 
-def get_target_semesters():
-   """Read CLASS_TERMS from env and return a set of semesters (or empty set to indicate all)."""
-   class_terms_env = os.environ.get("CLASS_TERMS", "")
-   print(f"CLASS_TERMS env variable: '{class_terms_env}'")
-   if class_terms_env:
-      target_semesters = {t.strip() for t in class_terms_env.split(',') if t.strip()}
-      print(f"CLASS_TERMS specified, only enhancing semesters: {target_semesters}")
-      return target_semesters
-   print("CLASS_TERMS not specified, enhancing all semesters by default")
-   return set()
+def available_grade_semesters(grades_dir=None):
+   """Return set of semester ids available from filenames like grades_25s.csv under in/grades."""
+   base = grades_dir or os.path.join(os.path.dirname(__file__), "in", "grades")
+   semesters = set()
+   if os.path.exists(base):
+      for filename in os.listdir(base):
+         if filename.startswith("grades_") and filename.endswith(".csv"):
+            sem = filename.replace("grades_", "").replace(".csv", "")
+            semesters.add(sem)
+   return semesters
+
+
+def resolve_enhance_terms():
+   """Resolve which semesters to enhance for integration.
+
+   Priority:
+     1) ENHANCE_TERMS env var. If value=='all' (case-insensitive) -> enhance all available semesters.
+     2) CLASS_TERMS env var -> enhance those terms.
+     3) Neither set -> enhance all available semesters.
+
+   Returns:
+     - None -> indicates 'all' (enhance all available semesters)
+     - set(...) -> explicitly requested semesters
+   """
+   val = os.environ.get("ENHANCE_TERMS")
+   if val:
+      val = val.strip()
+      if val.lower() == "all":
+         return None
+      terms = {t.strip() for t in val.split(',') if t.strip()}
+      return terms if terms else None
+
+   # Fallback to CLASS_TERMS
+   val = os.environ.get("CLASS_TERMS")
+   if val:
+      terms = {t.strip() for t in val.split(',') if t.strip()}
+      return terms if terms else None
+
+   # Default: all
+   return None
+
+
+# determine which semesters are available and which to enhance based on env vars
+# supports "all" for ENHANCE_TERMS to indicate every available semester
+# supports CLASS_TERMS as a fallback for most cases, where ENHANCE_TERMS is the override
+def determine_target_semesters():
+   """High-level wrapper to decide which grade semesters to enhance.
+
+   Returns a set of semester ids to enhance or None to indicate 'all available'.
+   This will print helpful messages if requested semesters are missing.
+   """
+   requested = resolve_enhance_terms()
+   available = available_grade_semesters()
+
+   if requested is None:
+      print(f"Enhancing all available semesters: {sorted(available)}")
+      return available
+
+   requested_set = set(requested)
+   matched = requested_set & available
+   missing = requested_set - available
+   if not matched:
+      print(f"No grade files found for requested semesters: {sorted(requested_set)}")
+      print(f"Available semesters: {sorted(available)}. Example valid input: '{sorted(available)[-1] if available else '25s'}'")
+      return set()
+   if missing:
+      print(f"Requested terms not present and will be skipped: {sorted(missing)}")
+   return matched
 
 
 def save_output_data(matched_professor_data, enhanced_grades_by_file, instructor_by_id):
@@ -148,7 +206,12 @@ def main():
    
    # 4. Map grades to instructor IDs
    print("Mapping grades to instructor IDs...")
-   target_semesters = get_target_semesters()
+   target_semesters = determine_target_semesters()
+   if not target_semesters:
+      # nothing to enhance (either no available semesters or requested ones missing)
+      print("No target semesters to enhance. Exiting.")
+      return
+
    enhanced_grades_by_file = map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data, target_semesters)
    
    # 5. Create instructor ID lookup
