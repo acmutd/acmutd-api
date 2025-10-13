@@ -51,6 +51,44 @@ def create_instructor_id_lookup(matched_professor_data):
     return instructor_lookup
 
 
+def handle_no_grades(grades_files):
+    """Print user guidance when no grade rows were processed.
+
+    This function lists possible causes and available semesters parsed from the
+    provided grades_files list using the academic semester ordering.
+    """
+    print("No grade rows were processed. Possible reasons:")
+    print(" - You specified a target semester (CLASS_TERMS) that has no grades data yet and it was not provided (for example, a currently ongoing term).")
+    print(" - There was a typo or misinput in the semester identifier you provided (i.e. Spring 2025 vs 25s).")
+
+    # Build a list of available semesters from the grades_files parameters
+    sem_set = {os.path.basename(fp).replace("grades_", "").replace(".csv", "") for fp in grades_files} if grades_files else set()
+
+    # glorified sort function to correctly sort by terms (spring --> summer --> fall, s < u < f)
+    def _semester_key(s):
+        s = s.strip().lower()
+        if len(s) < 3:
+            return (0, 99, s)
+        try:
+            year = int(s[:2])
+        except Exception:
+            year = 0
+        term_char = s[2] if len(s) > 2 else ""
+        term_order = {"s": 0, "u": 1, "f": 2}
+        term_rank = term_order.get(term_char, 99)
+        return (year, term_rank, s)
+
+    available_semesters = sorted(sem_set, key=_semester_key)
+
+    if available_semesters:
+        print(f"Available semester identifiers (from /in/grades): {', '.join(available_semesters)}")
+        print("If the semester desired does not appear here, then add it to the scripts/grades/put-csv-here folder and run the grades scraper first.")
+        example = available_semesters[-1]
+        print(f"Latest valid example semester to try: '{example}'")
+    else:
+        print("No grade files were found in /in/grades. Ensure grade CSVs are present and named like 'grades_25s.csv'.")
+
+
 def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data, target_semesters=None):
     """Maps grade CSV rows to coursebook sections and extracts instructor IDs."""
     section_lookup = create_section_lookup(coursebook_data)
@@ -136,20 +174,29 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                     else:
                         no_matches += 1
                 else:
-                    # Have instructor_id but no RMP data
-                    enhanced_row["instructor_name_normalized"] = normalize_name(
-                        row.get("Instructor 1", "")
-                    )
+                    # Have instructor_id but no RMP data - normalize the original instructor name
+                    instructor_1 = row.get("Instructor 1", "").strip()
+                    if instructor_1:
+                        enhanced_row["instructor_name_normalized"] = normalize_name(instructor_1)
+                    else:
+                        enhanced_row["instructor_name_normalized"] = ""
                     no_matches += 1
-
+                
                 enhanced_grades.append(enhanced_row)
 
-        # Store enhanced grades for this file (now correctly inside the loop)
+        # Store enhanced grades for this file
         enhanced_grades_by_file[filepath] = enhanced_grades
-    
+
     # Print mapping statistics
     print(f"\n--- Instructor Mapping Statistics ---")
     print(f"Total grades processed: {total_grades}")
+
+    # Handle case where no grades were processed to avoid division by zero
+    if total_grades == 0:
+        handle_no_grades(grades_files)
+        return enhanced_grades_by_file
+
+    # Safe to print percentages since total_grades > 0
     print(f"Section address matches: {section_matches} ({section_matches/total_grades*100:.1f}%)")
     print(f"Fallback name matches: {fallback_matches} ({fallback_matches/total_grades*100:.1f}%)")
     print(f"No matches found: {no_matches} ({no_matches/total_grades*100:.1f}%)")
