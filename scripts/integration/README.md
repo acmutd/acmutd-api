@@ -10,7 +10,7 @@ The integration scraper is organized into modular components:
 
 - **`main.py`** - Main orchestration script that coordinates all components
 - **`aggregator.py`** - Handles grades aggregation logic from multiple semesters
-- **`matcher.py`** - Performs fuzzy matching between RMP and professor ratings data
+- **`professor_matcher.py`** - Performs fuzzy matching between RMP and professor ratings data
 - **`mapper.py`** - Maps grades data to coursebook sections and extracts instructor IDs
 - **`utils.py`** - Shared utility functions for name normalization and data processing
 
@@ -57,21 +57,23 @@ For cases where professors have different names in grades vs RMP data, create a 
 ]
 ```
 
-This ensures professors with name discrepancies are still properly matched.
+This ensures professors with known name discrepancies are still properly matched.
 
 ## Output Data
 
 ### Generated Files
 ```
 out/
-├── matched_professor_data.json    # Professors with RMP data (indexed by name)
-├── instructor_by_id.json         # Instructors indexed by ID
-├── enhanced_grades.csv           # Grades with instructor IDs and RMP flags
+├── professors/  
+│   ├── matched_professor_data_names.json   # Professors with RMP data (indexed by name)  
+│   └── matched_professor_data.json         # Professors with RMP data (indexed by ID)  
+└── grades/  
+    └── enhanced_grades_<semester>.csv      # Enhanced grades per semester (with instructor IDs and RMP flags)  
 ```
 
-### Enhanced Grades CSV
+### Enhanced Grades CSVs
 
-The enhanced grades CSV includes all original grade data plus:
+Each enhanced grades CSV (one per semester) includes all original grade data plus:
 - `instructor_id` - UTD instructor ID from coursebook
 - `instructor_name_normalized` - Normalized instructor name
 
