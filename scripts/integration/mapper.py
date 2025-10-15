@@ -45,6 +45,8 @@ def create_instructor_id_lookup(matched_professor_data):
             if instructor_id:
                 # make normalized coursebook name a property of the instructor since the id is becoming the key
                 enhanced_entry = dict(professor_entry)
+                # remove the field that will become the key to avoid duplication
+                enhanced_entry.pop("instructor_id", None)
                 enhanced_entry["normalized_coursebook_name"] = professor_name
                 instructor_lookup[instructor_id] = enhanced_entry
     
