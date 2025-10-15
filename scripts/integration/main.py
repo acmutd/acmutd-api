@@ -112,7 +112,7 @@ def resolve_enhance_terms():
 def determine_target_semesters():
    """High-level wrapper to decide which grade semesters to enhance.
 
-   Returns a set of semester ids to enhance or None to indicate 'all available'.
+   Returns set of semester ids to enhance (possibly empty if none match). Never returns None.
    This will print helpful messages if requested semesters are missing.
    """
    requested = resolve_enhance_terms()

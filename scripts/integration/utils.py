@@ -13,7 +13,7 @@ def normalize_name(name):
     name = re.sub(r"\s+[A-Z](\.[A-Z])*\s*$", "", name)  # remove middle initials
     name = re.sub(r"([A-Z])\.([A-Z])", r"\1 \2", name)  # add space between initials
     name = re.sub(r"[.\s]+", " ", name)  # removes periods and extra spaces
-    name = re.sub(r"[''ʻ`]", "", name)  # remove apostrophes
+    name = re.sub(r"['’ʻ`]", "", name)  # remove apostrophes
     name = name.replace('-', ' ')  # replace hyphens with spaces
 
     if ", " in name:  # handle the Last, First formats by splitting up and swapping
