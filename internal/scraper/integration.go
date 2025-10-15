@@ -364,7 +364,9 @@ func (s *IntegrationHandler) downloadFromFolder(ctx context.Context, folderPath,
 		return fmt.Errorf("output directory not found: %s", outputDir)
 	}
 
-	s.service.ensureFirebaseInitialized(s.config.SaveEnvironment)
+	if err := s.service.ensureFirebaseInitialized(s.config.SaveEnvironment); err != nil {
+		return fmt.Errorf("failed to initialize Firebase: %w", err)
+	}
 	fileCount, err := s.service.cloudStorage.DownloadFromFolder(ctx, folderPath, outputDir)
 	if err != nil {
 		return fmt.Errorf("failed to download from folder %s: %w", folderPath, err)
