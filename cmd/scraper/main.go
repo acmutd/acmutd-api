@@ -9,35 +9,47 @@ import (
 )
 
 func init() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("error loading .env file: %v\n", err)
+	if err := godotenv.Load(); err != nil {
+		log.Printf("[acmutd-scraper] note: could not load .env file (%v); continuing with system environment", err)
 	}
 	log.SetPrefix("[acmutd-scraper] ")
 }
 
 func main() {
 	scraperToRun := os.Getenv("SCRAPER")
+	if scraperToRun == "" {
+		log.Fatal("SCRAPER environment variable is required (options: coursebook, grades, rmp-profiles, integration)")
+	}
 
 	log.Println("Running scraper:", scraperToRun)
-	log.Println("Saving environment:", os.Getenv("SAVE_ENVIRONMENT"))
+	log.Println("Save environment:", os.Getenv("SAVE_ENVIRONMENT"))
+	log.Println("")
 
-	log.Println("Make sure you have the correct .env file set up before running the scraper.")
-	log.Println("Make sure you have activated the correct virtual environment before running the scraper (source venv/bin/activate).")
-
-	handler := scraper.NewScraperService(scraperToRun)
-	if scraperToRun != "integration" {
-		err := handler.CheckAndRunScraper()
-
-		if err != nil {
-			log.Fatalf("error running scraper: %v\n", err)
-		}
-	} else {
-		log.Println("Integration scraper running, pulling data from Firebase.")
-		integration := scraper.NewIntegrationHandler(handler)
-		err := integration.IntegrationStart()
-		if err != nil {
-			log.Fatalf("error running integration scraper: %v\n", err)
-		}
+	// Initialize scraper service with Firebase connections when required
+	service, err := scraper.NewScraperService(scraperToRun)
+	if err != nil {
+		log.Fatalf("failed to initialize scraper service: %v", err)
 	}
+
+	var runErr error
+	switch scraperToRun {
+	case "coursebook", "grades", "rmp-profiles":
+		// Run individual scraper (coursebook, grades, or rmp-profiles)
+		runErr = service.CheckAndRunScraper()
+	case "integration":
+		// Run integration scraper (combines data from multiple sources)
+		integrationHandler, handlerErr := scraper.NewIntegrationHandler(service)
+		if handlerErr != nil {
+			log.Fatalf("failed to configure integration handler: %v", handlerErr)
+		}
+		runErr = integrationHandler.IntegrationStart()
+	default:
+		log.Fatalf("Invalid SCRAPER value: %s (options: coursebook, grades, rmp-profiles, integration)", scraperToRun)
+	}
+
+	if runErr != nil {
+		log.Fatalf("Scraper failed: %v\n", runErr)
+	}
+
+	log.Println("Scraper completed successfully!")
 }

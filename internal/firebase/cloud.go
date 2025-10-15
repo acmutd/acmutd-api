@@ -24,9 +24,10 @@ type CloudStorage struct {
 
 func GetDefaultBucketName() string {
 	saveEnvironment := os.Getenv("SAVE_ENVIRONMENT")
-	if saveEnvironment == "local" || saveEnvironment == "dev" {
+	switch saveEnvironment {
+	case "local", "dev":
 		return "acmutd-api-dev.firebasestorage.app"
-	} else if saveEnvironment == "prod" {
+	case "prod":
 		return "acmutd-api.firebasestorage.app"
 	}
 	return ""
