@@ -21,13 +21,11 @@ func NewRMPProfilesHandler(service *ScraperService) *RMPProfilesHandler {
 
 func (h *RMPProfilesHandler) Upload(scraper string) error {
 	outputDir := "scripts/" + scraper + "/out"
-	fmt.Println(outputDir)
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		return fmt.Errorf("output directory not found: %s", outputDir)
 	}
 
 	entries, err := os.ReadDir(outputDir)
-	fmt.Println(entries)
 	if err != nil {
 		return fmt.Errorf("failed to read output directory: %w", err)
 	}

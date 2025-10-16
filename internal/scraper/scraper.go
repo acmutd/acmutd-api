@@ -2,6 +2,7 @@ package scraper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -16,34 +17,90 @@ import (
 type ScraperService struct {
 	firestoreClient *firebase.Firestore
 	cloudStorage    *firebase.CloudStorage
-	scraper         string // coursebook, professor, grades
+	firebaseConfig  string
+	scraper         string // coursebook, professor, grades, integration
 }
 
-func NewScraperService(scraper string) *ScraperService {
-	sa := option.WithCredentialsFile(os.Getenv("FIREBASE_CONFIG"))
-	app, err := fb.NewApp(context.Background(), nil, sa)
-	if err != nil {
-		log.Fatalf("error initializing firebase app: %v\n", err)
+type ServiceOption func(*ScraperService)
+
+func NewScraperService(scraper string, opts ...ServiceOption) (*ScraperService, error) {
+	if scraper == "" {
+		return nil, errors.New("scraper type is required")
 	}
 
-	firestoreClient, err := firebase.NewFirestore(context.Background(), app)
-	if err != nil {
-		log.Fatalf("error initializing firestore: %v\n", err)
+	service := &ScraperService{scraper: scraper}
+
+	for _, opt := range opts {
+		opt(service)
 	}
 
-	cloudStorage, err := firebase.NewCloudStorage(context.Background(), app)
-	if err != nil {
-		log.Fatalf("error initializing cloud storage: %v\n", err)
+	return service, nil
+}
+
+func (s *ScraperService) ensureFirebaseInitialized(envHint string) error {
+	env := strings.ToLower(envHint)
+	if env == "" {
+		env = strings.ToLower(os.Getenv("SAVE_ENVIRONMENT"))
 	}
 
-	return &ScraperService{
-		firestoreClient: firestoreClient,
-		cloudStorage:    cloudStorage,
-		scraper:         scraper,
+	if env != "dev" && env != "prod" {
+		// treat anything else as local but still allow explicit FB_CONFIG
+		env = "local"
+	}
+
+	configPath, err := s.resolveConfigFilename(env)
+	if err != nil {
+		return err
+	}
+
+	if s.firebaseConfig == configPath && s.firestoreClient != nil && s.cloudStorage != nil {
+		return nil
+	}
+
+	ctx := context.Background()
+	app, err := fb.NewApp(ctx, nil, option.WithCredentialsFile(configPath))
+	if err != nil {
+		return fmt.Errorf("error initializing firebase app: %w", err)
+	}
+
+	firestoreClient, err := firebase.NewFirestore(ctx, app)
+	if err != nil {
+		return fmt.Errorf("error initializing firestore: %w", err)
+	}
+
+	cloudStorage, err := firebase.NewCloudStorage(ctx, app)
+	if err != nil {
+		return fmt.Errorf("error initializing cloud storage: %w", err)
+	}
+
+	s.firestoreClient = firestoreClient
+	s.cloudStorage = cloudStorage
+	s.firebaseConfig = configPath
+
+	return nil
+}
+
+func (s *ScraperService) resolveConfigFilename(env string) (string, error) {
+	baseName := strings.TrimSpace(os.Getenv("FB_CONFIG"))
+	if baseName == "" {
+		return "", errors.New("FB_CONFIG is required")
+	}
+
+	switch env {
+	case "prod":
+		return "prod." + baseName, nil
+	case "dev", "local":
+		return "dev." + baseName, nil
+	default:
+		return "", errors.New("invalid environment")
 	}
 }
 
 func (s *ScraperService) CheckAndRunScraper() error {
+	if s.scraper == "" {
+		return errors.New("scraper type is required")
+	}
+
 	// Always clear output before running scraper
 	if err := s.CleanupOutput(); err != nil {
 		return fmt.Errorf("failed to clean output directory: %w", err)
@@ -51,8 +108,7 @@ func (s *ScraperService) CheckAndRunScraper() error {
 
 	// run the specified scraper
 	runner := NewPythonRunner(s.scraper)
-	err := runner.Run()
-	if err != nil {
+	if err := runner.Run(); err != nil {
 		return err
 	}
 
@@ -64,31 +120,29 @@ func (s *ScraperService) CheckAndRunScraper() error {
 		return nil
 	}
 
-	switch saveEnv {
-	case "prod":
-		log.Println("SAVE_ENVIRONMENT=prod: Data will be uploaded to Firebase.")
-	case "dev":
-		log.Println("SAVE_ENVIRONMENT=dev: Data will be uploaded to Firebase (development environment).")
+	if err := s.ensureFirebaseInitialized(saveEnv); err != nil {
+		return fmt.Errorf("failed to initialize cloud storage: %w\nOutput not deleted to prevent data loss", err)
 	}
 
-	// if SAVE_ENVIRONMENT is not local, upload to Firebase
-	// can add dev/prod environments later
+	switch saveEnv {
+	case "prod":
+		log.Println("SAVE_ENVIRONMENT=prod: Data will be uploaded to Firebase (prod environment)")
+	case "dev":
+		log.Println("SAVE_ENVIRONMENT=dev: Data will be uploaded to Firebase (development environment)")
+	}
+
 	var uploadErr error
 	switch s.scraper {
 	case "coursebook":
-		handler := NewCoursebookHandler(s)
-		uploadErr = handler.Upload(s.scraper)
+		uploadErr = NewCoursebookHandler(s).Upload(s.scraper)
 	case "grades":
-		handler := NewGradesHandler(s)
-		uploadErr = handler.Upload(s.scraper)
+		uploadErr = NewGradesHandler(s).Upload(s.scraper)
 	case "rmp-profiles":
-		handler := NewRMPProfilesHandler(s)
-		uploadErr = handler.Upload(s.scraper)
+		uploadErr = NewRMPProfilesHandler(s).Upload(s.scraper)
 	default:
 		uploadErr = fmt.Errorf("unsupported scraper type: %s", s.scraper)
 	}
 
-	// data is always saved to /scripts/{scraper}/out regardless, but we clear it if we are uploading to Firebase
 	cleanupErr := s.CleanupOutput()
 	if uploadErr != nil {
 		return uploadErr
@@ -100,7 +154,7 @@ func (s *ScraperService) CheckAndRunScraper() error {
 }
 
 func (s *ScraperService) CleanupOutput() error {
-	outputDir := "./scripts/" + s.scraper + "/out"
+	outputDir := "scripts/" + s.scraper + "/out"
 
 	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
 		return nil

@@ -23,7 +23,7 @@ func NewGradesHandler(service *ScraperService) *GradesHandler {
 
 // Upload uploads grades data to cloud storage
 func (h *GradesHandler) Upload(scraper string) error {
-	outputDir := "./scripts/" + scraper + "/out"
+	outputDir := "scripts/" + scraper + "/out"
 
 	if h.service.isOutputEmpty(outputDir) {
 		return fmt.Errorf("no CSV files available in output directory")
