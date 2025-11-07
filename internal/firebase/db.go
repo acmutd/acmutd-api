@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	firebase "firebase.google.com/go/v4"
 	"github.com/acmutd/acmutd-api/internal/types"
 	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type Firestore struct {
@@ -30,63 +33,141 @@ func NewFirestore(ctx context.Context, app *firebase.App) (*Firestore, error) {
 	}, nil
 }
 
+func normalizeCoursePrefix(prefix string) string {
+	return strings.ToLower(strings.TrimSpace(prefix))
+}
+
+func normalizeCourseNumber(number string) string {
+	return strings.ToLower(strings.TrimSpace(number))
+}
+
+func normalizeTerm(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func sanitizeDocID(value string) string {
+	sanitized := strings.TrimSpace(value)
+	sanitized = strings.ReplaceAll(sanitized, "/", "-")
+	sanitized = strings.ReplaceAll(sanitized, " ", "")
+	return sanitized
+}
+
+func ensureSectionDocID(course types.Course, term string) string {
+	if section := sanitizeDocID(course.SectionAddress); section != "" {
+		return strings.ToLower(section)
+	}
+
+	prefix := sanitizeDocID(normalizeCoursePrefix(course.CoursePrefix))
+	number := sanitizeDocID(normalizeCourseNumber(course.CourseNumber))
+	section := sanitizeDocID(strings.ToLower(course.Section))
+	if section == "" {
+		section = "000"
+	}
+	normalizedTerm := sanitizeDocID(normalizeTerm(term))
+
+	generated := fmt.Sprintf("%s%s.%s.%s", prefix, number, section, normalizedTerm)
+	generated = strings.ReplaceAll(generated, "..", ".")
+	generated = strings.Trim(generated, ".")
+
+	return generated
+}
+
+func (c *Firestore) sectionsCollection(prefixID, numberID string) *firestore.CollectionRef {
+	return c.Collection("courses").
+		Doc(prefixID).
+		Collection("numbers").
+		Doc(numberID).
+		Collection("sections")
+}
+
 /*
 Structure:
 
-  - classes/{term}/courses/{coursePrefix-courseNumber-courseSection}
+  - courses/{course_prefix}/numbers/{course_number}/sections/{section_address}
 
-  - classes/{term}/indexes/{school}
+  - terms/{term}/prefixes/{course_prefix}
 
-    This will allow us to query for all courses by school, course prefix, course number, and course section.
-
-    THIS WILL OVERWRITE ALL PREVIOUS DATA IN THE COLLECTION.
+    This mirrors the recommended Firestore layout for efficient collection group
+    queries by term, course prefix, and course number while maintaining fast prefix
+    lookups for each term.
 */
 func (c *Firestore) InsertClassesWithIndexes(ctx context.Context, courses []types.Course, term string) {
-	batch := c.BulkWriter(ctx)
+	writer := c.BulkWriter(ctx)
 
-	// Group courses by school for indexing
-	schoolGroups := make(map[string][]types.Course)
+	normalizedTerm := normalizeTerm(term)
+	if normalizedTerm == "" {
+		writer.End()
+		return
+	}
+
+	termDoc := c.Collection("terms").Doc(normalizedTerm)
+	writer.Set(termDoc, map[string]any{
+		"term":         normalizedTerm,
+		"last_updated": time.Now(),
+	}, firestore.MergeAll)
+
+	prefixes := make(map[string]string)
 
 	for _, course := range courses {
-		courseID := fmt.Sprintf("%s-%s-%s", course.CoursePrefix, course.CourseNumber, course.Section)
+		courseCopy := course
+		courseCopy.Term = normalizedTerm
+		courseCopy.CoursePrefix = normalizeCoursePrefix(courseCopy.CoursePrefix)
+		courseCopy.CourseNumber = normalizeCourseNumber(courseCopy.CourseNumber)
+		courseCopy.Section = strings.ToLower(strings.TrimSpace(courseCopy.Section))
 
-		// Store individual course directly as struct
-		doc := c.Collection("classes").Doc(term).Collection("courses").Doc(courseID)
-		batch.Set(doc, course)
+		prefixID := sanitizeDocID(normalizeCoursePrefix(courseCopy.CoursePrefix))
+		numberID := sanitizeDocID(normalizeCourseNumber(courseCopy.CourseNumber))
+		if prefixID == "" || numberID == "" {
+			continue
+		}
 
-		// Group by school for indexing
-		school := course.CoursePrefix
-		schoolGroups[school] = append(schoolGroups[school], course)
+		sectionID := ensureSectionDocID(courseCopy, normalizedTerm)
+		courseCopy.SectionAddress = sectionID
+
+		doc := c.sectionsCollection(prefixID, numberID).Doc(sectionID)
+		writer.Set(doc, courseCopy)
+
+		if _, exists := prefixes[prefixID]; !exists {
+			prefixes[prefixID] = courseCopy.CoursePrefix
+		}
 	}
 
-	// Create index documents
-	for school, schoolCourses := range schoolGroups {
-		indexDoc := c.Collection("classes").Doc(term).Collection("indexes").Doc(school)
-		batch.Set(indexDoc, map[string]any{
-			"courses": schoolCourses,
-			"count":   len(schoolCourses),
-		})
+	for prefixID, originalPrefix := range prefixes {
+		writer.Set(
+			termDoc.Collection("prefixes").Doc(prefixID),
+			map[string]any{
+				"course_prefix":     originalPrefix,
+				"normalized_prefix": prefixID,
+				"term":              normalizedTerm,
+			},
+			firestore.MergeAll,
+		)
 	}
 
-	batch.End()
+	writer.End()
 }
 
 func (c *Firestore) InsertTerms(ctx context.Context, terms []string) {
-	batch := c.BulkWriter(ctx)
+	writer := c.BulkWriter(ctx)
 
 	for _, term := range terms {
-		doc := c.Collection("classes").Doc(term)
-		batch.Set(doc, map[string]any{
-			"term": term,
-		})
+		normalized := normalizeTerm(term)
+		if normalized == "" {
+			continue
+		}
+
+		doc := c.Collection("terms").Doc(normalized)
+		writer.Set(doc, map[string]any{
+			"term": normalized,
+		}, firestore.MergeAll)
 	}
 
-	batch.End()
+	writer.End()
 }
 
 func (c *Firestore) QueryAllTerms(ctx context.Context) ([]string, error) {
-	query := c.Collection("classes")
-	iter := query.Documents(ctx)
+	iter := c.Collection("terms").Documents(ctx)
+	defer iter.Stop()
 
 	var terms []string
 	for {
@@ -95,90 +176,83 @@ func (c *Firestore) QueryAllTerms(ctx context.Context) ([]string, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to get next document: %w", err)
+			return nil, fmt.Errorf("failed to get next term: %w", err)
 		}
+
+		data := doc.Data()
+		if termValue, ok := data["term"].(string); ok && termValue != "" {
+			terms = append(terms, termValue)
+			continue
+		}
+
 		terms = append(terms, doc.Ref.ID)
 	}
+
+	sort.Strings(terms)
 
 	return terms, nil
 }
 func (c *Firestore) QueryByCourseNumber(ctx context.Context, term, coursePrefix, courseNumber string) ([]types.Course, error) {
-	query := c.Collection("classes").Doc(term).Collection("courses").Where("course_prefix", "==", coursePrefix).Where("course_number", "==", courseNumber)
-	iter := query.Documents(ctx)
-
-	var courses []types.Course
-	for {
-		doc, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to get next document: %w", err)
-		}
-
-		var course types.Course
-		if err := doc.DataTo(&course); err != nil {
-			return nil, fmt.Errorf("failed to convert document to course: %w", err)
-		}
-		courses = append(courses, course)
+	term = normalizeTerm(term)
+	coursePrefix = normalizeCoursePrefix(coursePrefix)
+	courseNumber = normalizeCourseNumber(courseNumber)
+	if term == "" || coursePrefix == "" || courseNumber == "" {
+		return nil, nil
 	}
 
-	return courses, nil
+	query := c.CollectionGroup("sections").
+		Where("term", "==", term).
+		Where("course_prefix", "==", coursePrefix).
+		Where("course_number", "==", courseNumber)
+
+	return c.collectCourses(ctx, query)
 }
 
 func (c *Firestore) QueryByCoursePrefix(ctx context.Context, term, coursePrefix string) ([]types.Course, error) {
-	query := c.Collection("classes").Doc(term).Collection("courses").Where("course_prefix", "==", coursePrefix)
-	iter := query.Documents(ctx)
-
-	var courses []types.Course
-	for {
-		doc, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to get next document: %w", err)
-		}
-
-		var course types.Course
-		if err := doc.DataTo(&course); err != nil {
-			return nil, fmt.Errorf("failed to convert document to course: %w", err)
-		}
-		courses = append(courses, course)
+	term = normalizeTerm(term)
+	coursePrefix = normalizeCoursePrefix(coursePrefix)
+	if term == "" || coursePrefix == "" {
+		return nil, nil
 	}
 
-	return courses, nil
+	query := c.CollectionGroup("sections").
+		Where("term", "==", term).
+		Where("course_prefix", "==", coursePrefix)
+
+	return c.collectCourses(ctx, query)
 }
 
 // GetAllCoursesByTerm returns all courses for a given term
 func (c *Firestore) GetAllCoursesByTerm(ctx context.Context, term string) ([]types.Course, error) {
-	query := c.Collection("classes").Doc(term).Collection("courses")
-	iter := query.Documents(ctx)
-
-	var courses []types.Course
-	for {
-		doc, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("failed to get next document: %w", err)
-		}
-
-		var course types.Course
-		if err := doc.DataTo(&course); err != nil {
-			return nil, fmt.Errorf("failed to convert document to course: %w", err)
-		}
-		courses = append(courses, course)
+	term = normalizeTerm(term)
+	if term == "" {
+		return nil, nil
 	}
 
-	return courses, nil
+	query := c.CollectionGroup("sections").
+		Where("term", "==", term)
+
+	return c.collectCourses(ctx, query)
 }
 
 // QueryBySchool returns courses by school for a given term
 func (c *Firestore) QueryBySchool(ctx context.Context, term, school string) ([]types.Course, error) {
-	query := c.Collection("classes").Doc(term).Collection("courses").Where("school", "==", school)
+	term = normalizeTerm(term)
+	school = strings.TrimSpace(school)
+	if term == "" || school == "" {
+		return nil, nil
+	}
+
+	query := c.CollectionGroup("sections").
+		Where("term", "==", term).
+		Where("school", "==", school)
+
+	return c.collectCourses(ctx, query)
+}
+
+func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query) ([]types.Course, error) {
 	iter := query.Documents(ctx)
+	defer iter.Stop()
 
 	var courses []types.Course
 	for {
@@ -192,7 +266,7 @@ func (c *Firestore) QueryBySchool(ctx context.Context, term, school string) ([]t
 
 		var course types.Course
 		if err := doc.DataTo(&course); err != nil {
-			return nil, fmt.Errorf("failed to convert document to course: %w", err)
+			continue
 		}
 		courses = append(courses, course)
 	}
@@ -203,7 +277,7 @@ func (c *Firestore) QueryBySchool(ctx context.Context, term, school string) ([]t
 // SearchCourses searches courses by title, topic, or instructor name
 func (c *Firestore) SearchCourses(ctx context.Context, term, searchQuery string) ([]types.Course, error) {
 	// TODO: Figure out a nicer way to do this
-	courses, err := c.GetAllCoursesByTerm(ctx, term)
+	courses, err := c.GetAllCoursesByTerm(ctx, normalizeTerm(term))
 	if err != nil {
 		return nil, err
 	}
@@ -225,24 +299,125 @@ func (c *Firestore) SearchCourses(ctx context.Context, term, searchQuery string)
 
 // GetSchoolsByTerm returns all schools for a given term
 func (c *Firestore) GetSchoolsByTerm(ctx context.Context, term string) ([]string, error) {
-	query := c.Collection("classes").Doc(term).Collection("indexes")
-	iter := query.Documents(ctx)
+	term = normalizeTerm(term)
+	if term == "" {
+		return nil, nil
+	}
 
-	var schools []string
+	iter := c.Collection("terms").Doc(term).Collection("prefixes").Documents(ctx)
+	defer iter.Stop()
+
+	var prefixes []string
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to get next document: %w", err)
+			return nil, fmt.Errorf("failed to iterate prefixes: %w", err)
 		}
-		schools = append(schools, doc.Ref.ID)
+
+		data := doc.Data()
+		if prefix, ok := data["course_prefix"].(string); ok && strings.TrimSpace(prefix) != "" {
+			prefixes = append(prefixes, prefix)
+			continue
+		}
+
+		prefixes = append(prefixes, doc.Ref.ID)
 	}
 
-	return schools, nil
+	if len(prefixes) == 0 {
+		fallbackQuery := c.CollectionGroup("sections").Where("term", "==", term)
+		fallbackIter := fallbackQuery.Documents(ctx)
+		defer fallbackIter.Stop()
+
+		uniquePrefixes := make(map[string]struct{})
+		for {
+			doc, err := fallbackIter.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				return nil, fmt.Errorf("failed to iterate fallback prefixes: %w", err)
+			}
+
+			var course types.Course
+			if err := doc.DataTo(&course); err != nil {
+				return nil, fmt.Errorf("failed to parse fallback course: %w", err)
+			}
+
+			prefix := strings.TrimSpace(course.CoursePrefix)
+			if prefix == "" {
+				continue
+			}
+			uniquePrefixes[prefix] = struct{}{}
+		}
+
+		for prefix := range uniquePrefixes {
+			prefixes = append(prefixes, prefix)
+		}
+	}
+
+	if len(prefixes) == 0 {
+		return nil, nil
+	}
+
+	unique := make(map[string]struct{}, len(prefixes))
+	for _, prefix := range prefixes {
+		trimmed := strings.TrimSpace(prefix)
+		if trimmed == "" {
+			continue
+		}
+		unique[trimmed] = struct{}{}
+	}
+
+	prefixes = prefixes[:0]
+	for prefix := range unique {
+		prefixes = append(prefixes, prefix)
+	}
+
+	sort.Strings(prefixes)
+
+	return prefixes, nil
 }
 
+func (c *Firestore) GetProfessorById(ctx context.Context, id string) (*types.Professor, error) {
+	doc, err := c.Collection("professors").Doc(id).Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var professor types.Professor
+	if err := doc.DataTo(&professor); err != nil {
+		return nil, err
+	}
+
+	return &professor, nil
+}
+
+func (c *Firestore) GetProfessorsByName(ctx context.Context, name string) ([]types.Professor, error) {
+	query := c.Collection("professors").Where("normalized_coursebook_name", "==", name)
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	var professors []types.Professor
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next professor: %w", err)
+		}
+
+		var professor types.Professor
+		if err := doc.DataTo(&professor); err != nil {
+			continue
+		}
+		professors = append(professors, professor)
+	}
+	return professors, nil
+}
 func (c *Firestore) GenerateAPIKey(
 	ctx context.Context,
 	rateLimit int,
@@ -263,7 +438,6 @@ func (c *Firestore) GenerateAPIKey(
 		IsAdmin:       isAdmin,
 		CreatedAt:     time.Now(),
 		ExpiresAt:     expiresAt,
-		LastUsedAt:    time.Time{}, // Zero time for initial value
 		UsageCount:    0,
 	}
 
@@ -275,6 +449,9 @@ func (c *Firestore) GenerateAPIKey(
 func (c *Firestore) ValidateAPIKey(ctx context.Context, key string) (*types.APIKey, error) {
 	doc, err := c.Collection("api_keys").Doc(key).Get(ctx)
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 
@@ -283,18 +460,13 @@ func (c *Firestore) ValidateAPIKey(ctx context.Context, key string) (*types.APIK
 		return nil, err
 	}
 
-	// Check expiration
-	if !apiKey.ExpiresAt.IsZero() && time.Now().After(apiKey.ExpiresAt) {
-		return nil, fmt.Errorf("key expired")
-	}
-
+	// We don't need to check expiration here because it's checked in the middleware
 	return &apiKey, nil
 }
 
 // UpdateKeyUsage updates last used and usage count
 func (c *Firestore) UpdateKeyUsage(ctx context.Context, key string) error {
 	_, err := c.Collection("api_keys").Doc(key).Update(ctx, []firestore.Update{
-		{Path: "last_used_at", Value: time.Now()},
 		{Path: "usage_count", Value: firestore.Increment(1)},
 	})
 	return err
@@ -327,6 +499,9 @@ func (c *Firestore) DeleteAllAdminKeys(ctx context.Context) error {
 			break
 		}
 		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				break
+			}
 			return fmt.Errorf("failed to iterate admin keys: %w", err)
 		}
 
@@ -353,7 +528,6 @@ func (c *Firestore) GenerateAdminAPIKey(ctx context.Context) (string, error) {
 		IsAdmin:       true,
 		CreatedAt:     time.Now(),
 		ExpiresAt:     time.Time{}, // Never expires
-		LastUsedAt:    time.Time{},
 		UsageCount:    0,
 	}
 

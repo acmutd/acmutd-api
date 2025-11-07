@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/acmutd/acmutd-api/internal/types"
@@ -35,7 +36,6 @@ func (s *Server) RegisterRoutes() http.Handler {
 			courses.GET("/:term", s.getCoursesByTerm)
 			courses.GET("/:term/prefix/:prefix", s.getCoursesByPrefix)
 			courses.GET("/:term/prefix/:prefix/number/:number", s.getCoursesByNumber)
-			courses.GET("/:term/school/:school", s.getCoursesBySchool)
 			courses.GET("/:term/search", s.searchCourses)
 		}
 
@@ -43,11 +43,10 @@ func (s *Server) RegisterRoutes() http.Handler {
 		{
 			terms.GET("/", s.getTerms)
 		}
-
-		// Schools routes
-		schools := v1.Group("/schools")
+		professors := v1.Group("/professors")
 		{
-			schools.GET("/:term", s.getSchoolsByTerm)
+			professors.GET("/id/:id", s.getProfessorById)
+			professors.GET("/name/:name", s.getProfessorsByName)
 		}
 	}
 
@@ -71,16 +70,15 @@ func (s *Server) getAllCourses(c *gin.Context) {
 
 // Get courses by term
 func (s *Server) getCoursesByTerm(c *gin.Context) {
-	term := c.Param("term")
+	term := normalizeTermParam(c.Param("term"))
 	if term == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Term parameter is required"})
 		return
 	}
 
 	// Get query parameters for filtering
-	prefix := c.Query("prefix")
-	number := c.Query("number")
-	school := c.Query("school")
+	prefix := normalizePrefixParam(c.Query("prefix"))
+	number := normalizeCourseNumberParam(c.Query("number"))
 
 	var courses []types.Course
 	var err error
@@ -90,8 +88,6 @@ func (s *Server) getCoursesByTerm(c *gin.Context) {
 		courses, err = s.db.QueryByCourseNumber(c.Request.Context(), term, prefix, number)
 	} else if prefix != "" {
 		courses, err = s.db.QueryByCoursePrefix(c.Request.Context(), term, prefix)
-	} else if school != "" {
-		courses, err = s.db.QueryBySchool(c.Request.Context(), term, school)
 	} else {
 		// Get all courses for the term
 		courses, err = s.db.GetAllCoursesByTerm(c.Request.Context(), term)
@@ -111,8 +107,8 @@ func (s *Server) getCoursesByTerm(c *gin.Context) {
 
 // Get courses by prefix
 func (s *Server) getCoursesByPrefix(c *gin.Context) {
-	term := c.Param("term")
-	prefix := c.Param("prefix")
+	term := normalizeTermParam(c.Param("term"))
+	prefix := normalizePrefixParam(c.Param("prefix"))
 
 	if term == "" || prefix == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Term and prefix parameters are required"})
@@ -135,9 +131,9 @@ func (s *Server) getCoursesByPrefix(c *gin.Context) {
 
 // Get courses by number
 func (s *Server) getCoursesByNumber(c *gin.Context) {
-	term := c.Param("term")
-	prefix := c.Param("prefix")
-	number := c.Param("number")
+	term := normalizeTermParam(c.Param("term"))
+	prefix := normalizePrefixParam(c.Param("prefix"))
+	number := normalizeCourseNumberParam(c.Param("number"))
 
 	if term == "" || prefix == "" || number == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Term, prefix, and number parameters are required"})
@@ -159,34 +155,10 @@ func (s *Server) getCoursesByNumber(c *gin.Context) {
 	})
 }
 
-// Get courses by school
-func (s *Server) getCoursesBySchool(c *gin.Context) {
-	term := c.Param("term")
-	school := c.Param("school")
-
-	if term == "" || school == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Term and school parameters are required"})
-		return
-	}
-
-	courses, err := s.db.QueryBySchool(c.Request.Context(), term, school)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"term":    term,
-		"school":  school,
-		"count":   len(courses),
-		"courses": courses,
-	})
-}
-
 // Search courses
 func (s *Server) searchCourses(c *gin.Context) {
-	term := c.Param("term")
-	query := c.Query("q")
+	term := normalizeTermParam(c.Param("term"))
+	query := strings.TrimSpace(c.Query("q"))
 
 	if term == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Term parameter is required"})
@@ -212,28 +184,6 @@ func (s *Server) searchCourses(c *gin.Context) {
 	})
 }
 
-// Get schools by term
-func (s *Server) getSchoolsByTerm(c *gin.Context) {
-	term := c.Param("term")
-
-	if term == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Term parameter is required"})
-		return
-	}
-
-	schools, err := s.db.GetSchoolsByTerm(c.Request.Context(), term)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"term":    term,
-		"count":   len(schools),
-		"schools": schools,
-	})
-}
-
 func (s *Server) getTerms(c *gin.Context) {
 	terms, err := s.db.QueryAllTerms(c.Request.Context())
 	if err != nil {
@@ -245,6 +195,18 @@ func (s *Server) getTerms(c *gin.Context) {
 		"count": len(terms),
 		"terms": terms,
 	})
+}
+
+func normalizeTermParam(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func normalizePrefixParam(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func normalizeCourseNumberParam(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func (s *Server) createAPIKey(c *gin.Context) {
@@ -311,4 +273,43 @@ func (s *Server) getAPIKey(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, apiKey)
+}
+
+func (s *Server) getProfessorById(c *gin.Context) {
+	id := c.Param("id")
+
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Professor ID is required"})
+		return
+	}
+
+	professor, err := s.db.GetProfessorById(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get professor"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"professor": professor,
+	})
+}
+
+func (s *Server) getProfessorsByName(c *gin.Context) {
+	name := c.Param("name")
+
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Professor name is required"})
+		return
+	}
+
+	professors, err := s.db.GetProfessorsByName(c.Request.Context(), name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get professors"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count":      len(professors),
+		"professors": professors,
+	})
 }

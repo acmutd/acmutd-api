@@ -12,6 +12,7 @@ import (
 
 func (api *Server) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Health check endpoint is public
 		if c.Request.URL.Path == "/health" {
 			c.Next()
 			return
@@ -25,19 +26,28 @@ func (api *Server) AuthMiddleware() gin.HandlerFunc {
 
 		// Check cache first
 		if apiKeyData, found := api.apiKeyCache.Get(key); found {
-			keyData := apiKeyData.(*types.APIKey)
-			if keyData.ExpiresAt.Before(time.Now()) && !keyData.IsAdmin {
+			keyData, ok := apiKeyData.(*types.APIKey)
+			if !ok {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid API key"})
+				return
+			}
+
+			if keyData.IsAdmin {
+				api.updateKeyUsageAsync(key)
+				c.Set("api_key", keyData)
+				c.Next()
+				return
+			}
+
+			if keyData.ExpiresAt.Before(time.Now()) {
 				api.apiKeyCache.Delete(key)
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key expired"})
 				return
 			}
 
-			go func(key string) {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				api.db.UpdateKeyUsage(ctx, key)
-			}(key)
-			c.Set("api_key", apiKeyData.(*types.APIKey))
+			api.updateKeyUsageAsync(key)
+
+			c.Set("api_key", keyData)
 			c.Next()
 			return
 		}
@@ -53,11 +63,13 @@ func (api *Server) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		go func(key string) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-			api.db.UpdateKeyUsage(ctx, key)
-		}(key)
+		if apiKey.ExpiresAt.Before(time.Now()) && !apiKey.IsAdmin {
+			api.apiKeyCache.Delete(key)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key expired"})
+			return
+		}
+
+		api.updateKeyUsageAsync(key)
 
 		// Cache the valid key
 		api.apiKeyCache.Set(key, apiKey, cache.DefaultExpiration)
@@ -105,12 +117,19 @@ func (api *Server) AdminMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		go func(key string) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			defer cancel()
-			api.db.UpdateKeyUsage(ctx, key)
-		}(key)
-
+		api.updateKeyUsageAsync(key)
 		c.Next()
 	}
+}
+
+func (api *Server) updateKeyUsageAsync(key string) {
+	if key == "" {
+		return
+	}
+
+	go func(k string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		api.db.UpdateKeyUsage(ctx, k)
+	}(key)
 }
