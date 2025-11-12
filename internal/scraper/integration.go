@@ -597,7 +597,7 @@ func (s *IntegrationHandler) uploadIntegrationResults() error {
 
 	// Upload grades directory
 	log.Println("Uploading enhanced grades data...")
-	if err := s.uploadDirectory(gradesDir, "grades"); err != nil {
+	if err := s.uploadDirectory(gradesDir, "enhanced_grades"); err != nil {
 		return fmt.Errorf("failed to upload grades: %w", err)
 	}
 	log.Println("✓ Enhanced grades uploaded")
