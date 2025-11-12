@@ -180,25 +180,34 @@ func (s *CloudStorage) validateUpload(path string, data []byte) error {
 func (s *CloudStorage) detectContentType(path string) string {
 	ext := strings.ToLower(filepath.Ext(path))
 
+	// Prioritize explicit mappings over mime.TypeByExtension to avoid platform-specific issues
+	// (e.g., Windows associates .csv with Excel)
+	switch ext {
+	case ".csv":
+		log.Printf("detected MIME type: text/csv for file: %s", path)
+		return "text/csv"
+	case ".json":
+		log.Printf("detected MIME type: application/json for file: %s", path)
+		return "application/json"
+	case ".txt":
+		log.Printf("detected MIME type: text/plain for file: %s", path)
+		return "text/plain"
+	case ".pdf":
+		log.Printf("detected MIME type: application/pdf for file: %s", path)
+		return "application/pdf"
+	case ".xlsx", ".xls":
+		log.Printf("detected MIME type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet for file: %s", path)
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	}
+
+	// Fallback to mime.TypeByExtension for other file types
 	if mimeType := mime.TypeByExtension(ext); mimeType != "" {
 		log.Printf("detected MIME type: %s for file: %s", mimeType, path)
 		return mimeType
 	}
 
-	switch ext {
-	case ".csv":
-		return "text/csv"
-	case ".json":
-		return "application/json"
-	case ".txt":
-		return "text/plain"
-	case ".pdf":
-		return "application/pdf"
-	case ".xlsx", ".xls":
-		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-	default:
-		return "application/octet-stream"
-	}
+	log.Printf("detected MIME type: application/octet-stream (default) for file: %s", path)
+	return "application/octet-stream"
 }
 
 // downloadWorker processes download jobs concurrently
