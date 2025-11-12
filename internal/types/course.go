@@ -36,30 +36,59 @@ func (s School) String() string {
 	return string(s)
 }
 
+// Course represents a course section stored in Firestore.
+//
+// Firestore Structure:
+//   - courses/{course_prefix}/numbers/{course_number}/sections/{section_address}
+//
+// Courses are stored in a hierarchical structure for efficient queries:
+//   - course_prefix and course_number are normalized to lowercase
+//   - section_address is a unique identifier (e.g., "cs2305.001.23f")
+//   - term field enables collection group queries across all sections
+//
+// Indexes Required:
+//   - Collection group "sections" with term field (for term-based queries)
+//   - Composite indexes for term+course_prefix, term+course_number queries
+//
+// Related Collections:
+//   - terms/{term}/prefixes/{course_prefix} - metadata for available prefixes per term
 type Course struct {
-	SectionAddress  string `json:"section_address" firestore:"section_address"`
-	CoursePrefix    string `json:"course_prefix" firestore:"course_prefix"`
-	CourseNumber    string `json:"course_number" firestore:"course_number"`
-	Section         string `json:"section" firestore:"section"`
-	ClassNumber     string `json:"class_number" firestore:"class_number"`
-	Title           string `json:"title" firestore:"title"`
-	Topic           string `json:"topic" firestore:"topic"`
-	EnrolledStatus  string `json:"enrolled_status" firestore:"enrolled_status"`
-	EnrolledCurrent string `json:"enrolled_current" firestore:"enrolled_current"`
-	EnrolledMax     string `json:"enrolled_max" firestore:"enrolled_max"`
-	Instructors     string `json:"instructors" firestore:"instructors"`
-	Assistants      string `json:"assistants" firestore:"assistants"`
-	Term            string `json:"term" firestore:"term"`
-	Session         string `json:"session" firestore:"session"`
-	Days            string `json:"days" firestore:"days"`
-	Times           string `json:"times" firestore:"times"`
-	Times12h        string `json:"times_12h" firestore:"times_12h"`
-	Location        string `json:"location" firestore:"location"`
-	CoreArea        string `json:"core_area" firestore:"core_area"`
-	ActivityType    string `json:"activity_type" firestore:"activity_type"`
-	School          School `json:"school" firestore:"school"`
-	Dept            string `json:"dept" firestore:"dept"`
-	Syllabus        string `json:"syllabus" firestore:"syllabus"`
-	Textbooks       string `json:"textbooks" firestore:"textbooks"`
-	InstructorIDs   string `json:"instructor_ids" firestore:"instructor_ids"`
+	// Core identifiers (normalized to lowercase during ingestion)
+	SectionAddress string `json:"section_address" firestore:"section_address"` // Unique ID: {prefix}{number}.{section}.{term}
+	CoursePrefix   string `json:"course_prefix" firestore:"course_prefix"`     // e.g., "cs" (normalized lowercase)
+	CourseNumber   string `json:"course_number" firestore:"course_number"`     // e.g., "2305" (normalized lowercase)
+	Section        string `json:"section" firestore:"section"`                 // e.g., "001" (normalized lowercase)
+	Term           string `json:"term" firestore:"term"`                       // e.g., "23f" (normalized lowercase, indexed for collection group queries)
+
+	// Course metadata
+	ClassNumber string `json:"class_number" firestore:"class_number"` // UTD class number
+	Title       string `json:"title" firestore:"title"`               // Course title
+	Topic       string `json:"topic" firestore:"topic"`               // Special topics course name
+
+	// Enrollment information
+	EnrolledStatus  string `json:"enrolled_status" firestore:"enrolled_status"`   // "Open", "Closed", "Waitlist"
+	EnrolledCurrent string `json:"enrolled_current" firestore:"enrolled_current"` // Current enrollment count
+	EnrolledMax     string `json:"enrolled_max" firestore:"enrolled_max"`         // Maximum enrollment
+
+	// Instructor information
+	Instructors   string `json:"instructors" firestore:"instructors"`       // Comma-separated instructor names
+	InstructorIDs string `json:"instructor_ids" firestore:"instructor_ids"` // Comma-separated instructor IDs (links to professors collection)
+	Assistants    string `json:"assistants" firestore:"assistants"`         // Teaching assistants
+
+	// Schedule information
+	Session  string `json:"session" firestore:"session"`     // Session identifier
+	Days     string `json:"days" firestore:"days"`           // Days of the week (e.g., "Monday, Wednesday")
+	Times    string `json:"times" firestore:"times"`         // 24-hour time format
+	Times12h string `json:"times_12h" firestore:"times_12h"` // 12-hour time format
+	Location string `json:"location" firestore:"location"`   // Building and room
+
+	// Academic categorization
+	CoreArea     string `json:"core_area" firestore:"core_area"`         // Core curriculum area
+	ActivityType string `json:"activity_type" firestore:"activity_type"` // Lecture, Lab, etc.
+	School       School `json:"school" firestore:"school"`               // School code (can be string or number)
+	Dept         string `json:"dept" firestore:"dept"`                   // Department
+
+	// Additional resources
+	Syllabus  string `json:"syllabus" firestore:"syllabus"`   // Syllabus URL or content
+	Textbooks string `json:"textbooks" firestore:"textbooks"` // Required textbooks
 }

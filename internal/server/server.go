@@ -30,8 +30,19 @@ type Server struct {
 
 func NewServer() *http.Server {
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
+	if port == 0 {
+		port = 8080
+	}
+	log.Printf("[acmutd-api] Starting server on port %d", port)
 
-	sa := option.WithCredentialsFile(os.Getenv("FIREBASE_CONFIG"))
+	var configPath string
+	if os.Getenv("SAVE_ENVIRONMENT") == "prod" {
+		configPath = "prod." + os.Getenv("FB_CONFIG")
+	} else {
+		configPath = "dev." + os.Getenv("FB_CONFIG")
+	}
+
+	sa := option.WithCredentialsFile(configPath)
 	app, err := fb.NewApp(context.Background(), nil, sa)
 	if err != nil {
 		log.Fatalf("error initializing firebase app: %v\n", err)
@@ -45,7 +56,6 @@ func NewServer() *http.Server {
 	// Delete all existing admin keys and generate a new one
 	ctx := context.Background()
 
-	// Delete any existing admin keys
 	if err := db.DeleteAllAdminKeys(ctx); err != nil {
 		log.Printf("[acmutd-api] Warning: failed to delete existing admin keys: %v", err)
 	}

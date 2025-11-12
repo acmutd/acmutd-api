@@ -180,7 +180,6 @@ Retrieve all courses for a specific term.
 
 - `prefix` (optional): Filter by course prefix (e.g., "cs", "math")
 - `number` (optional): Filter by course number (e.g., "1337", "2305")
-- `school` (optional): Filter by school (e.g., "ecs", "nsm")
 
 **Response:**
 
@@ -235,10 +234,6 @@ curl "http://localhost:8080/api/v1/courses/24f?prefix=cs" \
 curl "http://localhost:8080/api/v1/courses/24f?prefix=cs&number=1337" \
   -H "X-API-Key: your-api-key-here"
 
-# Get all ECS school courses for Fall 2024
-curl "http://localhost:8080/api/v1/courses/24f?school=ecs" \
-  -H "X-API-Key: your-api-key-here"
-```
 
 ### Get Courses by Prefix
 
@@ -286,30 +281,6 @@ Retrieve specific courses by prefix and number for a term.
 
 ```bash
 curl http://localhost:8080/api/v1/courses/24f/prefix/cs/number/1337 \
-  -H "X-API-Key: your-api-key-here"
-```
-
-### Get Courses by School
-
-**GET** `/api/v1/courses/{term}/school/{school}`
-
-Retrieve all courses from a specific school for a term.
-
-**Headers:**
-
-- `X-API-Key`: Your API key (required)
-
-**Path Parameters:**
-
-- `term` (required): The academic term
-- `school` (required): The school code (e.g., "ECS", "NSM", "JSOM")
-
-**Response:** Same format as above, but filtered by school.
-
-**Example:**
-
-```bash
-curl http://localhost:8080/api/v1/courses/24f/school/ecs \
   -H "X-API-Key: your-api-key-here"
 ```
 
@@ -376,13 +347,13 @@ curl http://localhost:8080/api/v1/terms/ \
 
 ---
 
-## School Endpoints
+## Professor Endpoints
 
-### Get Schools by Term
+### Get Professor by ID
 
-**GET** `/api/v1/schools/{term}`
+**GET** `/api/v1/professors/id/{id}`
 
-Retrieve all schools that have courses in a specific term.
+Retrieve a specific professor by their instructor ID.
 
 **Headers:**
 
@@ -390,23 +361,99 @@ Retrieve all schools that have courses in a specific term.
 
 **Path Parameters:**
 
-- `term` (required): The academic term
+- `id` (required): The professor's instructor ID
 
 **Response:**
 
 ```json
 {
-  "term": "24f",
-  "count": 8,
-  "schools": [
-    "ecs",
-    "nsm",
-    "jsom",
-    "ah",
-    "bbs",
-    "epps",
-    "is",
-    "atec"
+  "professor": {
+    "instructor_id": "12345",
+    "normalized_coursebook_name": "John Doe",
+    "original_rmp_format": "Doe, John",
+    "department": "Computer Science",
+    "url": "https://www.ratemyprofessors.com/...",
+    "quality_rating": 4.5,
+    "difficulty_rating": 3.2,
+    "would_take_again": 85,
+    "ratings_count": 120,
+    "tags": ["Tough grader", "Gives good feedback"],
+    "rmp_id": "67890",
+    "overall_grade_rating": 3.8,
+    "total_grade_count": 500,
+    "course_ratings": {
+      "cs1337": 4.2,
+      "cs2336": 4.5
+    }
+  }
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:8080/api/v1/professors/id/12345 \
+  -H "X-API-Key: your-api-key-here"
+```
+
+### Get Professors by Name
+
+**GET** `/api/v1/professors/name/{name}`
+
+Search for professors by name (partial match supported).
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
+
+**Path Parameters:**
+
+- `name` (required): The professor's name or partial name to search for
+
+**Response:**
+
+```json
+{
+  "count": 2,
+  "professors": [
+    {
+      "instructor_id": "12345",
+      "normalized_coursebook_name": "John Doe",
+      "original_rmp_format": "Doe, John",
+      "department": "Computer Science",
+      "url": "https://www.ratemyprofessors.com/...",
+      "quality_rating": 4.5,
+      "difficulty_rating": 3.2,
+      "would_take_again": 85,
+      "ratings_count": 120,
+      "tags": ["Tough grader", "Gives good feedback"],
+      "rmp_id": "67890",
+      "overall_grade_rating": 3.8,
+      "total_grade_count": 500,
+      "course_ratings": {
+        "cs1337": 4.2,
+        "cs2336": 4.5
+      }
+    },
+    {
+      "instructor_id": "12346",
+      "normalized_coursebook_name": "Jane Doe",
+      "original_rmp_format": "Doe, Jane",
+      "department": "Mathematics",
+      "url": "https://www.ratemyprofessors.com/...",
+      "quality_rating": 4.8,
+      "difficulty_rating": 2.9,
+      "would_take_again": 92,
+      "ratings_count": 150,
+      "tags": ["Amazing lectures", "Caring"],
+      "rmp_id": "67891",
+      "overall_grade_rating": 4.0,
+      "total_grade_count": 600,
+      "course_ratings": {
+        "math2413": 4.7,
+        "math2414": 4.9
+      }
+    }
   ]
 }
 ```
@@ -414,7 +461,7 @@ Retrieve all schools that have courses in a specific term.
 **Example:**
 
 ```bash
-curl http://localhost:8080/api/v1/schools/24f \
+curl http://localhost:8080/api/v1/professors/name/john \
   -H "X-API-Key: your-api-key-here"
 ```
 
@@ -454,18 +501,26 @@ Each course object contains the following fields:
 
 ---
 
-## Common School Codes
+## Professor Object Schema
 
-| Code | Full Name |
-|------|-----------|
-| ECS | Erik Jonsson School of Engineering and Computer Science |
-| NSM | School of Natural Sciences and Mathematics |
-| JSOM | Naveen Jindal School of Management |
-| AH | School of Arts and Humanities |
-| BBS | School of Behavioral and Brain Sciences |
-| EPPS | School of Economic, Political and Policy Sciences |
-| IS | School of Interdisciplinary Studies |
-| ATEC | School of Arts, Technology, and Emerging Communication |
+Each professor object contains the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `instructor_id` | string | Unique instructor identifier |
+| `normalized_coursebook_name` | string | Professor's name in standard format |
+| `original_rmp_format` | string | Professor's name as it appears on RateMyProfessors |
+| `department` | string | Department affiliation |
+| `url` | string | RateMyProfessors profile URL |
+| `quality_rating` | float64 | Overall quality rating (0-5 scale) |
+| `difficulty_rating` | float64 | Difficulty rating (0-5 scale) |
+| `would_take_again` | int | Percentage of students who would take again (0-100) |
+| `ratings_count` | int | Total number of ratings on RateMyProfessors |
+| `tags` | []string | Common tags/descriptors from student reviews |
+| `rmp_id` | string | RateMyProfessors unique identifier |
+| `overall_grade_rating` | float64 | Average grade given (GPA scale) |
+| `total_grade_count` | int | Total number of grades recorded |
+| `course_ratings` | map[string]float64 | Per-course ratings (course code → rating) |
 
 ---
 
@@ -516,6 +571,26 @@ fetch('http://localhost:8080/api/v1/courses/24f?prefix=cs', {
   .then(response => response.json())
   .then(data => console.log(data))
   .catch(error => console.error('Error:', error));
+
+// Get professor by ID
+fetch('http://localhost:8080/api/v1/professors/id/12345', {
+  headers: {
+    'X-API-Key': 'your-api-key-here'
+  }
+})
+  .then(response => response.json())
+  .then(data => console.log(data))
+  .catch(error => console.error('Error:', error));
+
+// Get professors by name
+fetch('http://localhost:8080/api/v1/professors/name/john', {
+  headers: {
+    'X-API-Key': 'your-api-key-here'
+  }
+})
+  .then(response => response.json())
+  .then(data => console.log(data))
+  .catch(error => console.error('Error:', error));
 ```
 
 ### Python (requests)
@@ -530,6 +605,18 @@ response = requests.get('http://localhost:8080/api/v1/courses/24f',
                        headers=headers)
 data = response.json()
 print(data)
+
+# Get professor by ID
+response = requests.get('http://localhost:8080/api/v1/professors/id/12345',
+                       headers=headers)
+professor = response.json()
+print(professor)
+
+# Get professors by name
+response = requests.get('http://localhost:8080/api/v1/professors/name/john',
+                       headers=headers)
+professors = response.json()
+print(professors)
 ```
 
 ### cURL
@@ -547,8 +634,12 @@ curl http://localhost:8080/api/v1/courses/24f \
 curl "http://localhost:8080/api/v1/courses/24f/search?q=Computer Science" \
   -H "X-API-Key: your-api-key-here"
 
-# Get schools for a term
-curl http://localhost:8080/api/v1/schools/24f \
+# Get professor by ID
+curl http://localhost:8080/api/v1/professors/id/12345 \
+  -H "X-API-Key: your-api-key-here"
+
+# Get professors by name
+curl http://localhost:8080/api/v1/professors/name/john \
   -H "X-API-Key: your-api-key-here"
 
 # Create a new API key (admin only)
