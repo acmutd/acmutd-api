@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -15,13 +14,9 @@ import (
 )
 
 func init() {
-	if _, err := os.Stat("/.dockerenv"); os.IsNotExist(err) {
-		err := godotenv.Load()
-		if err != nil {
-			log.Fatalf("error loading .env file: %v\n", err)
-		}
-	} else {
-		log.Println("Running in Docker container, skipping .env file loading")
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalf("error loading .env file: %v\n", err)
 	}
 	log.SetPrefix("[acmutd-api] ")
 }
