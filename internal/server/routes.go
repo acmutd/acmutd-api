@@ -48,6 +48,15 @@ func (s *Server) RegisterRoutes() http.Handler {
 			professors.GET("/id/:id", s.getProfessorById)
 			professors.GET("/name/:name", s.getProfessorsByName)
 		}
+
+		grades := v1.Group("/grades")
+		{
+			grades.GET("/prof/id/:id", s.getGradesByProfId)
+			grades.GET("/prof/name/:name", s.getGradesByProfName)
+			grades.GET("/prefix/:prefix", s.getGradesByPrefix)
+			grades.GET("/prefix/:prefix/number/:number", s.getGradesByPrefixAndNumber)
+			grades.GET("/prefix/:prefix/term/:term", s.getGradesByPrefixAndTerm)
+		}
 	}
 
 	return router
@@ -311,5 +320,107 @@ func (s *Server) getProfessorsByName(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"count":      len(professors),
 		"professors": professors,
+	})
+}
+
+func (s *Server) getGradesByProfId(c *gin.Context) {
+	id := c.Param("id")
+
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Professor ID is required"})
+		return
+	}
+
+	grades, err := s.db.GetGradesByProfId(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count":  len(grades),
+		"grades": grades,
+	})
+}
+
+func (s *Server) getGradesByProfName(c *gin.Context) {
+	name := c.Param("name")
+
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Professor name is required"})
+		return
+	}
+
+	grades, err := s.db.GetGradesByProfName(c.Request.Context(), name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count":  len(grades),
+		"grades": grades,
+	})
+}
+
+func (s *Server) getGradesByPrefix(c *gin.Context) {
+	prefix := c.Param("prefix")
+
+	if prefix == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Prefix is required"})
+		return
+	}
+
+	grades, err := s.db.GetGradesByPrefix(c.Request.Context(), prefix)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count":  len(grades),
+		"grades": grades,
+	})
+}
+
+func (s *Server) getGradesByPrefixAndNumber(c *gin.Context) {
+	prefix := c.Param("prefix")
+	number := c.Param("number")
+
+	if prefix == "" || number == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Prefix and number are required"})
+		return
+	}
+
+	grades, err := s.db.GetGradesByPrefixAndNumber(c.Request.Context(), prefix, number)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count":  len(grades),
+		"grades": grades,
+	})
+}
+
+func (s *Server) getGradesByPrefixAndTerm(c *gin.Context) {
+	prefix := c.Param("prefix")
+	term := c.Param("term")
+
+	if prefix == "" || term == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Prefix and term are required"})
+		return
+	}
+
+	grades, err := s.db.GetGradesByPrefixAndTerm(c.Request.Context(), prefix, term)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"count":  len(grades),
+		"grades": grades,
 	})
 }

@@ -72,6 +72,40 @@ func ensureSectionDocID(course types.Course, term string) string {
 	return generated
 }
 
+type preparedCourse struct {
+	Course    types.Course
+	PrefixID  string
+	NumberID  string
+	SectionID string
+}
+
+func prepareCourseForTerm(course types.Course, normalizedTerm string) (preparedCourse, bool) {
+	if normalizedTerm == "" {
+		return preparedCourse{}, false
+	}
+
+	course.Term = normalizedTerm
+	course.CoursePrefix = normalizeCoursePrefix(course.CoursePrefix)
+	course.CourseNumber = normalizeCourseNumber(course.CourseNumber)
+	course.Section = strings.ToLower(strings.TrimSpace(course.Section))
+
+	prefixID := sanitizeDocID(course.CoursePrefix)
+	numberID := sanitizeDocID(course.CourseNumber)
+	if prefixID == "" || numberID == "" {
+		return preparedCourse{}, false
+	}
+
+	sectionID := ensureSectionDocID(course, normalizedTerm)
+	course.SectionAddress = sectionID
+
+	return preparedCourse{
+		Course:    course,
+		PrefixID:  prefixID,
+		NumberID:  numberID,
+		SectionID: sectionID,
+	}, true
+}
+
 func (c *Firestore) sectionsCollection(prefixID, numberID string) *firestore.CollectionRef {
 	return c.Collection("courses").
 		Doc(prefixID).
@@ -93,10 +127,10 @@ Structure:
 */
 func (c *Firestore) InsertClassesWithIndexes(ctx context.Context, courses []types.Course, term string) {
 	writer := c.BulkWriter(ctx)
+	defer writer.End()
 
 	normalizedTerm := normalizeTerm(term)
 	if normalizedTerm == "" {
-		writer.End()
 		return
 	}
 
@@ -109,26 +143,16 @@ func (c *Firestore) InsertClassesWithIndexes(ctx context.Context, courses []type
 	prefixes := make(map[string]string)
 
 	for _, course := range courses {
-		courseCopy := course
-		courseCopy.Term = normalizedTerm
-		courseCopy.CoursePrefix = normalizeCoursePrefix(courseCopy.CoursePrefix)
-		courseCopy.CourseNumber = normalizeCourseNumber(courseCopy.CourseNumber)
-		courseCopy.Section = strings.ToLower(strings.TrimSpace(courseCopy.Section))
-
-		prefixID := sanitizeDocID(normalizeCoursePrefix(courseCopy.CoursePrefix))
-		numberID := sanitizeDocID(normalizeCourseNumber(courseCopy.CourseNumber))
-		if prefixID == "" || numberID == "" {
+		prepared, ok := prepareCourseForTerm(course, normalizedTerm)
+		if !ok {
 			continue
 		}
 
-		sectionID := ensureSectionDocID(courseCopy, normalizedTerm)
-		courseCopy.SectionAddress = sectionID
+		doc := c.sectionsCollection(prepared.PrefixID, prepared.NumberID).Doc(prepared.SectionID)
+		writer.Set(doc, prepared.Course)
 
-		doc := c.sectionsCollection(prefixID, numberID).Doc(sectionID)
-		writer.Set(doc, courseCopy)
-
-		if _, exists := prefixes[prefixID]; !exists {
-			prefixes[prefixID] = courseCopy.CoursePrefix
+		if _, exists := prefixes[prepared.PrefixID]; !exists {
+			prefixes[prepared.PrefixID] = prepared.Course.CoursePrefix
 		}
 	}
 
@@ -143,12 +167,11 @@ func (c *Firestore) InsertClassesWithIndexes(ctx context.Context, courses []type
 			firestore.MergeAll,
 		)
 	}
-
-	writer.End()
 }
 
 func (c *Firestore) InsertTerms(ctx context.Context, terms []string) {
 	writer := c.BulkWriter(ctx)
+	defer writer.End()
 
 	for _, term := range terms {
 		normalized := normalizeTerm(term)
@@ -161,8 +184,6 @@ func (c *Firestore) InsertTerms(ctx context.Context, terms []string) {
 			"term": normalized,
 		}, firestore.MergeAll)
 	}
-
-	writer.End()
 }
 
 func (c *Firestore) QueryAllTerms(ctx context.Context) ([]string, error) {
@@ -277,19 +298,28 @@ func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query) (
 // SearchCourses searches courses by title, topic, or instructor name
 func (c *Firestore) SearchCourses(ctx context.Context, term, searchQuery string) ([]types.Course, error) {
 	// TODO: Figure out a nicer way to do this
-	courses, err := c.GetAllCoursesByTerm(ctx, normalizeTerm(term))
+	normalizedTerm := normalizeTerm(term)
+	courses, err := c.GetAllCoursesByTerm(ctx, normalizedTerm)
 	if err != nil {
 		return nil, err
 	}
 
+	query := strings.ToLower(strings.TrimSpace(searchQuery))
+	if query == "" {
+		return courses, nil
+	}
+
 	var filteredCourses []types.Course
-	query := strings.ToLower(searchQuery)
 
 	for _, course := range courses {
+		title := strings.ToLower(course.Title)
+		topic := strings.ToLower(course.Topic)
+		instructors := strings.ToLower(course.Instructors)
+
 		// Search in title, topic, and instructors
-		if strings.Contains(strings.ToLower(course.Title), query) ||
-			strings.Contains(strings.ToLower(course.Topic), query) ||
-			strings.Contains(strings.ToLower(course.Instructors), query) {
+		if strings.Contains(title, query) ||
+			strings.Contains(topic, query) ||
+			strings.Contains(instructors, query) {
 			filteredCourses = append(filteredCourses, course)
 		}
 	}
@@ -396,7 +426,12 @@ func (c *Firestore) GetProfessorById(ctx context.Context, id string) (*types.Pro
 }
 
 func (c *Firestore) GetProfessorsByName(ctx context.Context, name string) ([]types.Professor, error) {
-	query := c.Collection("professors").Where("normalized_coursebook_name", "==", name)
+	normalizedName := strings.ToLower(strings.TrimSpace(name))
+	if normalizedName == "" {
+		return nil, nil
+	}
+
+	query := c.Collection("professors").Where("normalized_coursebook_name", "==", normalizedName)
 	iter := query.Documents(ctx)
 	defer iter.Stop()
 
@@ -418,6 +453,56 @@ func (c *Firestore) GetProfessorsByName(ctx context.Context, name string) ([]typ
 	}
 	return professors, nil
 }
+
+func (c *Firestore) GetGradesByPrefix(ctx context.Context, prefix string) ([]types.Grades, error) {
+	query := c.CollectionGroup("records").Where("course_prefix", "==", prefix)
+	return c.collectGrades(ctx, query)
+}
+
+func (c *Firestore) GetGradesByPrefixAndNumber(ctx context.Context, prefix, number string) ([]types.Grades, error) {
+	records := c.Collection("grades").Doc(prefix).Collection("courses").Doc(number).Collection("records")
+	return c.collectGrades(ctx, records.Query)
+}
+
+func (c *Firestore) GetGradesByPrefixAndTerm(ctx context.Context, prefix, term string) ([]types.Grades, error) {
+	query := c.CollectionGroup("records").Where("course_prefix", "==", prefix).Where("term", "==", term)
+	return c.collectGrades(ctx, query)
+}
+
+func (c *Firestore) GetGradesByProfId(ctx context.Context, profId string) ([]types.Grades, error) {
+	query := c.CollectionGroup("records").Where("instructor_id", "==", profId)
+	return c.collectGrades(ctx, query)
+}
+
+func (c *Firestore) GetGradesByProfName(ctx context.Context, profName string) ([]types.Grades, error) {
+	query := c.CollectionGroup("records").Where("instructor_name_normalized", "==", profName)
+	return c.collectGrades(ctx, query)
+}
+
+func (c *Firestore) collectGrades(ctx context.Context, query firestore.Query) ([]types.Grades, error) {
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	var grades []types.Grades
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to get next grade: %w", err)
+		}
+
+		var grade types.Grades
+		if err := doc.DataTo(&grade); err != nil {
+			continue
+		}
+		grades = append(grades, grade)
+	}
+
+	return grades, nil
+}
+
 func (c *Firestore) GenerateAPIKey(
 	ctx context.Context,
 	rateLimit int,
@@ -487,11 +572,13 @@ func (c *Firestore) GetAPIKey(ctx context.Context, key string) (*types.APIKey, e
 }
 
 // DeleteAllAdminKeys deletes all existing admin keys from Firebase
-func (c *Firestore) DeleteAllAdminKeys(ctx context.Context) error {
+func (c *Firestore) DeleteAllAdminKeys(ctx context.Context) (returnedErr error) {
 	// Query all documents in api_keys collection where is_admin is true
 	iter := c.Collection("api_keys").Where("is_admin", "==", true).Documents(ctx)
+	defer iter.Stop()
 
 	batch := c.BulkWriter(ctx)
+	defer batch.End()
 
 	for {
 		doc, err := iter.Next()
@@ -508,7 +595,6 @@ func (c *Firestore) DeleteAllAdminKeys(ctx context.Context) error {
 		batch.Delete(doc.Ref)
 	}
 
-	batch.End()
 	return nil
 }
 
