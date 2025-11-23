@@ -186,8 +186,16 @@ func (c *Firestore) InsertTerms(ctx context.Context, terms []string) {
 	}
 }
 
-func (c *Firestore) QueryAllTerms(ctx context.Context) ([]string, error) {
-	iter := c.Collection("terms").Documents(ctx)
+func (c *Firestore) QueryAllTerms(ctx context.Context, limit, offset int) ([]string, bool, error) {
+	query := c.Collection("terms").OrderBy("term", firestore.Asc)
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	if limit > 0 {
+		query = query.Limit(limit + 1)
+	}
+
+	iter := query.Documents(ctx)
 	defer iter.Stop()
 
 	var terms []string
@@ -197,7 +205,7 @@ func (c *Firestore) QueryAllTerms(ctx context.Context) ([]string, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to get next term: %w", err)
+			return nil, false, fmt.Errorf("failed to get next term: %w", err)
 		}
 
 		data := doc.Data()
@@ -211,14 +219,20 @@ func (c *Firestore) QueryAllTerms(ctx context.Context) ([]string, error) {
 
 	sort.Strings(terms)
 
-	return terms, nil
+	hasNext := false
+	if limit > 0 && len(terms) > limit {
+		hasNext = true
+		terms = terms[:limit]
+	}
+
+	return terms, hasNext, nil
 }
-func (c *Firestore) QueryByCourseNumber(ctx context.Context, term, coursePrefix, courseNumber string) ([]types.Course, error) {
+func (c *Firestore) QueryByCourseNumber(ctx context.Context, term, coursePrefix, courseNumber string, limit, offset int) ([]types.Course, bool, error) {
 	term = normalizeTerm(term)
 	coursePrefix = normalizeCoursePrefix(coursePrefix)
 	courseNumber = normalizeCourseNumber(courseNumber)
 	if term == "" || coursePrefix == "" || courseNumber == "" {
-		return nil, nil
+		return []types.Course{}, false, nil
 	}
 
 	query := c.CollectionGroup("sections").
@@ -226,52 +240,56 @@ func (c *Firestore) QueryByCourseNumber(ctx context.Context, term, coursePrefix,
 		Where("course_prefix", "==", coursePrefix).
 		Where("course_number", "==", courseNumber)
 
-	return c.collectCourses(ctx, query)
+	return c.collectCourses(ctx, query, limit, offset)
 }
 
-func (c *Firestore) QueryByCoursePrefix(ctx context.Context, term, coursePrefix string) ([]types.Course, error) {
+func (c *Firestore) QueryByCoursePrefix(ctx context.Context, term, coursePrefix string, limit, offset int) ([]types.Course, bool, error) {
 	term = normalizeTerm(term)
 	coursePrefix = normalizeCoursePrefix(coursePrefix)
 	if term == "" || coursePrefix == "" {
-		return nil, nil
+		return []types.Course{}, false, nil
 	}
 
 	query := c.CollectionGroup("sections").
 		Where("term", "==", term).
 		Where("course_prefix", "==", coursePrefix)
 
-	return c.collectCourses(ctx, query)
+	return c.collectCourses(ctx, query, limit, offset)
 }
 
 // GetAllCoursesByTerm returns all courses for a given term
-func (c *Firestore) GetAllCoursesByTerm(ctx context.Context, term string) ([]types.Course, error) {
+func (c *Firestore) GetAllCoursesByTerm(ctx context.Context, term string, limit, offset int) ([]types.Course, bool, error) {
 	term = normalizeTerm(term)
 	if term == "" {
-		return nil, nil
+		return []types.Course{}, false, nil
 	}
 
 	query := c.CollectionGroup("sections").
 		Where("term", "==", term)
 
-	return c.collectCourses(ctx, query)
+	return c.collectCourses(ctx, query, limit, offset)
 }
 
 // QueryBySchool returns courses by school for a given term
-func (c *Firestore) QueryBySchool(ctx context.Context, term, school string) ([]types.Course, error) {
+func (c *Firestore) QueryBySchool(ctx context.Context, term, school string, limit, offset int) ([]types.Course, bool, error) {
 	term = normalizeTerm(term)
 	school = strings.TrimSpace(school)
 	if term == "" || school == "" {
-		return nil, nil
+		return []types.Course{}, false, nil
 	}
 
 	query := c.CollectionGroup("sections").
 		Where("term", "==", term).
 		Where("school", "==", school)
 
-	return c.collectCourses(ctx, query)
+	return c.collectCourses(ctx, query, limit, offset)
 }
 
-func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query) ([]types.Course, error) {
+func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, limit, offset int) ([]types.Course, bool, error) {
+	if limit > 0 {
+		query = query.Offset(offset).Limit(limit + 1)
+	}
+
 	iter := query.Documents(ctx)
 	defer iter.Stop()
 
@@ -282,7 +300,7 @@ func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query) (
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to get next document: %w", err)
+			return nil, false, fmt.Errorf("failed to get next document: %w", err)
 		}
 
 		var course types.Course
@@ -292,21 +310,39 @@ func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query) (
 		courses = append(courses, course)
 	}
 
-	return courses, nil
+	hasNext := false
+	if limit > 0 && len(courses) > limit {
+		hasNext = true
+		courses = courses[:limit]
+	}
+
+	return courses, hasNext, nil
 }
 
 // SearchCourses searches courses by title, topic, or instructor name
-func (c *Firestore) SearchCourses(ctx context.Context, term, searchQuery string) ([]types.Course, error) {
+func (c *Firestore) SearchCourses(ctx context.Context, term, searchQuery string, limit, offset int) ([]types.Course, bool, error) {
 	// TODO: Figure out a nicer way to do this
 	normalizedTerm := normalizeTerm(term)
-	courses, err := c.GetAllCoursesByTerm(ctx, normalizedTerm)
+	courses, _, err := c.GetAllCoursesByTerm(ctx, normalizedTerm, 0, 0)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	query := strings.ToLower(strings.TrimSpace(searchQuery))
 	if query == "" {
-		return courses, nil
+		if limit <= 0 {
+			return courses, false, nil
+		}
+		start := offset
+		if start >= len(courses) {
+			return []types.Course{}, false, nil
+		}
+		end := offset + limit
+		if end > len(courses) {
+			end = len(courses)
+		}
+		hasNext := end < len(courses)
+		return courses[start:end], hasNext, nil
 	}
 
 	var filteredCourses []types.Course
@@ -324,7 +360,23 @@ func (c *Firestore) SearchCourses(ctx context.Context, term, searchQuery string)
 		}
 	}
 
-	return filteredCourses, nil
+	if limit <= 0 {
+		return filteredCourses, false, nil
+	}
+
+	start := offset
+	if start >= len(filteredCourses) {
+		return []types.Course{}, false, nil
+	}
+
+	end := offset + limit
+	if end > len(filteredCourses) {
+		end = len(filteredCourses)
+	}
+
+	hasNext := end < len(filteredCourses)
+
+	return filteredCourses[start:end], hasNext, nil
 }
 
 // GetSchoolsByTerm returns all schools for a given term
@@ -425,13 +477,19 @@ func (c *Firestore) GetProfessorById(ctx context.Context, id string) (*types.Pro
 	return &professor, nil
 }
 
-func (c *Firestore) GetProfessorsByName(ctx context.Context, name string) ([]types.Professor, error) {
+func (c *Firestore) GetProfessorsByName(ctx context.Context, name string, limit, offset int) ([]types.Professor, bool, error) {
 	normalizedName := strings.ToLower(strings.TrimSpace(name))
 	if normalizedName == "" {
-		return nil, nil
+		return []types.Professor{}, false, nil
 	}
 
 	query := c.Collection("professors").Where("normalized_coursebook_name", "==", normalizedName)
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	if limit > 0 {
+		query = query.Limit(limit + 1)
+	}
 	iter := query.Documents(ctx)
 	defer iter.Stop()
 
@@ -442,7 +500,7 @@ func (c *Firestore) GetProfessorsByName(ctx context.Context, name string) ([]typ
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to get next professor: %w", err)
+			return nil, false, fmt.Errorf("failed to get next professor: %w", err)
 		}
 
 		var professor types.Professor
@@ -451,35 +509,45 @@ func (c *Firestore) GetProfessorsByName(ctx context.Context, name string) ([]typ
 		}
 		professors = append(professors, professor)
 	}
-	return professors, nil
+	hasNext := false
+	if limit > 0 && len(professors) > limit {
+		hasNext = true
+		professors = professors[:limit]
+	}
+
+	return professors, hasNext, nil
 }
 
-func (c *Firestore) GetGradesByPrefix(ctx context.Context, prefix string) ([]types.Grades, error) {
+func (c *Firestore) GetGradesByPrefix(ctx context.Context, prefix string, limit, offset int) ([]types.Grades, bool, error) {
 	query := c.CollectionGroup("records").Where("course_prefix", "==", prefix)
-	return c.collectGrades(ctx, query)
+	return c.collectGrades(ctx, query, limit, offset)
 }
 
-func (c *Firestore) GetGradesByPrefixAndNumber(ctx context.Context, prefix, number string) ([]types.Grades, error) {
+func (c *Firestore) GetGradesByPrefixAndNumber(ctx context.Context, prefix, number string, limit, offset int) ([]types.Grades, bool, error) {
 	records := c.Collection("grades").Doc(prefix).Collection("courses").Doc(number).Collection("records")
-	return c.collectGrades(ctx, records.Query)
+	return c.collectGrades(ctx, records.Query, limit, offset)
 }
 
-func (c *Firestore) GetGradesByPrefixAndTerm(ctx context.Context, prefix, term string) ([]types.Grades, error) {
+func (c *Firestore) GetGradesByPrefixAndTerm(ctx context.Context, prefix, term string, limit, offset int) ([]types.Grades, bool, error) {
 	query := c.CollectionGroup("records").Where("course_prefix", "==", prefix).Where("term", "==", term)
-	return c.collectGrades(ctx, query)
+	return c.collectGrades(ctx, query, limit, offset)
 }
 
-func (c *Firestore) GetGradesByProfId(ctx context.Context, profId string) ([]types.Grades, error) {
+func (c *Firestore) GetGradesByProfId(ctx context.Context, profId string, limit, offset int) ([]types.Grades, bool, error) {
 	query := c.CollectionGroup("records").Where("instructor_id", "==", profId)
-	return c.collectGrades(ctx, query)
+	return c.collectGrades(ctx, query, limit, offset)
 }
 
-func (c *Firestore) GetGradesByProfName(ctx context.Context, profName string) ([]types.Grades, error) {
+func (c *Firestore) GetGradesByProfName(ctx context.Context, profName string, limit, offset int) ([]types.Grades, bool, error) {
 	query := c.CollectionGroup("records").Where("instructor_name_normalized", "==", profName)
-	return c.collectGrades(ctx, query)
+	return c.collectGrades(ctx, query, limit, offset)
 }
 
-func (c *Firestore) collectGrades(ctx context.Context, query firestore.Query) ([]types.Grades, error) {
+func (c *Firestore) collectGrades(ctx context.Context, query firestore.Query, limit, offset int) ([]types.Grades, bool, error) {
+	if limit > 0 {
+		query = query.Offset(offset).Limit(limit + 1)
+	}
+
 	iter := query.Documents(ctx)
 	defer iter.Stop()
 
@@ -490,7 +558,7 @@ func (c *Firestore) collectGrades(ctx context.Context, query firestore.Query) ([
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to get next grade: %w", err)
+			return nil, false, fmt.Errorf("failed to get next grade: %w", err)
 		}
 
 		var grade types.Grades
@@ -500,7 +568,13 @@ func (c *Firestore) collectGrades(ctx context.Context, query firestore.Query) ([
 		grades = append(grades, grade)
 	}
 
-	return grades, nil
+	hasNext := false
+	if limit > 0 && len(grades) > limit {
+		hasNext = true
+		grades = grades[:limit]
+	}
+
+	return grades, hasNext, nil
 }
 
 func (c *Firestore) GenerateAPIKey(

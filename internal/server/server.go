@@ -11,6 +11,10 @@ import (
 
 	fb "firebase.google.com/go/v4"
 	"github.com/acmutd/acmutd-api/internal/firebase"
+	"github.com/acmutd/acmutd-api/internal/server/handlers"
+	"github.com/acmutd/acmutd-api/internal/server/middleware"
+	"github.com/acmutd/acmutd-api/internal/server/ratelimit"
+	"github.com/acmutd/acmutd-api/internal/server/router"
 	"github.com/patrickmn/go-cache"
 	"google.golang.org/api/option"
 )
@@ -23,7 +27,7 @@ const (
 type Server struct {
 	db          *firebase.Firestore
 	apiKeyCache *cache.Cache
-	rateLimiter *RateLimiter
+	rateLimiter *ratelimit.Limiter
 	port        int
 	adminKey    string
 }
@@ -68,17 +72,24 @@ func NewServer() *http.Server {
 
 	log.Printf("[acmutd-api] New admin key generated: %s", adminKey)
 
+	limiter := ratelimit.NewLimiter()
+	limiter.StartCleanup(rateLimitCacheTTL)
+
 	newServer := &Server{
 		db:          db,
 		apiKeyCache: cache.New(apiKeyCacheTTL, 10*time.Minute),
-		rateLimiter: NewRateLimiter(),
+		rateLimiter: limiter,
 		port:        port,
 		adminKey:    adminKey,
 	}
 
+	handler := handlers.New(newServer.db)
+	middlewares := middleware.NewManager(newServer.db, newServer.apiKeyCache, newServer.rateLimiter, newServer.adminKey)
+	httpHandler := router.New(handler, middlewares)
+
 	return &http.Server{
 		Addr:         fmt.Sprintf(":%d", newServer.port),
-		Handler:      newServer.RegisterRoutes(),
+		Handler:      httpHandler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 	}
