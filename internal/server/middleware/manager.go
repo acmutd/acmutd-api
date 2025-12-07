@@ -1,18 +1,38 @@
-package server
+package middleware
 
 import (
 	"context"
 	"net/http"
 	"time"
 
+	"github.com/acmutd/acmutd-api/internal/firebase"
+	"github.com/acmutd/acmutd-api/internal/server/ratelimit"
 	"github.com/acmutd/acmutd-api/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/patrickmn/go-cache"
 )
 
-func (api *Server) AuthMiddleware() gin.HandlerFunc {
+// Manager wires all HTTP middlewares with shared dependencies.
+type Manager struct {
+	db          *firebase.Firestore
+	apiKeyCache *cache.Cache
+	rateLimiter *ratelimit.Limiter
+	adminKey    string
+}
+
+// NewManager builds a middleware manager for the HTTP server.
+func NewManager(db *firebase.Firestore, apiKeyCache *cache.Cache, limiter *ratelimit.Limiter, adminKey string) *Manager {
+	return &Manager{
+		db:          db,
+		apiKeyCache: apiKeyCache,
+		rateLimiter: limiter,
+		adminKey:    adminKey,
+	}
+}
+
+// Auth validates API keys and decorates the context with key metadata.
+func (m *Manager) Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Health check endpoint is public
 		if c.Request.URL.Path == "/health" {
 			c.Next()
 			return
@@ -24,8 +44,7 @@ func (api *Server) AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Check cache first
-		if apiKeyData, found := api.apiKeyCache.Get(key); found {
+		if apiKeyData, found := m.apiKeyCache.Get(key); found {
 			keyData, ok := apiKeyData.(*types.APIKey)
 			if !ok {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid API key"})
@@ -33,27 +52,26 @@ func (api *Server) AuthMiddleware() gin.HandlerFunc {
 			}
 
 			if keyData.IsAdmin {
-				api.updateKeyUsageAsync(key)
+				m.updateKeyUsageAsync(key)
 				c.Set("api_key", keyData)
 				c.Next()
 				return
 			}
 
 			if keyData.ExpiresAt.Before(time.Now()) {
-				api.apiKeyCache.Delete(key)
+				m.apiKeyCache.Delete(key)
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key expired"})
 				return
 			}
 
-			api.updateKeyUsageAsync(key)
+			m.updateKeyUsageAsync(key)
 
 			c.Set("api_key", keyData)
 			c.Next()
 			return
 		}
 
-		// Cache miss - check Firestore
-		apiKey, err := api.db.ValidateAPIKey(c.Request.Context(), key)
+		apiKey, err := m.db.ValidateAPIKey(c.Request.Context(), key)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server error"})
 			return
@@ -64,21 +82,20 @@ func (api *Server) AuthMiddleware() gin.HandlerFunc {
 		}
 
 		if apiKey.ExpiresAt.Before(time.Now()) && !apiKey.IsAdmin {
-			api.apiKeyCache.Delete(key)
+			m.apiKeyCache.Delete(key)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key expired"})
 			return
 		}
 
-		api.updateKeyUsageAsync(key)
-
-		// Cache the valid key
-		api.apiKeyCache.Set(key, apiKey, cache.DefaultExpiration)
+		m.updateKeyUsageAsync(key)
+		m.apiKeyCache.Set(key, apiKey, cache.DefaultExpiration)
 		c.Set("api_key", apiKey)
 		c.Next()
 	}
 }
 
-func (api *Server) RateLimitMiddleware() gin.HandlerFunc {
+// RateLimit enforces per-key request limits.
+func (m *Manager) RateLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.URL.Path == "/health" {
 			c.Next()
@@ -92,9 +109,7 @@ func (api *Server) RateLimitMiddleware() gin.HandlerFunc {
 		}
 
 		apiKey := keyData.(*types.APIKey)
-		allowed := api.rateLimiter.Allow(apiKey.Key, apiKey.RateLimit, apiKey.WindowSeconds)
-
-		if !allowed {
+		if !m.rateLimiter.Allow(apiKey.Key, apiKey.RateLimit, apiKey.WindowSeconds) {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
 			return
 		}
@@ -103,7 +118,8 @@ func (api *Server) RateLimitMiddleware() gin.HandlerFunc {
 	}
 }
 
-func (api *Server) AdminMiddleware() gin.HandlerFunc {
+// Admin restricts routes to the generated admin key.
+func (m *Manager) Admin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		key := c.GetHeader("X-API-Key")
 		if key == "" {
@@ -111,18 +127,17 @@ func (api *Server) AdminMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// check if the provided api key is the admin key
-		if key != api.adminKey {
+		if key != m.adminKey {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin access required"})
 			return
 		}
 
-		api.updateKeyUsageAsync(key)
+		m.updateKeyUsageAsync(key)
 		c.Next()
 	}
 }
 
-func (api *Server) updateKeyUsageAsync(key string) {
+func (m *Manager) updateKeyUsageAsync(key string) {
 	if key == "" {
 		return
 	}
@@ -130,6 +145,6 @@ func (api *Server) updateKeyUsageAsync(key string) {
 	go func(k string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		api.db.UpdateKeyUsage(ctx, k)
+		m.db.UpdateKeyUsage(ctx, k)
 	}(key)
 }
