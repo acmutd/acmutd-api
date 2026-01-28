@@ -1,0 +1,837 @@
+{
+  "info": {
+    "_postman_id": "6d6eef19-5c80-45f1-9a8a-86821de8e4bb",
+    "name": "ACMUTD API REST Operations",
+    "description": "# ACM API Documentation\n\n## Overview\n\nThe ACM API provides access to course and school data for the University of Texas at Dallas. All endpoints return JSON responses and support CORS for cross-origin requests.\n\n**Base URL**: `http://localhost:8080` (or your deployed server URL)\n\n## Authentication\n\n**All API endpoints (except** **`/health`**) require authentication using an API key.\n\nInclude your API key in the request header:\n\n```\nX-API-Key: your-api-key-here\n\n ```\n\n### API Key Management\n\nAPI keys are managed through admin endpoints and include:\n\n- Rate limiting configuration\n    \n- Expiration dates\n    \n- Admin privileges\n    \n- Usage tracking\n    \n\n## Response Format\n\nAll successful responses follow this general format:\n\n```\n{\n  \"term\": \"string\",\n  \"count\": number,\n  \"data\": [...]\n}\n\n ```\n\nError responses follow this format:\n\n```\n{\n  \"error\": \"Error message description\"\n}\n\n ```\n\n## Course Object Schema\n\nEach course object contains the following fields:\n\n| Field | Type | Description |\n| --- | --- | --- |\n| `section_address` | string | Unique identifier for the course section |\n| `course_prefix` | string | Course prefix (e.g., \"CS\", \"MATH\") |\n| `course_number` | string | Course number (e.g., \"1337\", \"2305\") |\n| `section` | string | Section number (e.g., \"001\", \"002\") |\n| `class_number` | string | Unique class number |\n| `title` | string | Course title |\n| `topic` | string | Special topic (if applicable) |\n| `enrolled_status` | string | Enrollment status (\"Open\", \"Closed\", etc.) |\n| `enrolled_current` | string | Current enrollment count |\n| `enrolled_max` | string | Maximum enrollment capacity |\n| `instructors` | string | Instructor names |\n| `assistants` | string | Teaching assistant names |\n| `term` | string | Academic term |\n| `session` | string | Session type (\"Regular\", \"Summer\", etc.) |\n| `days` | string | Class days (\"MW\", \"TR\", \"F\", etc.) |\n| `times` | string | Class times in 24-hour format |\n| `times_12h` | string | Class times in 12-hour format |\n| `location` | string | Classroom location |\n| `core_area` | string | Core curriculum area code |\n| `activity_type` | string | Activity type (\"Lecture\", \"Lab\", etc.) |\n| `school` | string | School code |\n| `dept` | string | Department name |\n| `syllabus` | string | Syllabus URL |\n| `textbooks` | string | Textbook information |\n| `instructor_ids` | string | Instructor ID numbers |\n\n---\n\n## Professor Object Schema\n\nEach professor object contains the following fields:\n\n| Field | Type | Description |\n| --- | --- | --- |\n| `instructor_id` | string | Unique instructor identifier |\n| `normalized_coursebook_name` | string | Professor's name in standard format |\n| `original_rmp_format` | string | Professor's name as it appears on RateMyProfessors |\n| `department` | string | Department affiliation |\n| `url` | string | RateMyProfessors profile URL |\n| `quality_rating` | float64 | Overall quality rating (0-5 scale) |\n| `difficulty_rating` | float64 | Difficulty rating (0-5 scale) |\n| `would_take_again` | int | Percentage of students who would take again (0-100) |\n| `ratings_count` | int | Total number of ratings on RateMyProfessors |\n| `tags` | \\[\\]string | Common tags/descriptors from student reviews |\n| `rmp_id` | string | RateMyProfessors unique identifier |\n| `overall_grade_rating` | float64 | Average grade given (GPA scale) |\n| `total_grade_count` | int | Total number of grades recorded |\n| `course_ratings` | map\\[string\\]float64 | Per-course ratings (course code → rating) |\n\n---\n\n## Error Codes\n\n| Status Code | Description |\n| --- | --- |\n| 200 | Success |\n| 400 | Bad Request - Missing or invalid parameters |\n| 401 | Unauthorized - Missing or invalid API key |\n| 403 | Forbidden - Admin access required |\n| 429 | Too Many Requests - Rate limit exceeded |\n| 500 | Internal Server Error - Database or server error |\n\n---\n\n## Rate Limiting\n\nThe API implements rate limiting based on your API key configuration:\n\n- Each API key has a configurable rate limit and time window\n    \n- Rate limits are enforced per API key\n    \n- Rate limit information is included in your API key configuration\n    \n\n---\n\n## CORS Support\n\nThe API supports Cross-Origin Resource Sharing (CORS) and allows requests from any origin with the following headers:\n\n- Access-Control-Allow-Origin: \\*\n    \n- Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\n    \n- Access-Control-Allow-Headers: Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key\n    \n\n---\n\n## Examples in Different Languages\n\n### JavaScript (Fetch API)\n\n```\n// Get all CS courses for Fall 2024\nfetch('http://localhost:8080/api/v1/courses/24f?prefix=cs', {\n  headers: {\n    'X-API-Key': 'your-api-key-here'\n  }\n})\n  .then(response => response.json())\n  .then(data => console.log(data))\n  .catch(error => console.error('Error:', error));\n// Get professor by ID\nfetch('http://localhost:8080/api/v1/professors/id/12345', {\n  headers: {\n    'X-API-Key': 'your-api-key-here'\n  }\n})\n  .then(response => response.json())\n  .then(data => console.log(data))\n  .catch(error => console.error('Error:', error));\n// Get professors by name\nfetch('http://localhost:8080/api/v1/professors/name/john', {\n  headers: {\n    'X-API-Key': 'your-api-key-here'\n  }\n})\n  .then(response => response.json())\n  .then(data => console.log(data))\n  .catch(error => console.error('Error:', error));\n\n ```\n\n### Python (requests)\n\n```\nimport requests\n# Get all CS courses for Fall 2024\nheaders = {'X-API-Key': 'your-api-key-here'}\nresponse = requests.get('http://localhost:8080/api/v1/courses/24f',\n                       params={'prefix': 'cs'},\n                       headers=headers)\ndata = response.json()\nprint(data)\n# Get professor by ID\nresponse = requests.get('http://localhost:8080/api/v1/professors/id/12345',\n                       headers=headers)\nprofessor = response.json()\nprint(professor)\n# Get professors by name\nresponse = requests.get('http://localhost:8080/api/v1/professors/name/john',\n                       headers=headers)\nprofessors = response.json()\nprint(professors)\n\n ```\n\n### cURL\n\n```\n# Get all available terms\ncurl http://localhost:8080/api/v1/terms/ \\\n  -H \"X-API-Key: your-api-key-here\"\n# Get all courses for a term\ncurl http://localhost:8080/api/v1/courses/24f \\\n  -H \"X-API-Key: your-api-key-here\"\n# Search for courses\ncurl \"http://localhost:8080/api/v1/courses/24f/search?q=Computer Science\" \\\n  -H \"X-API-Key: your-api-key-here\"\n# Get professor by ID\ncurl http://localhost:8080/api/v1/professors/id/12345 \\\n  -H \"X-API-Key: your-api-key-here\"\n# Get professors by name\ncurl http://localhost:8080/api/v1/professors/name/john \\\n  -H \"X-API-Key: your-api-key-here\"\n# Create a new API key (admin only)\ncurl -X POST http://localhost:8080/admin/apikeys \\\n  -H \"X-API-Key: admin-key-here\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"rate_limit\": 100,\n    \"window_seconds\": 60,\n    \"is_admin\": false,\n    \"expires_at\": \"2024-12-31T23:59:59Z\"\n  }'\n\n ```\n\n---\n\n## Versioning\n\nThis documentation covers API version 1 (`/api/v1/`). Future versions may introduce breaking changes and will be documented separately.\n\n---\n\n## Support\n\nFor issues or questions about the API, please contact the development team or create an issue in the project repository.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "49126023",
+    "_collection_link": "https://go.postman.co/collection/49126023-6d6eef19-5c80-45f1-9a8a-86821de8e4bb?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Admin Endpoints",
+      "item": [
+        {
+          "name": "Create API Key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "packages": {},
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rate_limit\": 100,\n  \"window_seconds\": 60,\n  \"is_admin\": false,\n  \"expires_at\": \"2024-12-31T23:59:59Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/admin/apikeys",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "apikeys"
+              ]
+            },
+            "description": "### Create API Key\n\n**POST** `/admin/apikeys`\n\nCreate a new API key with specified rate limiting and permissions.\n\n**Headers:**\n\n- `X-API-Key`: Admin API key (required)\n    \n\n**Request Body:**\n\n```\n{\n  \"rate_limit\": 100,\n  \"window_seconds\": 60,\n  \"is_admin\": false,\n  \"expires_at\": \"2024-12-31T23:59:59Z\"\n}\n\n ```\n\n**Parameters:**\n\n- `rate_limit` (required): Maximum requests allowed per window\n    \n- `window_seconds` (required): Time window in seconds for rate limiting\n    \n- `is_admin` (optional): Whether the key has admin privileges (default: false)\n    \n- `expires_at` (optional): Expiration date in ISO 8601 format\n    \n\n**Response:**\n\n```\n{\n  \"key\": \"generated-api-key-string\"\n}\n\n ```\n\n**Example:**\n\n```\ncurl -X POST http://localhost:8080/admin/apikeys \\\n  -H \"X-API-Key: admin-key-here\" \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"rate_limit\": 100,\n    \"window_seconds\": 60,\n    \"is_admin\": false,\n    \"expires_at\": \"2024-12-31T23:59:59Z\"\n  }'\n\n ```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get API Key Information",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/apikeys/{{key}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "admin",
+                "apikeys",
+                "{{key}}"
+              ]
+            },
+            "description": "### Get API Key Information\n\n**GET** `/admin/apikeys/{key}`\n\nRetrieve information about a specific API key.\n\n**Headers:**\n\n- `X-API-Key`: Admin API key (required)\n    \n\n**Path Parameters:**\n\n- `key` (required): The API key to retrieve information for\n    \n\n**Response:**\n\n```\n{\n  \"key\": \"api-key-string\",\n  \"rate_limit\": 100,\n  \"window_seconds\": 60,\n  \"is_admin\": false,\n  \"created_at\": \"2024-01-01T00:00:00Z\",\n  \"expires_at\": \"2024-12-31T23:59:59Z\",\n  \"last_used_at\": \"2024-01-15T10:30:00Z\",\n  \"usage_count\": 150\n}\n\n ```\n\n**Example:**\n\n```\ncurl http://localhost:8080/admin/apikeys/api-key-here \\\n  -H \"X-API-Key: admin-key-here\"\n\n ```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Course Endpoints",
+      "item": [
+        {
+          "name": "Get All Courses",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            },
+            "description": "### Get All Courses\n\n**GET** `/api/v1/courses/`\n\nReturns a helpful error since callers must provide a term.\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Response:**\n\n```\n{\n    \"error\": \"Term parameter is required. Use /api/v1/courses/{term}\"\n}\n\n ```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Courses by Term",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses/{{term}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{term}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "2",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "### Get All Courses by Term\n\n**GET** `/api/v1/courses/{term}`\n\nRetrieve all courses for a specific term.\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `term` (required): The academic term (e.g., \"24f\", \"25s\")\n    \n\n**Query Parameters:**\n\n- `page` (optional): Filter by pagination (e.g., \"2\", \"3\")\n    \n- `limit` (optional): Sets number of entries per page (e.g., \"100\", \"200\")\n    \n\n**Response:**\n\n```\n{\n  \"term\": \"24f\",\n  \"count\": 150,\n  \"courses\": [\n    {\n      \"section_address\": \"string\",\n      \"course_prefix\": \"CS\",\n      \"course_number\": \"1337\",\n      \"section\": \"001\",\n      \"class_number\": \"12345\",\n      \"title\": \"Computer Science I\",\n      \"topic\": \"\",\n      \"enrolled_status\": \"Open\",\n      \"enrolled_current\": \"25\",\n      \"enrolled_max\": \"30\",\n      \"instructors\": \"Dr. John Doe\",\n      \"assistants\": \"\",\n      \"term\": \"24f\",\n      \"session\": \"Regular\",\n      \"days\": \"MW\",\n      \"times\": \"10:00-11:15\",\n      \"times_12h\": \"10:00 AM-11:15 AM\",\n      \"location\": \"ECSS 2.415\",\n      \"core_area\": \"020\",\n      \"activity_type\": \"Lecture\",\n      \"school\": \"ECS\",\n      \"dept\": \"Computer Science\",\n      \"syllabus\": \"https://example.com/syllabus\",\n      \"textbooks\": \"Required textbook information\",\n      \"instructor_ids\": \"12345\"\n    }\n  ]\n}\n\n ```\n\n**Examples:**\n\n```\n# Get all courses for Fall 2024\ncurl http://localhost:8080/api/v1/courses/24f \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Courses by Prefix",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses/{{term}}/prefix/{{prefix}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{term}}",
+                "prefix",
+                "{{prefix}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "### Get Courses by Prefix\n\n**GET** `/api/v1/courses/{term}/prefix/{prefix}`\n\nRetrieve all courses with a specific prefix for a term.\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `term` (required): The academic term (e.g., \"24f\", \"25s\")\n    \n- `prefix` (required): The course prefix (e.g., \"cs\", \"math\")\n    \n\n**Query Parameters:**\n\n- `page` (optional): Filter by pagination (e.g., \"2\", \"3\")\n    \n- `limit` (optional): Sets number of entries per page (e.g., \"100\", \"200\")\n    \n\n**Response:** Same format as above, but filtered by prefix.\n\n**Example:**\n\n```\n# Get all CS courses for Fall 2024\ncurl \"http://localhost:8080/api/v1/courses/24f/prefix/cs\" \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Courses by Number",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses/{{term}}/prefix/{{prefix}}/number/{{number}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{term}}",
+                "prefix",
+                "{{prefix}}",
+                "number",
+                "{{number}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "### Get Courses by Number\n\n**GET** `/api/v1/courses/{term}/prefix/{prefix}/number/{number}`\n\nRetrieve specific courses by prefix and number for a term.\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `term` (required): The academic term\n    \n- `prefix` (required): The course prefix (e.g., \"cs\", \"math\")\n    \n- `number` (required): The course number (e.g., \"1337\", \"2305\")\n    \n\n**Query Parameters:**\n\n- `page` (optional): Filter by pagination (e.g., \"2\", \"3\")\n    \n- `limit` (optional): Sets number of entries per page (e.g., \"100\", \"200\")\n    \n\n**Response:** Same format as above, but filtered by prefix and number.\n\n**Example:**\n\n```\n# Get all CS 1337 courses for Fall 2024\ncurl http://localhost:8080/api/v1/courses/24f/prefix/cs/number/1337 \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        },
+        {
+          "name": "Search Courses",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses/{{term}}/search?q=Computer Science",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{term}}",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "Computer Science"
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "25",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "### Search Courses\n\n**GET** `/api/v1/courses/{term}/search`\n\nSearch courses by title, topic, or instructor.\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `term` (required): The academic term (e.g., \"24f\", \"25s\")\n    \n\n**Query Parameters:**\n\n- `q` (required): Search query string (e.g., \"Computer Science\")\n    \n- `page` (optional): Filter by pagination (e.g., \"2\", \"3\")\n    \n- `limit` (optional): Sets number of entries per page (e.g., \"100\", \"200\")\n    \n\n**Response:** Same format as above, but filtered by search query.\n\n**Example:**\n\n```\n# Get all Computer Science courses for Fall 2024\ncurl \"http://localhost:8080/api/v1/courses/24f/search?q=Computer Science\" \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        }
+      ],
+      "description": "## Course Object Schema\n\nEach course object contains the following fields:\n\n| Field | Type | Description |\n| --- | --- | --- |\n| `section_address` | string | Unique identifier for the course section |\n| `course_prefix` | string | Course prefix (e.g., \"CS\", \"MATH\") |\n| `course_number` | string | Course number (e.g., \"1337\", \"2305\") |\n| `section` | string | Section number (e.g., \"001\", \"002\") |\n| `class_number` | string | Unique class number |\n| `title` | string | Course title |\n| `topic` | string | Special topic (if applicable) |\n| `enrolled_status` | string | Enrollment status (\"Open\", \"Closed\", etc.) |\n| `enrolled_current` | string | Current enrollment count |\n| `enrolled_max` | string | Maximum enrollment capacity |\n| `instructors` | string | Instructor names |\n| `assistants` | string | Teaching assistant names |\n| `term` | string | Academic term |\n| `session` | string | Session type (\"Regular\", \"Summer\", etc.) |\n| `days` | string | Class days (\"MW\", \"TR\", \"F\", etc.) |\n| `times` | string | Class times in 24-hour format |\n| `times_12h` | string | Class times in 12-hour format |\n| `location` | string | Classroom location |\n| `core_area` | string | Core curriculum area code |\n| `activity_type` | string | Activity type (\"Lecture\", \"Lab\", etc.) |\n| `school` | string | School code |\n| `dept` | string | Department name |\n| `syllabus` | string | Syllabus URL |\n| `textbooks` | string | Textbook information |\n| `instructor_ids` | string | Instructor ID numbers |"
+    },
+    {
+      "name": "Term Endpoints",
+      "item": [
+        {
+          "name": "Get All Terms",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/terms/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "terms",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "### Get All Terms\n\n**GET** `/api/v1/terms/`\n\nRetrieve all available academic terms in the database.\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Response:**\n\n```\n{\n  \"count\": 3,\n  \"terms\": [\n    \"24f\",\n    \"25s\",\n    \"23f\"\n  ]\n}\n\n ```\n\n**Example:**\n\n```\ncurl http://localhost:8080/api/v1/terms/ \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Professor Endpoints",
+      "item": [
+        {
+          "name": "Get Professor by ID",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/professors/id/{{id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "professors",
+                "id",
+                "{{id}}"
+              ]
+            },
+            "description": "### Get Professor by ID\n\n**GET** `/api/v1/professors/id/{id}`\n\nRetrieve a specific professor by their instructor ID.\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `id` (required): The professor's instructor ID\n    \n\n**Response:**\n\n```\n{\n  \"professor\": {\n    \"instructor_id\": \"12345\",\n    \"normalized_coursebook_name\": \"John Doe\",\n    \"original_rmp_format\": \"Doe, John\",\n    \"department\": \"Computer Science\",\n    \"url\": \"https://www.ratemyprofessors.com/...\",\n    \"quality_rating\": 4.5,\n    \"difficulty_rating\": 3.2,\n    \"would_take_again\": 85,\n    \"ratings_count\": 120,\n    \"tags\": [\"Tough grader\", \"Gives good feedback\"],\n    \"rmp_id\": \"67890\",\n    \"overall_grade_rating\": 3.8,\n    \"total_grade_count\": 500,\n    \"course_ratings\": {\n      \"cs1337\": 4.2,\n      \"cs2336\": 4.5\n    }\n  }\n}\n\n ```\n\n**Example:**\n\n```\ncurl http://localhost:8080/api/v1/professors/id/12345 \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Professors by Name",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/professors/name/{{name}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "professors",
+                "name",
+                "{{name}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "### Get Professors by Name\n\n**GET** `/api/v1/professors/name/{name}`\n\nSearch for professors by name (partial match not yet supported).\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `name` (required): The professor's name or partial name to search for\n    \n\n**Query Parameters:**\n\n- `page` (optional): Filter by pagination (e.g., \"2\", \"3\")\n    \n- `limit` (optional): Sets number of entries per page (e.g., \"100\", \"200\")\n    \n\n**Response:**\n\n```\n{\n  \"count\": 2,\n  \"professors\": [\n    {\n      \"instructor_id\": \"12345\",\n      \"normalized_coursebook_name\": \"John Doe\",\n      \"original_rmp_format\": \"Doe, John\",\n      \"department\": \"Computer Science\",\n      \"url\": \"https://www.ratemyprofessors.com/...\",\n      \"quality_rating\": 4.5,\n      \"difficulty_rating\": 3.2,\n      \"would_take_again\": 85,\n      \"ratings_count\": 120,\n      \"tags\": [\"Tough grader\", \"Gives good feedback\"],\n      \"rmp_id\": \"67890\",\n      \"overall_grade_rating\": 3.8,\n      \"total_grade_count\": 500,\n      \"course_ratings\": {\n        \"cs1337\": 4.2,\n        \"cs2336\": 4.5\n      }\n    },\n    {\n      \"instructor_id\": \"12346\",\n      \"normalized_coursebook_name\": \"Jane Doe\",\n      \"original_rmp_format\": \"Doe, Jane\",\n      \"department\": \"Mathematics\",\n      \"url\": \"https://www.ratemyprofessors.com/...\",\n      \"quality_rating\": 4.8,\n      \"difficulty_rating\": 2.9,\n      \"would_take_again\": 92,\n      \"ratings_count\": 150,\n      \"tags\": [\"Amazing lectures\", \"Caring\"],\n      \"rmp_id\": \"67891\",\n      \"overall_grade_rating\": 4.0,\n      \"total_grade_count\": 600,\n      \"course_ratings\": {\n        \"math2413\": 4.7,\n        \"math2414\": 4.9\n      }\n    }\n  ]\n}\n\n ```\n\n**Example:**\n\n```\ncurl http://localhost:8080/api/v1/professors/name/john \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        }
+      ],
+      "description": "## Professor Object Schema\n\nEach professor object contains the following fields:\n\n| Field | Type | Description |\n| --- | --- | --- |\n| `instructor_id` | string | Unique instructor identifier |\n| `normalized_coursebook_name` | string | Professor's name in standard format |\n| `original_rmp_format` | string | Professor's name as it appears on RateMyProfessors |\n| `department` | string | Department affiliation |\n| `url` | string | RateMyProfessors profile URL |\n| `quality_rating` | float64 | Overall quality rating (0-5 scale) |\n| `difficulty_rating` | float64 | Difficulty rating (0-5 scale) |\n| `would_take_again` | int | Percentage of students who would take again (0-100) |\n| `ratings_count` | int | Total number of ratings on RateMyProfessors |\n| `tags` | \\[\\]string | Common tags/descriptors from student reviews |\n| `rmp_id` | string | RateMyProfessors unique identifier |\n| `overall_grade_rating` | float64 | Average grade given (GPA scale) |\n| `total_grade_count` | int | Total number of grades recorded |\n| `course_ratings` | map\\[string\\]float64 | Per-course ratings (course code → rating) |"
+    },
+    {
+      "name": "Grade Endpoints",
+      "item": [
+        {
+          "name": "Get Grades by Prof ID",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/grades/prof/id/{{id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grades",
+                "prof",
+                "id",
+                "{{id}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "### Get Grades by Prof ID\n\n**GET** `/api/v1/grades/prof/id/{id}`\n\nRetrieve course grade distributions by their instructor ID.\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `id` (required): The professor's instructor ID\n    \n\n**Query Parameters:**\n\n- `page` (optional): Filter by pagination (e.g., \"2\", \"3\")\n    \n- `limit` (optional): Sets number of entries per page (e.g., \"100\", \"200\")\n    \n\n**Response:**\n\n```\n{\n  \"count\": 1,\n  \"grades\": [\n    {\n      \"course_prefix\": \"cs\",\n      \"course_number\": \"1337\",\n      \"term\": \"24f\",\n      \"instructor_id\": \"12345\",\n      \"instructor_name_normalized\": \"john doe\",\n      \"section\": \"001\",\n      \"instructor_1\": \"Doe, John\",\n      \"instructor_2\": \"\",\n      \"instructor_3\": \"\",\n      \"instructor_4\": \"\",\n      \"instructor_5\": \"\",\n      \"instructor_6\": \"\",\n      \"A+\": \"6\",\n      \"A\": \"7\",\n      \"A-\": \"1\",\n      \"B+\": \"1\",\n      \"B\": \"2\",\n      \"B-\": \"0\",\n      \"C+\": \"2\",\n      \"C\": \"2\",\n      \"C-\": \"0\",\n      \"D+\": \"0\",\n      \"D\": \"0\",\n      \"D-\": \"0\",\n      \"F\": \"0\",\n      \"NF\": \"0\",\n      \"CR\": \"0\",\n      \"I\": \"0\",\n      \"NC\": \"0\",\n      \"P\": \"0\",\n      \"W\": \"0\"\n    }\n  ] \n}\n\n ```\n\n**Example:**\n\n```\ncurl http://localhost:8080/api/v1/grades/prof/id/12345 \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Grades by Prof Name",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/grades/prof/name/{{name}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grades",
+                "prof",
+                "name",
+                "{{name}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "### Get Grades by Prof Name\n\n**GET** `/api/v1/grades/prof/name/{name}`\n\nRetrieve course grade distributions by their instructor name (partial match not yet supported).\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `name` (required): The professor's name or partial name to search for\n    \n\n**Query Parameters:**\n\n- `page` (optional): Filter by pagination (e.g., \"2\", \"3\")\n    \n- `limit` (optional): Sets number of entries per page (e.g., \"100\", \"200\")\n    \n\n**Response:** Same format as above, but filtered by professor name.\n\n**Example:**\n\n```\ncurl http://localhost:8080/api/v1/grades/prof/name/John \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Grades by Prefix",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/grades/prefix/{{prefix}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grades",
+                "prefix",
+                "{{prefix}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "### Get Grades by Prefix\n\n**GET** `/api/v1/grades/prefix/{prefix}`\n\nRetrieve course grade distributions by prefix\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `prefix` (required): The course prefix (e.g., \"cs\", \"math\")\n    \n\n**Query Parameters:**\n\n- `page` (optional): Filter by pagination (e.g., \"2\", \"3\")\n    \n- `limit` (optional): Sets number of entries per page (e.g., \"100\", \"200\")\n    \n\n**Response:** Same format as above, but filtered by professor name.\n\n**Example:**\n\n```\ncurl http://localhost:8080/api/v1/grades/prefix/cs \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Grades by Prefix and Number",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/grades/prefix/{{prefix}}/number/{{number}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grades",
+                "prefix",
+                "{{prefix}}",
+                "number",
+                "{{number}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": null,
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "### Get Grades by Prefix and Number\n\n**GET** `/api/v1/grades/prefix/{prefix}/number/{number}`\n\nRetrieve course grade distributions by prefix and course number\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `prefix` (required): The course prefix (e.g., \"cs\", \"math\")\n    \n- `number` (required): The course number (e.g., \"1337\", \"2305\")\n    \n\n**Query Parameters:**\n\n- `page` (optional): Filter by pagination (e.g., \"2\", \"3\")\n    \n- `limit` (optional): Sets number of entries per page (e.g., \"100\", \"200\")\n    \n\n**Response:** Same format as above, but filtered by professor name.\n\n**Example:**\n\n```\ncurl http://localhost:8080/api/v1/grades/prefix/cs/number/1337 \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Grades by Prefix and Term",
+          "request": {
+            "auth": {
+              "type": "apikey",
+              "apikey": [
+                {
+                  "key": "value",
+                  "value": "",
+                  "type": "string"
+                },
+                {
+                  "key": "key",
+                  "value": "X-API-Key",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/grades/prefix/{{prefix}}/term/{{term}}?page&limit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "grades",
+                "prefix",
+                "{{prefix}}",
+                "term",
+                "{{term}}"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": null,
+                  "type": "text"
+                },
+                {
+                  "key": "limit",
+                  "value": null,
+                  "type": "text"
+                }
+              ]
+            },
+            "description": "### Get Grades by Prefix and Term\n\n**GET** `/api/v1/grades/prefix/{prefix}/term/{term}`\n\nRetrieve course grade distributions by prefix and term.\n\n**Headers:**\n\n- `X-API-Key`: Your API key (required)\n    \n\n**Path Parameters:**\n\n- `prefix` (required): The course prefix (e.g., \"cs\", \"math\")\n    \n- `term` (required): The academic term (e.g., \"24f\", \"25s\")\n    \n\n**Query Parameters:**\n\n- `page` (optional): Filter by pagination (e.g., \"2\", \"3\")\n    \n- `limit` (optional): Sets number of entries per page (e.g., \"100\", \"200\")\n    \n\n**Response:** Same format as above, but filtered by professor name.\n\n**Example:**\n\n```\ncurl http://localhost:8080/api/v1/grades/prefix/cs/term/24f \\\n  -H \"X-API-Key: your-api-key-here\"\n\n ```"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health Check",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/health",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "health"
+          ]
+        },
+        "description": "### Health Check\n\n**GET** `/health`\n\nCheck if the API is running. This endpoint does not require authentication.\n\n**Response:**\n\n```\n{\n  \"status\": \"healthy\",\n  \"message\": \"ACM API is running\"\n}\n\n ```\n\n**Example:**\n\n```\ncurl http://localhost:8080/health\n\n\n ```"
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "id",
+      "value": "1"
+    },
+    {
+      "key": "base_url",
+      "value": "https://template.postman-echo.com"
+    }
+  ]
+}
