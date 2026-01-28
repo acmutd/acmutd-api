@@ -4,6 +4,8 @@
 
 The ACM API provides access to course and school data for the University of Texas at Dallas. All endpoints return JSON responses and support CORS for cross-origin requests.
 
+The ACMUTD_API_REST_Operations.postman_collections.json can be imported into Postman to test all the endpoints.
+
 **Base URL**: `http://localhost:8080` (or your deployed server URL)
 
 ## Authentication
@@ -227,7 +229,6 @@ curl http://localhost:8080/api/v1/courses/24f \
   -H "X-API-Key: your-api-key-here"
 ```
 
-
 ### Get Courses by Prefix
 
 **GET** `/api/v1/courses/{term}/prefix/{prefix}`
@@ -335,11 +336,7 @@ Retrieve all available academic terms in the database.
 ```json
 {
   "count": 3,
-  "terms": [
-    "24f",
-    "25s",
-    "23f"
-  ]
+  "terms": ["24f", "25s", "23f"]
 }
 ```
 
@@ -537,7 +534,7 @@ Retrieve course grade distributions by their instructor ID.
       "P": "0",
       "W": "0"
     }
-  ] 
+  ]
 }
 ```
 
@@ -668,33 +665,33 @@ curl http://localhost:8080/api/v1/grades/prefix/cs/term/24f \
 
 Each course object contains the following fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `section_address` | string | Unique identifier for the course section (e.g., "cs1337.001.24f")|
-| `course_prefix` | string | Course prefix (e.g., "CS", "MATH") |
-| `course_number` | string | Course number (e.g., "1337", "2305") |
-| `section` | string | Section number (e.g., "001", "002") |
-| `class_number` | string | Unique class number |
-| `title` | string | Course title |
-| `topic` | string | Special topic (if applicable) |
-| `enrolled_status` | string | Enrollment status ("Open", "Closed", etc.) |
-| `enrolled_current` | string | Current enrollment count |
-| `enrolled_max` | string | Maximum enrollment capacity |
-| `instructors` | string | Instructor names |
-| `assistants` | string | Teaching assistant names |
-| `term` | string | Academic term |
-| `session` | string | Session type ("Regular", "Summer", etc.) |
-| `days` | string | Class days ("MW", "TR", "F", etc.) |
-| `times` | string | Class times in 24-hour format |
-| `times_12h` | string | Class times in 12-hour format |
-| `location` | string | Classroom location |
-| `core_area` | string | Core curriculum area code |
-| `activity_type` | string | Activity type ("Lecture", "Lab", etc.) |
-| `school` | string | School code |
-| `dept` | string | Department name |
-| `syllabus` | string | Syllabus URL |
-| `textbooks` | string | Textbook information |
-| `instructor_ids` | string | Instructor ID numbers |
+| Field              | Type   | Description                                                       |
+| ------------------ | ------ | ----------------------------------------------------------------- |
+| `section_address`  | string | Unique identifier for the course section (e.g., "cs1337.001.24f") |
+| `course_prefix`    | string | Course prefix (e.g., "CS", "MATH")                                |
+| `course_number`    | string | Course number (e.g., "1337", "2305")                              |
+| `section`          | string | Section number (e.g., "001", "002")                               |
+| `class_number`     | string | Unique class number                                               |
+| `title`            | string | Course title                                                      |
+| `topic`            | string | Special topic (if applicable)                                     |
+| `enrolled_status`  | string | Enrollment status ("Open", "Closed", etc.)                        |
+| `enrolled_current` | string | Current enrollment count                                          |
+| `enrolled_max`     | string | Maximum enrollment capacity                                       |
+| `instructors`      | string | Instructor names                                                  |
+| `assistants`       | string | Teaching assistant names                                          |
+| `term`             | string | Academic term                                                     |
+| `session`          | string | Session type ("Regular", "Summer", etc.)                          |
+| `days`             | string | Class days ("MW", "TR", "F", etc.)                                |
+| `times`            | string | Class times in 24-hour format                                     |
+| `times_12h`        | string | Class times in 12-hour format                                     |
+| `location`         | string | Classroom location                                                |
+| `core_area`        | string | Core curriculum area code                                         |
+| `activity_type`    | string | Activity type ("Lecture", "Lab", etc.)                            |
+| `school`           | string | School code                                                       |
+| `dept`             | string | Department name                                                   |
+| `syllabus`         | string | Syllabus URL                                                      |
+| `textbooks`        | string | Textbook information                                              |
+| `instructor_ids`   | string | Instructor ID numbers                                             |
 
 ---
 
@@ -702,35 +699,35 @@ Each course object contains the following fields:
 
 Each professor object contains the following fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `instructor_id` | string | Unique instructor identifier |
-| `normalized_coursebook_name` | string | Professor's name in standard format |
-| `original_rmp_format` | string | Professor's name as it appears on RateMyProfessors |
-| `department` | string | Department affiliation |
-| `url` | string | RateMyProfessors profile URL |
-| `quality_rating` | float64 | Overall quality rating (0-5 scale) |
-| `difficulty_rating` | float64 | Difficulty rating (0-5 scale) |
-| `would_take_again` | int | Percentage of students who would take again (0-100) |
-| `ratings_count` | int | Total number of ratings on RateMyProfessors |
-| `tags` | []string | Common tags/descriptors from student reviews |
-| `rmp_id` | string | RateMyProfessors unique identifier |
-| `overall_grade_rating` | float64 | Average grade given (GPA scale) |
-| `total_grade_count` | int | Total number of grades recorded |
-| `course_ratings` | map[string]float64 | Per-course ratings (course code → rating) |
+| Field                        | Type               | Description                                         |
+| ---------------------------- | ------------------ | --------------------------------------------------- |
+| `instructor_id`              | string             | Unique instructor identifier                        |
+| `normalized_coursebook_name` | string             | Professor's name in standard format                 |
+| `original_rmp_format`        | string             | Professor's name as it appears on RateMyProfessors  |
+| `department`                 | string             | Department affiliation                              |
+| `url`                        | string             | RateMyProfessors profile URL                        |
+| `quality_rating`             | float64            | Overall quality rating (0-5 scale)                  |
+| `difficulty_rating`          | float64            | Difficulty rating (0-5 scale)                       |
+| `would_take_again`           | int                | Percentage of students who would take again (0-100) |
+| `ratings_count`              | int                | Total number of ratings on RateMyProfessors         |
+| `tags`                       | []string           | Common tags/descriptors from student reviews        |
+| `rmp_id`                     | string             | RateMyProfessors unique identifier                  |
+| `overall_grade_rating`       | float64            | Average grade given (GPA scale)                     |
+| `total_grade_count`          | int                | Total number of grades recorded                     |
+| `course_ratings`             | map[string]float64 | Per-course ratings (course code → rating)           |
 
 ---
 
 ## Error Codes
 
-| Status Code | Description |
-|-------------|-------------|
-| 200 | Success |
-| 400 | Bad Request - Missing or invalid parameters |
-| 401 | Unauthorized - Missing or invalid API key |
-| 403 | Forbidden - Admin access required |
-| 429 | Too Many Requests - Rate limit exceeded |
-| 500 | Internal Server Error - Database or server error |
+| Status Code | Description                                      |
+| ----------- | ------------------------------------------------ |
+| 200         | Success                                          |
+| 400         | Bad Request - Missing or invalid parameters      |
+| 401         | Unauthorized - Missing or invalid API key        |
+| 403         | Forbidden - Admin access required                |
+| 429         | Too Many Requests - Rate limit exceeded          |
+| 500         | Internal Server Error - Database or server error |
 
 ---
 
@@ -748,7 +745,7 @@ The API implements rate limiting based on your API key configuration:
 
 The API supports Cross-Origin Resource Sharing (CORS) and allows requests from any origin with the following headers:
 
-- Access-Control-Allow-Origin: *
+- Access-Control-Allow-Origin: \*
 - Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
 - Access-Control-Allow-Headers: Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key
 
@@ -760,34 +757,34 @@ The API supports Cross-Origin Resource Sharing (CORS) and allows requests from a
 
 ```javascript
 // Get all CS courses for Fall 2024
-fetch('http://localhost:8080/api/v1/courses/24f?prefix=cs', {
+fetch("http://localhost:8080/api/v1/courses/24f?prefix=cs", {
   headers: {
-    'X-API-Key': 'your-api-key-here'
-  }
+    "X-API-Key": "your-api-key-here",
+  },
 })
-  .then(response => response.json())
-  .then(data => console.log(data))
-  .catch(error => console.error('Error:', error));
+  .then((response) => response.json())
+  .then((data) => console.log(data))
+  .catch((error) => console.error("Error:", error));
 
 // Get professor by ID
-fetch('http://localhost:8080/api/v1/professors/id/12345', {
+fetch("http://localhost:8080/api/v1/professors/id/12345", {
   headers: {
-    'X-API-Key': 'your-api-key-here'
-  }
+    "X-API-Key": "your-api-key-here",
+  },
 })
-  .then(response => response.json())
-  .then(data => console.log(data))
-  .catch(error => console.error('Error:', error));
+  .then((response) => response.json())
+  .then((data) => console.log(data))
+  .catch((error) => console.error("Error:", error));
 
 // Get professors by name
-fetch('http://localhost:8080/api/v1/professors/name/john', {
+fetch("http://localhost:8080/api/v1/professors/name/john", {
   headers: {
-    'X-API-Key': 'your-api-key-here'
-  }
+    "X-API-Key": "your-api-key-here",
+  },
 })
-  .then(response => response.json())
-  .then(data => console.log(data))
-  .catch(error => console.error('Error:', error));
+  .then((response) => response.json())
+  .then((data) => console.log(data))
+  .catch((error) => console.error("Error:", error));
 ```
 
 ### Python (requests)
