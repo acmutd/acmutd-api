@@ -178,14 +178,14 @@ Retrieve all courses for a specific term.
 
 **Query Parameters:**
 
-- `prefix` (optional): Filter by course prefix (e.g., "cs", "math")
-- `number` (optional): Filter by course number (e.g., "1337", "2305")
+- `page` (optional): Filter by pagination (e.g., "2", "3")
+- `limit` (optional): Sets number of entries per page (e.g., "100", "200")
 
 **Response:**
 
 ```json
 {
-  "term": "2024FALL",
+  "term": "24f",
   "count": 150,
   "courses": [
     {
@@ -225,14 +225,7 @@ Retrieve all courses for a specific term.
 # Get all courses for Fall 2024
 curl http://localhost:8080/api/v1/courses/24f \
   -H "X-API-Key: your-api-key-here"
-
-# Get all CS courses for Fall 2024
-curl "http://localhost:8080/api/v1/courses/24f?prefix=cs" \
-  -H "X-API-Key: your-api-key-here"
-
-# Get CS 1337 for Fall 2024
-curl "http://localhost:8080/api/v1/courses/24f?prefix=cs&number=1337" \
-  -H "X-API-Key: your-api-key-here"
+```
 
 
 ### Get Courses by Prefix
@@ -247,8 +240,13 @@ Retrieve all courses with a specific prefix for a term.
 
 **Path Parameters:**
 
-- `term` (required): The academic term
-- `prefix` (required): The course prefix (e.g., "CS", "MATH", "PHYS")
+- `term` (required): The academic term (e.g., "24f", "25s")
+- `prefix` (required): The course prefix (e.g., "CS", "MATH")
+
+**Query Parameters:**
+
+- `page` (optional): Filter by pagination (e.g., "2", "3")
+- `limit` (optional): Sets number of entries per page (e.g., "100", "200")
 
 **Response:** Same format as above, but filtered by prefix.
 
@@ -271,9 +269,14 @@ Retrieve specific courses by prefix and number for a term.
 
 **Path Parameters:**
 
-- `term` (required): The academic term
-- `prefix` (required): The course prefix
-- `number` (required): The course number
+- `term` (required): The academic term (e.g., "24f", "25s")
+- `prefix` (required): The course prefix (e.g., "CS", "MATH")
+- `number` (required): The course number (e.g., "1337", "2305")
+
+**Query Parameters:**
+
+- `page` (optional): Filter by pagination (e.g., "2", "3")
+- `limit` (optional): Sets number of entries per page (e.g., "100", "200")
 
 **Response:** Same format as above, but filtered by prefix and number.
 
@@ -288,7 +291,7 @@ curl http://localhost:8080/api/v1/courses/24f/prefix/cs/number/1337 \
 
 **GET** `/api/v1/courses/{term}/search`
 
-Search courses by title, instructor, or other text fields.
+Search courses by title, topic, or instructor.
 
 **Headers:**
 
@@ -296,11 +299,13 @@ Search courses by title, instructor, or other text fields.
 
 **Path Parameters:**
 
-- `term` (required): The academic term
+- `term` (required): The academic term (e.g., "24f", "25s")
 
 **Query Parameters:**
 
-- `q` (required): Search query string
+- `q` (required): Search query string (e.g., "Computer Science")
+- `page` (optional): Filter by pagination(e.g., "2", "3")
+- `limit` (optional): Sets number of entries per page (e.g., "100", "200")
 
 **Response:** Same format as above, but filtered by search query.
 
@@ -400,7 +405,7 @@ curl http://localhost:8080/api/v1/professors/id/12345 \
 
 **GET** `/api/v1/professors/name/{name}`
 
-Search for professors by name (partial match supported).
+Search for professors by name (partial match not yet supported).
 
 **Headers:**
 
@@ -409,6 +414,11 @@ Search for professors by name (partial match supported).
 **Path Parameters:**
 
 - `name` (required): The professor's name or partial name to search for
+
+**Query Parameters:**
+
+- `page` (optional): Filter by pagination (e.g., "2", "3")
+- `limit` (optional): Sets number of entries per page (e.g., "100", "200")
 
 **Response:**
 
@@ -467,13 +477,200 @@ curl http://localhost:8080/api/v1/professors/name/john \
 
 ---
 
+## Grade Endpoints
+
+### Get Grades by Prof ID
+
+**GET** `/api/v1/grades/prof/id/{id}`
+
+Retrieve course grade distributions by their instructor ID.
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
+
+**Path Parameters:**
+
+- `id` (required): The professor's instructor ID
+
+**Query Parameters:**
+
+- `page` (optional): Filter by pagination (e.g., "2", "3")
+- `limit` (optional): Sets number of entries per page (e.g., "100", "200")
+
+**Response:**
+
+```json
+{
+  "count": 1,
+  "grades": [
+    {
+      "course_prefix": "cs",
+      "course_number": "1337",
+      "term": "24f",
+      "instructor_id": "12345",
+      "instructor_name_normalized": "john doe",
+      "section": "001",
+      "instructor_1": "Doe, John",
+      "instructor_2": "",
+      "instructor_3": "",
+      "instructor_4": "",
+      "instructor_5": "",
+      "instructor_6": "",
+      "A+": "6",
+      "A": "7",
+      "A-": "1",
+      "B+": "1",
+      "B": "2",
+      "B-": "0",
+      "C+": "2",
+      "C": "2",
+      "C-": "0",
+      "D+": "0",
+      "D": "0",
+      "D-": "0",
+      "F": "0",
+      "NF": "0",
+      "CR": "0",
+      "I": "0",
+      "NC": "0",
+      "P": "0",
+      "W": "0"
+    }
+  ] 
+}
+```
+
+**Example:**
+
+```bash
+curl http://localhost:8080/api/v1/grades/prof/id/12345 \
+  -H "X-API-Key: your-api-key-here"
+```
+
+### Get Grades by Prof Name
+
+**GET** `/api/v1/grades/prof/name/{name}`
+
+Retrieve course grade distributions by their instructor name (partial match not yet supported).
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
+
+**Path Parameters:**
+
+- `name` (required): The professor's name or partial name to search for
+
+**Query Parameters:**
+
+- `page` (optional): Filter by pagination (e.g., "2", "3")
+- `limit` (optional): Sets number of entries per page (e.g., "100", "200")
+
+**Response:** Same format as above, but filtered by professor name.
+
+**Example:**
+
+```bash
+curl http://localhost:8080/api/v1/grades/prof/name/John \
+  -H "X-API-Key: your-api-key-here"
+```
+
+### Get Grades by Prefix
+
+**GET** `/api/v1/grades/prefix/{prefix}`
+
+Retrieve course grade distributions by prefix
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
+
+**Path Parameters:**
+
+- `prefix` (required): The course prefix (e.g., "cs", "math")
+
+**Query Parameters:**
+
+- `page` (optional): Filter by pagination (e.g., "2", "3")
+- `limit` (optional): Sets number of entries per page (e.g., "100", "200")
+
+**Response:** Same format as above, but filtered by professor name.
+
+**Example:**
+
+```bash
+curl http://localhost:8080/api/v1/grades/prefix/cs \
+  -H "X-API-Key: your-api-key-here"
+```
+
+### Get Grades by Prefix and Number
+
+**GET** `/api/v1/grades/prefix/{prefix}/number/{number}`
+
+Retrieve course grade distributions by their prefix and course number.
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
+
+**Path Parameters:**
+
+- `prefix` (required): The course prefix (e.g., "cs", "math")
+- `number` (required): The course number (e.g., "1337", "2305")
+
+**Query Parameters:**
+
+- `page` (optional): Filter by pagination (e.g., "2", "3")
+- `limit` (optional): Sets number of entries per page (e.g., "100", "200")
+
+**Response:** Same format as above, but filtered by professor name.
+
+**Example:**
+
+```bash
+curl http://localhost:8080/api/v1/grades/prefix/cs/number/1337 \
+  -H "X-API-Key: your-api-key-here"
+```
+
+### Get Grades by Prefix and Term
+
+**GET** `/api/v1/grades/prefix/{prefix}/term/{term}`
+
+Retrieve course grade distributions by their prefix and term
+
+**Headers:**
+
+- `X-API-Key`: Your API key (required)
+
+**Path Parameters:**
+
+- `prefix` (required): The course prefix(e.g., "cs", "math")
+- `term` (required): The academic term (e.g., "24f", 25s")
+
+**Query Parameters:**
+
+- `page` (optional): Filter by pagination (e.g., "2", "3")
+- `limit` (optional): Sets number of entries per page (e.g., "100", "200")
+
+**Response:** Same format as above, but filtered by professor name.
+
+**Example:**
+
+```bash
+curl http://localhost:8080/api/v1/grades/prefix/cs/term/24f \
+  -H "X-API-Key: your-api-key-here"
+```
+
+---
+
 ## Course Object Schema
 
 Each course object contains the following fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `section_address` | string | Unique identifier for the course section |
+| `section_address` | string | Unique identifier for the course section (e.g., "cs1337.001.24f")|
 | `course_prefix` | string | Course prefix (e.g., "CS", "MATH") |
 | `course_number` | string | Course number (e.g., "1337", "2305") |
 | `section` | string | Section number (e.g., "001", "002") |
