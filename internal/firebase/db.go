@@ -538,6 +538,22 @@ func (c *Firestore) GetGradesByNumberAndTerm(ctx context.Context, term string, p
 	return c.collectGrades(ctx, query, limit, offset)
 }
 
+func (c *Firestore) GetGradesBySection(ctx context.Context, term string, prefix, number string, section string) (*types.Grades, error) {
+	id := fmt.Sprintf("%s%s.%s.%s", prefix, number, section, term)
+
+	doc, err := c.Collection("grades").Doc(prefix).Collection("courses").Doc(number).Collection("records").Doc(id).Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var grades types.Grades
+	if err := doc.DataTo(&grades); err != nil {
+		return nil, err
+	}
+
+	return &grades, nil
+}
+
 func (c *Firestore) GetGradesByProfId(ctx context.Context, profId string, limit, offset int) ([]types.Grades, bool, error) {
 	query := c.CollectionGroup("records").Where("instructor_id", "==", profId)
 	return c.collectGrades(ctx, query, limit, offset)

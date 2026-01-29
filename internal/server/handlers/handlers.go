@@ -511,6 +511,29 @@ func (h *Handler) GetGradesByNumberAndTerm(c *gin.Context) {
 	})
 }
 
+// GetGradesBySection loads grade distributions for specific section
+func (h *Handler) GetGradesBySection(c *gin.Context) {
+	term := c.Param("term")
+	prefix := c.Param("prefix")
+	number := c.Param("number")
+	section := c.Param("section")
+
+	if term == "" || prefix == "" || number == "" || section == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term, prefix, number, and section are required"})
+		return
+	}
+
+	grades, err := h.db.GetGradesBySection(c.Request.Context(), term, prefix, number, section)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"grades": grades,
+	})
+}
+
 func normalizeTerm(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
