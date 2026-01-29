@@ -391,6 +391,35 @@ func (h *Handler) GetGradesByProfName(c *gin.Context) {
 	})
 }
 
+// GetGradesByTerm loads grade distributions by term.
+func (h *Handler) GetGradesByTerm(c *gin.Context) {
+	term := c.Param("term")
+
+	if term == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term is required"})
+		return
+	}
+
+	params, ok := parsePaginationOrRespond(c)
+	if !ok {
+		return
+	}
+
+	grades, hasNext, err := h.db.GetGradesByTerm(c.Request.Context(), term, params.Limit, params.Offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
+		return
+	}
+
+	pagination := buildPaginationMeta(params, len(grades), hasNext)
+
+	c.JSON(http.StatusOK, gin.H{
+		"count":      len(grades),
+		"grades":     grades,
+		"pagination": pagination,
+	})
+}
+
 // GetGradesByPrefix loads grade distributions by prefix.
 func (h *Handler) GetGradesByPrefix(c *gin.Context) {
 	prefix := c.Param("prefix")

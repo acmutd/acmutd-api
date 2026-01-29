@@ -564,6 +564,11 @@ func (c *Firestore) GetGradesByProfName(ctx context.Context, profName string, li
 	return c.collectGrades(ctx, query, limit, offset)
 }
 
+func (c *Firestore) GetGradesByTerm(ctx context.Context, term string, limit, offset int) ([]types.Grades, bool, error) {
+	query := c.CollectionGroup("records").Where("term", "==", term)
+	return c.collectGrades(ctx, query, limit, offset)
+}
+
 func (c *Firestore) collectGrades(ctx context.Context, query firestore.Query, limit, offset int) ([]types.Grades, bool, error) {
 	if limit > 0 {
 		query = query.Offset(offset).Limit(limit + 1)
