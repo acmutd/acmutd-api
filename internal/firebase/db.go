@@ -533,6 +533,11 @@ func (c *Firestore) GetGradesByPrefixAndTerm(ctx context.Context, prefix, term s
 	return c.collectGrades(ctx, query, limit, offset)
 }
 
+func (c *Firestore) GetGradesByNumberAndTerm(ctx context.Context, term string, prefix, number string, limit, offset int) ([]types.Grades, bool, error) {
+	query := c.Collection("grades").Doc(prefix).Collection("courses").Doc(number).Collection("records").Where("term", "==", term)
+	return c.collectGrades(ctx, query, limit, offset)
+}
+
 func (c *Firestore) GetGradesByProfId(ctx context.Context, profId string, limit, offset int) ([]types.Grades, bool, error) {
 	query := c.CollectionGroup("records").Where("instructor_id", "==", profId)
 	return c.collectGrades(ctx, query, limit, offset)

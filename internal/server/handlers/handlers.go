@@ -480,6 +480,37 @@ func (h *Handler) GetGradesByPrefixAndTerm(c *gin.Context) {
 	})
 }
 
+// GetGradesByNumberAndTerm loads grade distributions by course number in a specific term
+func (h *Handler) GetGradesByNumberAndTerm(c *gin.Context) {
+	term := c.Param("term")
+	prefix := c.Param("prefix")
+	number := c.Param("number")
+
+	if term == "" || prefix == "" || number == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term, prefix, and number are required"})
+		return
+	}
+
+	params, ok := parsePaginationOrRespond(c)
+	if !ok {
+		return
+	}
+
+	grades, hasNext, err := h.db.GetGradesByNumberAndTerm(c.Request.Context(), term, prefix, number, params.Limit, params.Offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
+		return
+	}
+
+	pagination := buildPaginationMeta(params, len(grades), hasNext)
+
+	c.JSON(http.StatusOK, gin.H{
+		"count":      len(grades),
+		"grades":     grades,
+		"pagination": pagination,
+	})
+}
+
 func normalizeTerm(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }

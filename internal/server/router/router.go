@@ -51,6 +51,7 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 			grades.GET("/prefix/:prefix", handler.GetGradesByPrefix)
 			grades.GET("/prefix/:prefix/number/:number", handler.GetGradesByPrefixAndNumber)
 			grades.GET("/prefix/:prefix/term/:term", handler.GetGradesByPrefixAndTerm)
+			grades.GET("/prefix/:prefix/number/:number/term/:term", handler.GetGradesByNumberAndTerm)
 		}
 	}
 
