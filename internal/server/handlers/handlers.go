@@ -420,7 +420,7 @@ func (h *Handler) GetGradesByTerm(c *gin.Context) {
 	})
 }
 
-// GetGradesByPrefix loads grade distributions by prefix.
+// GetGradesByPrefix loads grade distributions by prefix with optional term filter.
 func (h *Handler) GetGradesByPrefix(c *gin.Context) {
 	prefix := c.Param("prefix")
 
@@ -429,12 +429,25 @@ func (h *Handler) GetGradesByPrefix(c *gin.Context) {
 		return
 	}
 
+	term := c.Query("term")
+
 	params, ok := parsePaginationOrRespond(c)
 	if !ok {
 		return
 	}
 
-	grades, hasNext, err := h.db.GetGradesByPrefix(c.Request.Context(), prefix, params.Limit, params.Offset)
+	var (
+		grades  []types.Grades
+		hasNext bool
+		err     error
+	)
+
+	if term == "" {
+		grades, hasNext, err = h.db.GetGradesByPrefix(c.Request.Context(), prefix, params.Limit, params.Offset)
+	} else {
+		grades, hasNext, err = h.db.GetGradesByPrefixAndTerm(c.Request.Context(), prefix, term, params.Limit, params.Offset)
+	}
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
 		return
@@ -449,7 +462,7 @@ func (h *Handler) GetGradesByPrefix(c *gin.Context) {
 	})
 }
 
-// GetGradesByPrefixAndNumber loads grade distributions by prefix and course number.
+// GetGradesByPrefixAndNumber loads grade distributions by prefix and course number with optional term filter.
 func (h *Handler) GetGradesByPrefixAndNumber(c *gin.Context) {
 	prefix := c.Param("prefix")
 	number := c.Param("number")
@@ -459,73 +472,25 @@ func (h *Handler) GetGradesByPrefixAndNumber(c *gin.Context) {
 		return
 	}
 
-	params, ok := parsePaginationOrRespond(c)
-	if !ok {
-		return
-	}
-
-	grades, hasNext, err := h.db.GetGradesByPrefixAndNumber(c.Request.Context(), prefix, number, params.Limit, params.Offset)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
-		return
-	}
-
-	pagination := buildPaginationMeta(params, len(grades), hasNext)
-
-	c.JSON(http.StatusOK, gin.H{
-		"count":      len(grades),
-		"grades":     grades,
-		"pagination": pagination,
-	})
-}
-
-// GetGradesByPrefixAndTerm loads grade distributions by prefix and term.
-func (h *Handler) GetGradesByPrefixAndTerm(c *gin.Context) {
-	prefix := c.Param("prefix")
-	term := c.Param("term")
-
-	if prefix == "" || term == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Prefix and term are required"})
-		return
-	}
+	term := c.Query("term")
 
 	params, ok := parsePaginationOrRespond(c)
 	if !ok {
 		return
 	}
 
-	grades, hasNext, err := h.db.GetGradesByPrefixAndTerm(c.Request.Context(), prefix, term, params.Limit, params.Offset)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
-		return
+	var (
+		grades  []types.Grades
+		hasNext bool
+		err     error
+	)
+
+	if term != "" {
+		grades, hasNext, err = h.db.GetGradesByPrefixAndNumber(c.Request.Context(), prefix, number, params.Limit, params.Offset)
+	} else {
+		grades, hasNext, err = h.db.GetGradesByNumberAndTerm(c.Request.Context(), term, prefix, number, params.Limit, params.Offset)
 	}
 
-	pagination := buildPaginationMeta(params, len(grades), hasNext)
-
-	c.JSON(http.StatusOK, gin.H{
-		"count":      len(grades),
-		"grades":     grades,
-		"pagination": pagination,
-	})
-}
-
-// GetGradesByNumberAndTerm loads grade distributions by course number in a specific term
-func (h *Handler) GetGradesByNumberAndTerm(c *gin.Context) {
-	term := c.Param("term")
-	prefix := c.Param("prefix")
-	number := c.Param("number")
-
-	if term == "" || prefix == "" || number == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Term, prefix, and number are required"})
-		return
-	}
-
-	params, ok := parsePaginationOrRespond(c)
-	if !ok {
-		return
-	}
-
-	grades, hasNext, err := h.db.GetGradesByNumberAndTerm(c.Request.Context(), term, prefix, number, params.Limit, params.Offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get grades"})
 		return
