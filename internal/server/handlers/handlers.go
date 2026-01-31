@@ -46,7 +46,7 @@ func (h *Handler) GetAllCourses(c *gin.Context) {
 	})
 }
 
-// GetCoursesByTerm fetches courses and applies optional prefix/number filters.
+// GetCoursesByTerm fetches courses within a term.
 func (h *Handler) GetCoursesByTerm(c *gin.Context) {
 	term := normalizeTerm(c.Param("term"))
 	if term == "" {
@@ -59,23 +59,13 @@ func (h *Handler) GetCoursesByTerm(c *gin.Context) {
 		return
 	}
 
-	prefix := normalizePrefix(c.Query("prefix"))
-	number := normalizeCourseNumber(c.Query("number"))
-
 	var (
 		courses []types.Course
 		hasNext bool
 		err     error
 	)
 
-	switch {
-	case prefix != "" && number != "":
-		courses, hasNext, err = h.db.QueryByCourseNumber(c.Request.Context(), term, prefix, number, params.Limit, params.Offset)
-	case prefix != "":
-		courses, hasNext, err = h.db.QueryByCoursePrefix(c.Request.Context(), term, prefix, params.Limit, params.Offset)
-	default:
-		courses, hasNext, err = h.db.GetAllCoursesByTerm(c.Request.Context(), term, params.Limit, params.Offset)
-	}
+	courses, hasNext, err = h.db.GetAllCoursesByTerm(c.Request.Context(), term, params.Limit, params.Offset)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
