@@ -285,6 +285,27 @@ func (c *Firestore) QueryBySchool(ctx context.Context, term, school string, limi
 	return c.collectCourses(ctx, query, limit, offset)
 }
 
+func (c *Firestore) GetCourseBySection(ctx context.Context, term string, prefix string, number string, section string) (*types.Course, error) {
+	term = normalizeTerm(term)
+	prefix = normalizeCoursePrefix(prefix)
+	number = normalizeCourseNumber(number)
+	section = strings.ToLower(strings.TrimSpace(section))
+
+	id := fmt.Sprintf("%s%s.%s.%s", prefix, number, section, term)
+
+	doc, err := c.Collection("courses").Doc(prefix).Collection("numbers").Doc(number).Collection("sections").Doc(id).Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var course types.Course
+	if err := doc.DataTo(&course); err != nil {
+		return nil, err
+	}
+
+	return &course, nil
+}
+
 func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, limit, offset int) ([]types.Course, bool, error) {
 	if limit > 0 {
 		query = query.Offset(offset).Limit(limit + 1)

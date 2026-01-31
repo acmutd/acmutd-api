@@ -148,6 +148,28 @@ func (h *Handler) GetCoursesByNumber(c *gin.Context) {
 	})
 }
 
+func (h *Handler) GetCourseBySection(c *gin.Context) {
+	term := normalizeTerm(c.Param("term"))
+	prefix := normalizePrefix(c.Param("prefix"))
+	number := normalizeCourseNumber(c.Param("number"))
+	section := strings.TrimSpace(c.Param("section"))
+
+	if term == "" || prefix == "" || number == "" || section == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term, prefix, number, and section parameters are required"})
+		return
+	}
+
+	course, err := h.db.GetCourseBySection(c.Request.Context(), term, prefix, number, section)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"course": course,
+	})
+}
+
 // SearchCourses runs a text search against courses for a term.
 func (h *Handler) SearchCourses(c *gin.Context) {
 	term := normalizeTerm(c.Param("term"))
