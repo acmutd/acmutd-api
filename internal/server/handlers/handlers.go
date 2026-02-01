@@ -148,6 +148,7 @@ func (h *Handler) GetCoursesByNumber(c *gin.Context) {
 	})
 }
 
+// GetCourseBySection fetches a specific course by term, prefix, number, and section.
 func (h *Handler) GetCourseBySection(c *gin.Context) {
 	term := normalizeTerm(c.Param("term"))
 	prefix := normalizePrefix(c.Param("prefix"))
