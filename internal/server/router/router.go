@@ -48,10 +48,9 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 		{
 			grades.GET("/prof/id/:id", handler.GetGradesByProfID)
 			grades.GET("/prof/name/:name", handler.GetGradesByProfName)
-			grades.GET("/term/:term", handler.GetGradesByTerm)
 			grades.GET("/prefix/:prefix", handler.GetGradesByPrefix)
 			grades.GET("/prefix/:prefix/number/:number", handler.GetGradesByPrefixAndNumber)
-			grades.GET("/prefix/:prefix/number/:number/term/:term/section/:section", handler.GetGradesBySection)
+			grades.GET("/prefix/:prefix/term/:term", handler.GetGradesByPrefixAndTerm)
 		}
 	}
 
