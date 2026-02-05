@@ -30,6 +30,7 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 			courses.GET("/:term", handler.GetCoursesByTerm)
 			courses.GET("/:term/prefix/:prefix", handler.GetCoursesByPrefix)
 			courses.GET("/:term/prefix/:prefix/number/:number", handler.GetCoursesByNumber)
+			courses.GET("/:term/prefix/:prefix/number/:number/section/:section", handler.GetCourseBySection)
 			courses.GET("/:term/search", handler.SearchCourses)
 		}
 

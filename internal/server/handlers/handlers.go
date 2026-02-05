@@ -46,7 +46,7 @@ func (h *Handler) GetAllCourses(c *gin.Context) {
 	})
 }
 
-// GetCoursesByTerm fetches courses and applies optional prefix/number filters.
+// GetCoursesByTerm fetches courses within a term.
 func (h *Handler) GetCoursesByTerm(c *gin.Context) {
 	term := normalizeTerm(c.Param("term"))
 	if term == "" {
@@ -59,23 +59,13 @@ func (h *Handler) GetCoursesByTerm(c *gin.Context) {
 		return
 	}
 
-	prefix := normalizePrefix(c.Query("prefix"))
-	number := normalizeCourseNumber(c.Query("number"))
-
 	var (
 		courses []types.Course
 		hasNext bool
 		err     error
 	)
 
-	switch {
-	case prefix != "" && number != "":
-		courses, hasNext, err = h.db.QueryByCourseNumber(c.Request.Context(), term, prefix, number, params.Limit, params.Offset)
-	case prefix != "":
-		courses, hasNext, err = h.db.QueryByCoursePrefix(c.Request.Context(), term, prefix, params.Limit, params.Offset)
-	default:
-		courses, hasNext, err = h.db.GetAllCoursesByTerm(c.Request.Context(), term, params.Limit, params.Offset)
-	}
+	courses, hasNext, err = h.db.GetAllCoursesByTerm(c.Request.Context(), term, params.Limit, params.Offset)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -155,6 +145,29 @@ func (h *Handler) GetCoursesByNumber(c *gin.Context) {
 		"count":      len(courses),
 		"courses":    courses,
 		"pagination": pagination,
+	})
+}
+
+// GetCourseBySection fetches a specific course by term, prefix, number, and section.
+func (h *Handler) GetCourseBySection(c *gin.Context) {
+	term := normalizeTerm(c.Param("term"))
+	prefix := normalizePrefix(c.Param("prefix"))
+	number := normalizeCourseNumber(c.Param("number"))
+	section := strings.TrimSpace(c.Param("section"))
+
+	if term == "" || prefix == "" || number == "" || section == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term, prefix, number, and section parameters are required"})
+		return
+	}
+
+	course, err := h.db.GetCourseBySection(c.Request.Context(), term, prefix, number, section)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"course": course,
 	})
 }
 
