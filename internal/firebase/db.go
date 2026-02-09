@@ -581,8 +581,44 @@ func (c *Firestore) GetGradesByProfId(ctx context.Context, profId string, limit,
 }
 
 func (c *Firestore) GetGradesByProfName(ctx context.Context, profName string, limit, offset int) ([]types.Grades, bool, error) {
-	query := c.CollectionGroup("records").Where("instructor_name_normalized", "==", profName)
-	return c.collectGrades(ctx, query, limit, offset)
+	normalizedName := strings.ToLower(strings.TrimSpace(profName))
+	if normalizedName == "" {
+		return []types.Grades{}, false, nil
+	}
+
+	query := c.CollectionGroup("records").Where("instructor_name_normalized", "==", normalizedName)
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	if limit > 0 {
+		query = query.Limit(limit + 1)
+	}
+	iter := query.Documents(ctx)
+	defer iter.Stop()
+
+	var grades []types.Grades
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to get next grade: %w", err)
+		}
+
+		var grade types.Grades
+		if err := doc.DataTo(&grade); err != nil {
+			continue
+		}
+		grades = append(grades, grade)
+	}
+	hasNext := false
+	if limit > 0 && len(grades) > limit {
+		hasNext = true
+		grades = grades[:limit]
+	}
+
+	return grades, hasNext, nil
 }
 
 func (c *Firestore) GetGradesByTerm(ctx context.Context, term string, limit, offset int) ([]types.Grades, bool, error) {
