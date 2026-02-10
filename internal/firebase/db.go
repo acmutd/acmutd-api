@@ -504,7 +504,9 @@ func (c *Firestore) GetProfessorsByName(ctx context.Context, name string, limit,
 		return []types.Professor{}, false, nil
 	}
 
-	query := c.Collection("professors").Where("normalized_coursebook_name", "==", normalizedName)
+	query := c.Collection("professors").
+		Where("normalized_coursebook_name", ">=", normalizedName).
+		Where("normalized_coursebook_name", "<=", normalizedName+"\uf8ff")
 
 	if offset > 0 {
 		query = query.Offset(offset)
@@ -587,7 +589,10 @@ func (c *Firestore) GetGradesByProfName(ctx context.Context, profName string, li
 		return []types.Grades{}, false, nil
 	}
 
-	query := c.CollectionGroup("records").Where("instructor_name_normalized", "==", normalizedName)
+	query := c.CollectionGroup("records").
+		Where("instructor_name_normalized", ">=", normalizedName).
+		Where("instructor_name_normalized", "<=", normalizedName+"\uf8ff")
+
 	return c.collectGrades(ctx, query, limit, offset)
 }
 
