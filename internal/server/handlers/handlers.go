@@ -498,7 +498,7 @@ func (h *Handler) GetGradesByPrefixAndNumber(c *gin.Context) {
 		err     error
 	)
 
-	if term != "" {
+	if term == "" {
 		grades, hasNext, err = h.db.GetGradesByPrefixAndNumber(c.Request.Context(), prefix, number, params.Limit, params.Offset)
 	} else {
 		grades, hasNext, err = h.db.GetGradesByNumberAndTerm(c.Request.Context(), term, prefix, number, params.Limit, params.Offset)
