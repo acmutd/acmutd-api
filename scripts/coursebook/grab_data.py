@@ -237,6 +237,171 @@ def get_single_class(data, term, filter):
         'location': location
     }
 
+# Get extra class overview detail for waitlist)
+def get_class_detail(session_id, section_address, data_req, div_id):
+    url = "https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog"
+
+    headers = {
+        'accept': '*/*',
+        'accept-language': 'en-US,en;q=0.9',
+        'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'cookie': f'PTGSESSID={session_id}',
+        'origin': 'https://coursebook.utdallas.edu',
+        'priority': 'u=1, i',
+        'referer': 'https://coursebook.utdallas.edu/guidedsearch',
+        'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Linux"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'x-requested-with': 'XMLHttpRequest',
+    }
+    
+    data = {
+        "id": section_address,
+        "req": data_req,
+        "action": "info",
+        "div": div_id
+    }
+
+    response = requests.post(url, headers=headers, data=data, timeout=12)
+
+    return response.text
+
+# parse the overview html for all the data
+def parse_class_overview(html, section_addr):
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Section address
+    try:
+        # Split into prefix, number, section, term
+        match = re.match(r"^([A-Z]+)(\d+)\.(\d+)\.(\d{2}[A-Z])$", section_addr)
+
+        if match:
+            prefix = match.group(1).lower()
+            number = match.group(2)
+            section = match.group(3)
+            term = match.group(4).lower()
+        else:
+            prefix = number = section = term = ""
+
+    except Exception:
+        print(f"Failed to parse section address from overview: {html[:200]}")
+        section_addr = prefix = number = section = term = ""
+
+    # Title
+    try:
+        title_td = soup.select_one(".courseinfo__overviewtable__coursetitle")
+        class_title = title_td.decode_contents().strip()
+    except Exception:
+        class_title = ""
+
+    # Instructors
+    try:
+        instructors = []
+        instructor_netids = []
+        for div in soup.select("div[id^='inst-']"):
+            # Name
+            text = div.get_text(separator="・", strip=True)
+            name = text.split("・")[0].strip()
+            instructors.append(name)
+
+            # netid
+            email_link = div.find("a", href=True)
+            if email_link and "@" in email_link.text:
+                netid = email_link.text.strip().split("@")[0]
+                instructor_netids.append(netid)
+
+    except Exception:
+        instructors = []
+        instructor_netids = []
+
+    try:
+        status_td = soup.find("th", string=lambda s: s and "Status:" in s)
+        if status_td:
+            status_row = status_td.find_parent("tr")
+            status_text = status_row.get_text(" ", strip=True)
+
+            # Extract waitlist number
+            waitlist_match = re.search(r"Waitlist:\s*(\d+)", status_text)
+            waitlist = int(waitlist_match.group(1)) if waitlist_match else 0
+        else:
+            waitlist = 0
+    except Exception:
+        waitlist = 0
+
+    # Schedule
+    try:
+        schedule_block = soup.select_one(".courseinfo__meeting-item--multiple p.courseinfo__meeting-time")
+        
+        if schedule_block:
+            lines = list(schedule_block.stripped_strings)
+
+            if len(lines) >= 3:
+                schedule_day = lines[1].replace(" & ", ",")
+                schedule_time = lines[2]
+            else:
+                schedule_day = schedule_time = ""
+
+            # Location is usually the last item if the link exists
+            location_link = schedule_block.find("a", href=True)
+            location = location_link.get_text(strip=True) if location_link else ""
+        else:
+            schedule_day = schedule_time = location = ""
+
+    except Exception as e:
+        print(f"Error parsing schedule: {e}")
+
+    return {
+        'section_address': section_addr,
+        'course_prefix': prefix,
+        'course_number': number,
+        'section': section,
+        'title': class_title.replace(r'\(.*\)', ''),
+        'term': term,
+        'instructors': instructors,
+        'instructor_ids': instructor_netids,
+        'days': schedule_day.replace(' & ', ','),
+        'times_12h': schedule_time,
+        'location': location,
+        'waitlist': waitlist
+    }
+
+# we have to click the overview button on each class to get waitlist cause report monkey doesn't give that info
+def get_class_overview(data, session_id):
+    data_json = json.loads(data)
+    html_content = data_json["sethtml"]["#sr"]
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    rows = soup.find_all('tr', class_='cb-row')
+
+    all_courses = []
+    print("Getting classes overview...")
+    for row in rows:
+        section_address = row.get("data-id")
+        data_req = row.get("data-req") # needed in request for overview
+        row_id = row.get("id")
+        div_id = f"{row_id}childcontent"
+        
+        overview_html = get_class_detail(
+            session_id,
+            section_address,
+            data_req,
+            div_id
+        )
+        # with open(f"{course['section_address']}_overview.html", "w", encoding="utf-8") as f:
+        #     f.write(overview_html)
+
+        print(f"Got class overview for section_address: {section_address}")
+
+        class_overview = parse_class_overview(overview_html, section_address)
+        print(class_overview)
+        all_courses.append(class_overview)
+
+    return all_courses
+
 
 def manually_parse_html_data(html_content, term, filter_value, all_data):
     """
@@ -338,6 +503,10 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                         session_id = process_filters(
                             session_id, term, all_data, dropdown_options, new_filters, remaining_filter_order)
                         break
+                    
+                    # class_overview = get_class_overview(response.text, session_id)
+                    # print(class_overview)
+                    # break
 
                     # check if there is only one item (report monkey download link not generated) --> nvm i handled this with the if/else below
                     items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
