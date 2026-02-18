@@ -270,103 +270,114 @@ def get_class_detail(session_id, section_address, data_req, div_id):
 
     return response.text
 
-# parse the overview html for all the data
 def parse_class_overview(html, section_addr):
     soup = BeautifulSoup(html, "html.parser")
+    
+    # Some sections are separated by th title then td content
+    def get_val(label):
+        """Finds label text (in th or td) and returns the next td's text"""
+        tag = soup.find(string=re.compile(re.escape(label), re.I))
+        if tag:
+            val_cell = tag.parent.find_next('td') 
+            return val_cell.get_text(strip=True) if val_cell else None
+        return None
 
-    # Section address
-    try:
-        # Split into prefix, number, section, term
-        match = re.match(r"^([A-Z]+)(\d+)\.(\d+)\.(\d{2}[A-Z])$", section_addr)
-
-        if match:
-            prefix = match.group(1).lower()
-            number = match.group(2)
-            section = match.group(3)
-            term = match.group(4).lower()
-        else:
-            prefix = number = section = term = ""
-
-    except Exception:
-        print(f"Failed to parse section address from overview: {html[:200]}")
-        section_addr = prefix = number = section = term = ""
-
-    # Title
-    try:
-        title_td = soup.select_one(".courseinfo__overviewtable__coursetitle")
-        class_title = title_td.decode_contents().strip()
-    except Exception:
-        class_title = ""
-
-    # Instructors
-    try:
-        instructors = []
-        instructor_netids = []
-        for div in soup.select("div[id^='inst-']"):
-            # Name
-            text = div.get_text(separator="・", strip=True)
-            name = text.split("・")[0].strip()
-            instructors.append(name)
-
-            # netid
-            email_link = div.find("a", href=True)
-            if email_link and "@" in email_link.text:
-                netid = email_link.text.strip().split("@")[0]
-                instructor_netids.append(netid)
-
-    except Exception:
-        instructors = []
-        instructor_netids = []
-
-    try:
-        status_td = soup.find("th", string=lambda s: s and "Status:" in s)
-        if status_td:
-            status_row = status_td.find_parent("tr")
-            status_text = status_row.get_text(" ", strip=True)
-
-            # Extract waitlist number
-            waitlist_match = re.search(r"Waitlist:\s*(\d+)", status_text)
-            waitlist = int(waitlist_match.group(1)) if waitlist_match else 0
-        else:
-            waitlist = 0
-    except Exception:
-        waitlist = 0
-
-    # Schedule
-    try:
-        schedule_block = soup.select_one(".courseinfo__meeting-item--multiple p.courseinfo__meeting-time")
+    def parse_people():
+        """Parse Instructors and TAs"""
+        people = {
+            'instructors': [], 'instructor_netids': [],
+            'tas': [], 'ta_netids': []
+        }
         
-        if schedule_block:
-            lines = list(schedule_block.stripped_strings)
-
-            if len(lines) >= 3:
-                schedule_day = lines[1].replace(" & ", ",")
-                schedule_time = lines[2]
+        # Iterate all divs with id starting with 'inst-'
+        for div in soup.select("div[id^='inst-']"):
+            text_content = div.get_text(separator="・", strip=True)
+            name = text_content.split("・")[0].strip()
+            
+            # Parse netid from mailto link
+            email_link = div.find("a", href=re.compile("mailto:"))
+            net_id = email_link['href'].replace('mailto:', '').split('@')[0] if email_link else ""
+            
+            if "Teaching Assistant" in text_content:
+                people['tas'].append(name)
+                if net_id: people['ta_netids'].append(net_id)
             else:
-                schedule_day = schedule_time = ""
+                people['instructors'].append(name)
+                if net_id: people['instructor_netids'].append(net_id)
+                
+        return people
 
-            # Location is usually the last item if the link exists
-            location_link = schedule_block.find("a", href=True)
-            location = location_link.get_text(strip=True) if location_link else ""
-        else:
-            schedule_day = schedule_time = location = ""
+    def parse_location_and_schedule():
+        """Gets location code and schedule details"""
+        meeting_div = soup.find('div', class_='courseinfo__meeting-item--multiple')
+        lines = list(meeting_div.stripped_strings) if meeting_div else []
+        
+        # Location
+        loc_link = meeting_div.find('a', href=re.compile(r"locator\.utdallas\.edu")) if meeting_div else None
+        location = loc_link.get_text(strip=True)
 
-    except Exception as e:
-        print(f"Error parsing schedule: {e}")
+        return {
+            'days': lines[1] if len(lines) > 1 else None,
+            'times_12h': lines[2] if len(lines) > 2 else None,
+            'location': location
+        }
 
+    # Parse Section Address
+    try:
+        parts = section_addr.split('.')
+        match = re.match(r"([A-Za-z]+)(\d+)", parts[0])
+        prefix = match.group(1)
+        number = match.group(2)
+        section = parts[1]
+        term = parts[2]
+    except Exception:
+        print(f"Failed to parse section address: {section_addr}")
+        prefix = number = section = term = ""
+
+    # Enrollment
+    curr = 0
+    avail = 0
+    wait = 0
+    status_row_text = get_val("Status")
+    try: 
+        curr = int(re.search(r'Enrolled Total:\s*(\d+)', status_row_text).group(1)) if "Enrolled Total" in status_row_text else 0
+        avail = int(re.search(r'Available Seats:\s*(\d+)', status_row_text).group(1)) if "Available Seats" in status_row_text else 0
+        wait = int(re.search(r'Waitlist:\s*(\d+)', status_row_text).group(1)) if "Waitlist" in status_row_text else 0
+    except Exception:
+        print(f"Failed to parse enrollment info: {status_row_text}")
+    
+
+    people_data = parse_people()
+    schedule_data = parse_location_and_schedule()
+    class_num_raw = get_val("Class/Course Number")
+
+    # Missing: topic, session, schedule_combined, core_area, textbook, syllabus, dept
+    # Different: school
+    # New: description, waitlist, ta_netid, 
     return {
         'section_address': section_addr,
         'course_prefix': prefix,
         'course_number': number,
         'section': section,
-        'title': class_title.replace(r'\(.*\)', ''),
+        'class_number': class_num_raw.split('/')[0].strip() if class_num_raw else None,
+        'class_level': get_val("Class Level"),
+        'instruction_mode': get_val("Instruction Mode"),
+        'title': soup.find('td', class_='courseinfo__overviewtable__coursetitle').get_text(strip=True),
+        'description': get_val("Description"),
+        'enrolled_status': 'OPEN' if 'OPEN' in status_row_text else 'CLOSED',
+        'enrolled_current': curr,
+        'enrolled_max': curr + avail,
+        'waitlist': wait,
         'term': term,
-        'instructors': instructors,
-        'instructor_ids': instructor_netids,
-        'days': schedule_day.replace(' & ', ','),
-        'times_12h': schedule_time,
-        'location': location,
-        'waitlist': waitlist
+        'days': schedule_data['days'],
+        'times_12h': schedule_data['times_12h'],
+        'location': schedule_data['location'],
+        'activity_type': get_val("Activity Type"),
+        'instructors': people_data['instructors'],
+        'instructor_netids': people_data['instructor_netids'],
+        'tas': people_data['tas'],
+        'ta_netids': people_data['ta_netids'],
+        'school': get_val("College")
     }
 
 # we have to click the overview button on each class to get waitlist cause report monkey doesn't give that info
@@ -391,7 +402,7 @@ def get_class_overview(data, session_id):
             data_req,
             div_id
         )
-        # with open(f"{course['section_address']}_overview.html", "w", encoding="utf-8") as f:
+        # with open(f"{section_address}_overview.html", "w", encoding="utf-8") as f:
         #     f.write(overview_html)
 
         print(f"Got class overview for section_address: {section_address}")
@@ -456,6 +467,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
     """
     Recursively processes filters to scrape course data.
     """
+    c = 0
 
     # base case: no more filters to apply
     if not filter_order:
@@ -504,8 +516,13 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                             session_id, term, all_data, dropdown_options, new_filters, remaining_filter_order)
                         break
                     
+                    # NEW PARSE METHOD
                     # class_overview = get_class_overview(response.text, session_id)
                     # print(class_overview)
+
+                    # with open(f"{c}.json", "w", encoding="utf-8") as f:
+                    #     json.dump(class_overview, f, indent=4)
+                    #     c += 1
                     # break
 
                     # check if there is only one item (report monkey download link not generated) --> nvm i handled this with the if/else below
