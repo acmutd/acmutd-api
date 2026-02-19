@@ -117,6 +117,10 @@ func normalizeCourseNumber(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
+func normalizeSchool(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}
+
 func parsePaginationParams(c *gin.Context) (paginationParams, error) {
 	limitValue := strings.TrimSpace(c.Query("limit"))
 	if limitValue == "" {

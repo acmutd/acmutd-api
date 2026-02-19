@@ -37,8 +37,12 @@ func normalizeCourseNumber(number string) string {
 }
 
 // normalizeTerm normalizes a term value to lowercase
-func normalizeTerm(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+func normalizeTerm(term string) string {
+	return strings.ToLower(strings.TrimSpace(term))
+}
+
+func normalizeSchool(school string) string {
+	return strings.ToLower((strings.TrimSpace(school)))
 }
 
 // sanitizeDocID sanitizes a value for use as a Firestore document ID

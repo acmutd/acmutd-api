@@ -174,7 +174,7 @@ func (c *Firestore) GetAllCoursesByTerm(ctx context.Context, term string, limit,
 // QueryBySchool returns courses by school for a given term
 func (c *Firestore) QueryBySchool(ctx context.Context, term, school string, limit, offset int) ([]types.Course, bool, error) {
 	term = normalizeTerm(term)
-	school = strings.TrimSpace(school)
+	school = normalizeSchool(school)
 	if term == "" || school == "" {
 		return []types.Course{}, false, nil
 	}

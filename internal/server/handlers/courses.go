@@ -51,6 +51,38 @@ func (h *Handler) GetCoursesByTerm(c *gin.Context) {
 	})
 }
 
+// GetCoursesBySchool fetches courses by school within a term.
+func (h *Handler) GetCoursesBySchool(c *gin.Context) {
+	term := normalizeTerm(c.Param("term"))
+	school := normalizeSchool(c.Param("school"))
+
+	if term == "" || school == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term and school parameters are required"})
+		return
+	}
+
+	params, ok := parsePaginationOrRespond(c)
+	if !ok {
+		return
+	}
+
+	courses, hasNext, err := h.db.QueryBySchool(c.Request.Context(), term, school, params.Limit, params.Offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	pagination := buildPaginationMeta(params, len(courses), hasNext)
+
+	c.JSON(http.StatusOK, gin.H{
+		"term":       term,
+		"school":     school,
+		"count":      len(courses),
+		"courses":    courses,
+		"pagination": pagination,
+	})
+}
+
 // GetCoursesByPrefix fetches courses by prefix within a term.
 func (h *Handler) GetCoursesByPrefix(c *gin.Context) {
 	term := normalizeTerm(c.Param("term"))
