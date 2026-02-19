@@ -190,7 +190,7 @@ func (c *Firestore) GetCourseBySection(ctx context.Context, term string, prefix 
 	term = normalizeTerm(term)
 	prefix = normalizeCoursePrefix(prefix)
 	number = normalizeCourseNumber(number)
-	section = strings.ToLower(strings.TrimSpace(section))
+	section = normalizeSection(section)
 
 	id := fmt.Sprintf("%s%s.%s.%s", prefix, number, section, term)
 

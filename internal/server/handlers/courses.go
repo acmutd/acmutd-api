@@ -32,10 +32,10 @@ func (h *Handler) GetCourses(c *gin.Context) {
 	}
 
 	// Parse optional query parameters
-	prefix := normalizePrefix(strings.TrimSpace(c.Query("prefix")))
-	number := normalizeCourseNumber(strings.TrimSpace(c.Query("number")))
-	section := strings.ToLower(strings.TrimSpace(c.Query("section")))
-	school := normalizeSchool(strings.TrimSpace(c.Query("school")))
+	prefix := normalizePrefix(c.Query("prefix"))
+	number := normalizeCourseNumber(c.Query("number"))
+	section := normalizeSection(c.Query("section"))
+	school := normalizeSchool(c.Query("school"))
 
 	// Validate parameter dependencies
 	if section != "" && (prefix == "" || number == "") {

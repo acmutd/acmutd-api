@@ -36,6 +36,10 @@ func normalizeCourseNumber(number string) string {
 	return strings.ToLower(strings.TrimSpace(number))
 }
 
+func normalizeSection(section string) string {
+	return strings.ToLower(strings.TrimSpace(section))
+}
+
 // normalizeTerm normalizes a term value to lowercase
 func normalizeTerm(term string) string {
 	return strings.ToLower(strings.TrimSpace(term))

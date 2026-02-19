@@ -117,6 +117,10 @@ func normalizeCourseNumber(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
+func normalizeSection(section string) string {
+	return strings.ToLower(strings.TrimSpace(section))
+}
+
 func normalizeSchool(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
