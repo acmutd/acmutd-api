@@ -105,24 +105,24 @@ func (h *Handler) GetAPIKey(c *gin.Context) {
 	c.JSON(http.StatusOK, apiKey)
 }
 
-func normalizeTerm(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+func normalizeTerm(term string) string {
+	return strings.ToLower(strings.TrimSpace(term))
 }
 
-func normalizePrefix(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+func normalizePrefix(prefix string) string {
+	return strings.ToLower(strings.TrimSpace(prefix))
 }
 
-func normalizeCourseNumber(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+func normalizeCourseNumber(number string) string {
+	return strings.ToLower(strings.TrimSpace(number))
 }
 
 func normalizeSection(section string) string {
 	return strings.ToLower(strings.TrimSpace(section))
 }
 
-func normalizeSchool(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
+func normalizeSchool(school string) string {
+	return strings.ToLower(strings.TrimSpace(school))
 }
 
 func parsePaginationParams(c *gin.Context) (paginationParams, error) {
