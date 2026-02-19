@@ -244,6 +244,8 @@ func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, l
 // SearchCourses searches courses by title, topic, or instructor name
 func (c *Firestore) SearchCourses(ctx context.Context, term, searchQuery string, limit, offset int) ([]types.Course, bool, error) {
 	// TODO: Figure out a nicer way to do this
+	// Firestore doesn't implement full-text search, so we currently need to
+	// query all courses by term and manually perform a search ourselves
 	normalizedTerm := normalizeTerm(term)
 	courses, _, err := c.GetAllCoursesByTerm(ctx, normalizedTerm, 0, 0)
 	if err != nil {

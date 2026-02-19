@@ -24,6 +24,25 @@ func (h *Handler) GetAllCourses(c *gin.Context) {
 //   - prefix: filters by course prefix
 //   - school: filters by school
 //   - none: returns all courses for term
+
+// All 16 Query Parameter Combinations
+// #	prefix | number | section | school | Result
+// 1	-	-	-	-	GetAllCoursesByTerm
+// 2	-	-	-	✓	QueryBySchool
+// 3	-	-	✓	-	Error: Section requires prefix and number
+// 4	-	-	✓	✓	Error: Section requires prefix and number
+// 5	-	✓	-	-	Error: Number requires prefix
+// 6	-	✓	-	✓	Error: Number requires prefix
+// 7	-	✓	✓	-	Error: Section requires prefix and number
+// 8	-	✓	✓	✓	Error: Section requires prefix and number
+// 9	✓	-	-	-	QueryByCoursePrefix
+// 10	✓	-	-	✓	QueryByCoursePrefix (school ignored)
+// 11	✓	-	✓	-	Error: Section requires prefix and number
+// 12	✓	-	✓	✓	Error: Section requires prefix and number
+// 13	✓	✓	-	-	QueryByCourseNumber
+// 14	✓	✓	-	✓	QueryByCourseNumber (school ignored)
+// 15	✓	✓	✓	-	GetCourseBySection
+// 16	✓	✓	✓	✓	GetCourseBySection (school ignored)
 func (h *Handler) GetCourses(c *gin.Context) {
 	term := normalizeTerm(c.Param("term"))
 	if term == "" {
