@@ -310,18 +310,31 @@ def parse_class_overview(html, section_addr):
     def parse_location_and_schedule():
         """Gets location code and schedule details"""
         meeting_div = soup.find('div', class_='courseinfo__meeting-item--multiple')
-        lines = list(meeting_div.stripped_strings) if meeting_div else []
+        if not meeting_div:
+            print(f"meeting div not found for {section_addr}")
+            return { 'days': "", 'times_12h': "", 'location': ""}
+
+        lines = list(meeting_div.stripped_strings)
         
-        # Location
-        loc_link = meeting_div.find('a', href=re.compile(r"locator\.utdallas\.edu")) if meeting_div else None
-        location = loc_link.get_text(strip=True)
+        loc_link = meeting_div.find('a', href=re.compile(r"locator\.utdallas\.edu"))
+
+        if loc_link:
+            location = loc_link.get_text(strip=True)
+        else:
+            # Fallback for when there is no link ("See instructor for room assignment")
+            map_div = meeting_div.find('div', class_='courseinfo__map')
+            if map_div and map_div.get_text(strip=True):
+                location = map_div.get_text(strip=True)
+            else:
+                # just grab the 4th line of text if it exists
+                location = lines[3] if len(lines) > 3 else ""
 
         return {
             'days': lines[1] if len(lines) > 1 else None,
             'times_12h': lines[2] if len(lines) > 2 else None,
             'location': location
         }
-
+    
     # Parse Section Address
     try:
         parts = section_addr.split('.')
@@ -340,16 +353,21 @@ def parse_class_overview(html, section_addr):
     wait = 0
     status_row_text = get_val("Status")
     try: 
-        curr = int(re.search(r'Enrolled Total:\s*(\d+)', status_row_text).group(1)) if "Enrolled Total" in status_row_text else 0
-        avail = int(re.search(r'Available Seats:\s*(\d+)', status_row_text).group(1)) if "Available Seats" in status_row_text else 0
-        wait = int(re.search(r'Waitlist:\s*(\d+)', status_row_text).group(1)) if "Waitlist" in status_row_text else 0
+        curr = int(re.search(r'Enrolled Total:\s*(-?\d+)', status_row_text).group(1)) if "Enrolled Total" in status_row_text else 0
+        avail = int(re.search(r'Available Seats:\s*(-?\d+)', status_row_text).group(1)) if "Available Seats" in status_row_text else 0
+        wait = int(re.search(r'Waitlist:\s*(-?\d+)', status_row_text).group(1)) if "Waitlist" in status_row_text else 0
     except Exception:
-        print(f"Failed to parse enrollment info: {status_row_text}")
+        print(f"Failed to parse enrollment info for {section_addr}: '{status_row_text}'")
     
-
-    people_data = parse_people()
-    schedule_data = parse_location_and_schedule()
-    class_num_raw = get_val("Class/Course Number")
+    class_num_raw = ""
+    people_data = {}
+    schedule_data = {}
+    try: 
+        people_data = parse_people()
+        schedule_data = parse_location_and_schedule()
+        class_num_raw = get_val("Class/Course Number")
+    except Exception:
+        print(f"Failed to parse")
 
     # Missing: topic, session, schedule_combined, core_area, textbook, syllabus, dept
     # Different: school
@@ -389,26 +407,27 @@ def get_class_overview(data, session_id):
     rows = soup.find_all('tr', class_='cb-row')
 
     all_courses = []
-    print("Getting classes overview...")
-    for row in rows:
+    print(f"Getting overview for {len(rows)} classes")
+    for i, row in enumerate(rows):
         section_address = row.get("data-id")
         data_req = row.get("data-req") # needed in request for overview
         row_id = row.get("id")
         div_id = f"{row_id}childcontent"
         
-        overview_html = get_class_detail(
-            session_id,
-            section_address,
-            data_req,
+        overview_html, new_session_id = make_request_with_retry(
+            get_class_detail, 
+            session_id, 
+            section_address, 
+            data_req, 
             div_id
         )
-        # with open(f"{section_address}_overview.html", "w", encoding="utf-8") as f:
-        #     f.write(overview_html)
 
-        print(f"Got class overview for section_address: {section_address}")
+        session_id = new_session_id
+
+        print(f"({i+1}/{len(rows)}): overview for section_address: {section_address}")
 
         class_overview = parse_class_overview(overview_html, section_address)
-        print(class_overview)
+        # print(class_overview)
         all_courses.append(class_overview)
 
     return all_courses
@@ -467,7 +486,6 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
     """
     Recursively processes filters to scrape course data.
     """
-    c = 0
 
     # base case: no more filters to apply
     if not filter_order:
@@ -483,6 +501,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
 
         for i, option_value in enumerate(options):
             new_filters = filters.copy()
+            # option_value = "cp_biol"
             new_filters[current_filter_type] = option_value
             print(
                 f"[{i+1}/{len(options)}] Processing {current_filter_type}: {option_value}")
@@ -515,19 +534,17 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                         session_id = process_filters(
                             session_id, term, all_data, dropdown_options, new_filters, remaining_filter_order)
                         break
-                    
-                    # NEW PARSE METHOD
-                    # class_overview = get_class_overview(response.text, session_id)
-                    # print(class_overview)
-
-                    # with open(f"{c}.json", "w", encoding="utf-8") as f:
-                    #     json.dump(class_overview, f, indent=4)
-                    #     c += 1
-                    # break
 
                     # check if there is only one item (report monkey download link not generated) --> nvm i handled this with the if/else below
                     items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
                     items = int(items[0]) if items else 0
+
+                    # NEW PARSE METHOD
+                    # class_overview = get_class_overview(response.text, session_id)
+
+                    # with open(f"{option_value}.json", "w", encoding="utf-8") as f:
+                    #     json.dump(class_overview, f, indent=4)
+                    # break
 
                     # try to get the report monkey endpoint to get the JSON data
                     print(
