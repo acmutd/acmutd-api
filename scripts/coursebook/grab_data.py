@@ -427,7 +427,6 @@ def get_class_overview(data, session_id):
         print(f"({i+1}/{len(rows)}): overview for section_address: {section_address}")
 
         class_overview = parse_class_overview(overview_html, section_address)
-        # print(class_overview)
         all_courses.append(class_overview)
 
     return all_courses
@@ -542,8 +541,13 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     # NEW PARSE METHOD
                     # class_overview = get_class_overview(response.text, session_id)
 
-                    # with open(f"{option_value}.json", "w", encoding="utf-8") as f:
-                    #     json.dump(class_overview, f, indent=4)
+                    # if class_overview:
+                    #     # with open(f"{option_value}.json", "w", encoding="utf-8") as f:
+                    #     #     json.dump(class_overview, f, indent=4)
+
+                    #     for d in class_overview:
+                    #         all_data[d['section_address']] = d
+                    
                     # break
 
                     # try to get the report monkey endpoint to get the JSON data
