@@ -55,6 +55,7 @@ func (h *Handler) GetCourses(c *gin.Context) {
 	number := normalizeCourseNumber(c.Query("number"))
 	section := normalizeSection(c.Query("section"))
 	school := normalizeSchool(c.Query("school"))
+	search := strings.TrimSpace(c.Query("q"))
 
 	// Validate parameter dependencies
 	if section != "" && (prefix == "" || number == "") {
@@ -79,6 +80,7 @@ func (h *Handler) GetCourses(c *gin.Context) {
 		CourseNumber: number,
 		Section:      section,
 		School:       school,
+		Search:       search,
 		Limit:        params.Limit,
 		Offset:       params.Offset,
 	}
@@ -125,6 +127,9 @@ func (h *Handler) GetCourses(c *gin.Context) {
 	if school != "" {
 		responseMeta["school"] = school
 	}
+	if search != "" {
+		responseMeta["query"] = search
+	}
 
 	pagination := buildPaginationMeta(params, len(courses), hasNext)
 
@@ -133,48 +138,4 @@ func (h *Handler) GetCourses(c *gin.Context) {
 	responseMeta["pagination"] = pagination
 
 	c.JSON(http.StatusOK, responseMeta)
-}
-
-// SearchCourses runs a text search against courses for a term.
-func (h *Handler) SearchCourses(c *gin.Context) {
-	term := normalizeTerm(c.Param("term"))
-	searchQuery := strings.TrimSpace(c.Query("q"))
-
-	if term == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Term parameter is required"})
-		return
-	}
-
-	if searchQuery == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Search query parameter 'q' is required"})
-		return
-	}
-
-	params, ok := parsePaginationOrRespond(c)
-	if !ok {
-		return
-	}
-
-	query := types.CourseQuery{
-		Term:   term,
-		Search: searchQuery,
-		Limit:  params.Limit,
-		Offset: params.Offset,
-	}
-
-	courses, hasNext, err := h.db.SearchCourses(c.Request.Context(), query)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	pagination := buildPaginationMeta(params, len(courses), hasNext)
-
-	c.JSON(http.StatusOK, gin.H{
-		"term":       term,
-		"query":      searchQuery,
-		"count":      len(courses),
-		"courses":    courses,
-		"pagination": pagination,
-	})
 }

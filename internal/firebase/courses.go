@@ -155,11 +155,14 @@ func (c *Firestore) QueryCourses(ctx context.Context, q types.CourseQuery) ([]ty
 		query = query.Where("school", "==", school)
 	}
 
-	return c.collectCourses(ctx, query, q.Limit, q.Offset)
+	return c.collectCourses(ctx, query, q.Search, q.Limit, q.Offset)
 }
 
-func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, limit, offset int) ([]types.Course, bool, error) {
-	if limit > 0 {
+func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, search string, limit, offset int) ([]types.Course, bool, error) {
+	search = strings.ToLower(strings.TrimSpace(search))
+
+	// If no search query, apply pagination at the query level
+	if search == "" && limit > 0 {
 		query = query.Offset(offset).Limit(limit + 1)
 	}
 
@@ -183,6 +186,42 @@ func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, l
 		courses = append(courses, course)
 	}
 
+	// If search query provided, filter results manually and apply pagination
+	if search != "" {
+		var filteredCourses []types.Course
+		for _, course := range courses {
+			title := strings.ToLower(course.Title)
+			topic := strings.ToLower(course.Topic)
+			instructors := strings.ToLower(course.Instructors)
+
+			if strings.Contains(title, search) ||
+				strings.Contains(topic, search) ||
+				strings.Contains(instructors, search) {
+				filteredCourses = append(filteredCourses, course)
+			}
+		}
+		courses = filteredCourses
+
+		// Apply manual pagination for search results
+		if limit <= 0 {
+			return courses, false, nil
+		}
+
+		start := offset
+		if start >= len(courses) {
+			return []types.Course{}, false, nil
+		}
+
+		end := offset + limit
+		if end > len(courses) {
+			end = len(courses)
+		}
+
+		hasNext := end < len(courses)
+		return courses[start:end], hasNext, nil
+	}
+
+	// No search: check if there are more results
 	hasNext := false
 	if limit > 0 && len(courses) > limit {
 		hasNext = true
@@ -190,65 +229,4 @@ func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, l
 	}
 
 	return courses, hasNext, nil
-}
-
-// SearchCourses searches courses by title, topic, or instructor name
-func (c *Firestore) SearchCourses(ctx context.Context, q types.CourseQuery) ([]types.Course, bool, error) {
-	// TODO: Figure out a nicer way to do this
-	// Firestore doesn't implement full-text search, so we currently need to
-	// query all courses by term and manually perform a search ourselves
-	courses, _, err := c.QueryCourses(ctx, types.CourseQuery{Term: q.Term})
-	if err != nil {
-		return nil, false, err
-	}
-
-	search := strings.ToLower(strings.TrimSpace(q.Search))
-	if search == "" {
-		if q.Limit <= 0 {
-			return courses, false, nil
-		}
-		start := q.Offset
-		if start >= len(courses) {
-			return []types.Course{}, false, nil
-		}
-		end := q.Offset + q.Limit
-		if end > len(courses) {
-			end = len(courses)
-		}
-		hasNext := end < len(courses)
-		return courses[start:end], hasNext, nil
-	}
-
-	var filteredCourses []types.Course
-
-	for _, course := range courses {
-		title := strings.ToLower(course.Title)
-		topic := strings.ToLower(course.Topic)
-		instructors := strings.ToLower(course.Instructors)
-
-		// Search in title, topic, and instructors
-		if strings.Contains(title, search) ||
-			strings.Contains(topic, search) ||
-			strings.Contains(instructors, search) {
-			filteredCourses = append(filteredCourses, course)
-		}
-	}
-
-	if q.Limit <= 0 {
-		return filteredCourses, false, nil
-	}
-
-	start := q.Offset
-	if start >= len(filteredCourses) {
-		return []types.Course{}, false, nil
-	}
-
-	end := q.Offset + q.Limit
-	if end > len(filteredCourses) {
-		end = len(filteredCourses)
-	}
-
-	hasNext := end < len(filteredCourses)
-
-	return filteredCourses[start:end], hasNext, nil
 }
