@@ -17,32 +17,14 @@ func (h *Handler) GetAllCourses(c *gin.Context) {
 
 // GetCourses fetches courses with optional filtering by query parameters.
 // Path parameter: term (required)
-// Query parameters: prefix, number, section, school (all optional)
-// Filtering priority:
-//   - section: requires prefix and number, returns single course
-//   - number: requires prefix, filters by course number
-//   - prefix: filters by course prefix
-//   - school: filters by school
-//   - none: returns all courses for term
-
-// All 16 Query Parameter Combinations (all use QueryCourses with different filters)
-// #	prefix | number | section | school | Result
-// 1	-	-	-	-	All courses for term
-// 2	-	-	-	✓	Filter by school
-// 3	-	-	✓	-	Error: Section requires prefix and number
-// 4	-	-	✓	✓	Error: Section requires prefix and number
-// 5	-	✓	-	-	Error: Number requires prefix
-// 6	-	✓	-	✓	Error: Number requires prefix
-// 7	-	✓	✓	-	Error: Section requires prefix and number
-// 8	-	✓	✓	✓	Error: Section requires prefix and number
-// 9	✓	-	-	-	Filter by prefix
-// 10	✓	-	-	✓	Filter by prefix (school ignored)
-// 11	✓	-	✓	-	Error: Section requires prefix and number
-// 12	✓	-	✓	✓	Error: Section requires prefix and number
-// 13	✓	✓	-	-	Filter by prefix and number
-// 14	✓	✓	-	✓	Filter by prefix and number (school ignored)
-// 15	✓	✓	✓	-	Single course by section
-// 16	✓	✓	✓	✓	Single course by section (school ignored)
+// Query parameters: prefix, number, section, school, q (all optional, can be combined)
+//
+// All filters are independent and can be used in any combination:
+//   - prefix: filters by course prefix (e.g., "cs")
+//   - number: filters by course number (e.g., "1337") - works with or without prefix
+//   - section: filters by section (e.g., "001") - works with or without prefix/number
+//   - school: filters by school code (e.g., "ecs", "nsm")
+//   - q: search query for title, topic, or instructor name
 func (h *Handler) GetCourses(c *gin.Context) {
 	term := normalizeTerm(c.Param("term"))
 	if term == "" {
@@ -56,16 +38,6 @@ func (h *Handler) GetCourses(c *gin.Context) {
 	section := normalizeSection(c.Query("section"))
 	school := normalizeSchool(c.Query("school"))
 	search := strings.TrimSpace(c.Query("q"))
-
-	// Validate parameter dependencies
-	if section != "" && (prefix == "" || number == "") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Section parameter requires both prefix and number parameters"})
-		return
-	}
-	if number != "" && prefix == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Number parameter requires prefix parameter"})
-		return
-	}
 
 	// For all other queries, parse pagination
 	params, ok := parsePaginationOrRespond(c)
@@ -88,8 +60,8 @@ func (h *Handler) GetCourses(c *gin.Context) {
 	// Build response metadata based on filters used
 	responseMeta := gin.H{"term": term}
 
-	// Handle section lookup (returns single course)
-	if section != "" {
+	// Handle specific section lookup (returns single course only when prefix+number+section all provided)
+	if section != "" && prefix != "" && number != "" {
 		courses, _, err := h.db.QueryCourses(c.Request.Context(), query)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -123,6 +95,9 @@ func (h *Handler) GetCourses(c *gin.Context) {
 	}
 	if number != "" {
 		responseMeta["number"] = number
+	}
+	if section != "" {
+		responseMeta["section"] = section
 	}
 	if school != "" {
 		responseMeta["school"] = school
