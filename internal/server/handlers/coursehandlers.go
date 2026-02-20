@@ -25,24 +25,24 @@ func (h *Handler) GetAllCourses(c *gin.Context) {
 //   - school: filters by school
 //   - none: returns all courses for term
 
-// All 16 Query Parameter Combinations
+// All 16 Query Parameter Combinations (all use QueryCourses with different filters)
 // #	prefix | number | section | school | Result
-// 1	-	-	-	-	GetAllCoursesByTerm
-// 2	-	-	-	✓	QueryBySchool
+// 1	-	-	-	-	All courses for term
+// 2	-	-	-	✓	Filter by school
 // 3	-	-	✓	-	Error: Section requires prefix and number
 // 4	-	-	✓	✓	Error: Section requires prefix and number
 // 5	-	✓	-	-	Error: Number requires prefix
 // 6	-	✓	-	✓	Error: Number requires prefix
 // 7	-	✓	✓	-	Error: Section requires prefix and number
 // 8	-	✓	✓	✓	Error: Section requires prefix and number
-// 9	✓	-	-	-	QueryByCoursePrefix
-// 10	✓	-	-	✓	QueryByCoursePrefix (school ignored)
+// 9	✓	-	-	-	Filter by prefix
+// 10	✓	-	-	✓	Filter by prefix (school ignored)
 // 11	✓	-	✓	-	Error: Section requires prefix and number
 // 12	✓	-	✓	✓	Error: Section requires prefix and number
-// 13	✓	✓	-	-	QueryByCourseNumber
-// 14	✓	✓	-	✓	QueryByCourseNumber (school ignored)
-// 15	✓	✓	✓	-	GetCourseBySection
-// 16	✓	✓	✓	✓	GetCourseBySection (school ignored)
+// 13	✓	✓	-	-	Filter by prefix and number
+// 14	✓	✓	-	✓	Filter by prefix and number (school ignored)
+// 15	✓	✓	✓	-	Single course by section
+// 16	✓	✓	✓	✓	Single course by section (school ignored)
 func (h *Handler) GetCourses(c *gin.Context) {
 	term := normalizeTerm(c.Param("term"))
 	if term == "" {
@@ -66,12 +66,37 @@ func (h *Handler) GetCourses(c *gin.Context) {
 		return
 	}
 
-	// Handle section lookup (returns single course, no pagination)
+	// For all other queries, parse pagination
+	params, ok := parsePaginationOrRespond(c)
+	if !ok {
+		return
+	}
+
+	// Build query with all parameters
+	query := types.CourseQuery{
+		Term:         term,
+		CoursePrefix: prefix,
+		CourseNumber: number,
+		Section:      section,
+		School:       school,
+		Limit:        params.Limit,
+		Offset:       params.Offset,
+	}
+
+	// Build response metadata based on filters used
+	responseMeta := gin.H{"term": term}
+
+	// Handle section lookup (returns single course)
 	if section != "" {
-		course, err := h.db.GetCourseBySection(c.Request.Context(), term, prefix, number, section)
+		courses, _, err := h.db.QueryCourses(c.Request.Context(), query)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+
+		var course *types.Course
+		if len(courses) > 0 {
+			course = &courses[0]
 		}
 
 		c.JSON(http.StatusOK, gin.H{
@@ -84,43 +109,21 @@ func (h *Handler) GetCourses(c *gin.Context) {
 		return
 	}
 
-	// For all other queries, parse pagination
-	params, ok := parsePaginationOrRespond(c)
-	if !ok {
-		return
-	}
-
-	var (
-		courses []types.Course
-		hasNext bool
-		err     error
-	)
-
-	// Build response metadata based on filters used
-	responseMeta := gin.H{"term": term}
-
-	switch {
-	case number != "":
-		// Filter by prefix and number
-		courses, hasNext, err = h.db.QueryByCourseNumber(c.Request.Context(), term, prefix, number, params.Limit, params.Offset)
-		responseMeta["prefix"] = prefix
-		responseMeta["number"] = number
-	case prefix != "":
-		// Filter by prefix only
-		courses, hasNext, err = h.db.QueryByCoursePrefix(c.Request.Context(), term, prefix, params.Limit, params.Offset)
-		responseMeta["prefix"] = prefix
-	case school != "":
-		// Filter by school
-		courses, hasNext, err = h.db.QueryBySchool(c.Request.Context(), term, school, params.Limit, params.Offset)
-		responseMeta["school"] = school
-	default:
-		// No filters, return all courses for term
-		courses, hasNext, err = h.db.GetAllCoursesByTerm(c.Request.Context(), term, params.Limit, params.Offset)
-	}
-
+	courses, hasNext, err := h.db.QueryCourses(c.Request.Context(), query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Add filter info to response
+	if prefix != "" {
+		responseMeta["prefix"] = prefix
+	}
+	if number != "" {
+		responseMeta["number"] = number
+	}
+	if school != "" {
+		responseMeta["school"] = school
 	}
 
 	pagination := buildPaginationMeta(params, len(courses), hasNext)
@@ -135,14 +138,14 @@ func (h *Handler) GetCourses(c *gin.Context) {
 // SearchCourses runs a text search against courses for a term.
 func (h *Handler) SearchCourses(c *gin.Context) {
 	term := normalizeTerm(c.Param("term"))
-	query := strings.TrimSpace(c.Query("q"))
+	searchQuery := strings.TrimSpace(c.Query("q"))
 
 	if term == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Term parameter is required"})
 		return
 	}
 
-	if query == "" {
+	if searchQuery == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Search query parameter 'q' is required"})
 		return
 	}
@@ -152,7 +155,14 @@ func (h *Handler) SearchCourses(c *gin.Context) {
 		return
 	}
 
-	courses, hasNext, err := h.db.SearchCourses(c.Request.Context(), term, query, params.Limit, params.Offset)
+	query := types.CourseQuery{
+		Term:   term,
+		Search: searchQuery,
+		Limit:  params.Limit,
+		Offset: params.Offset,
+	}
+
+	courses, hasNext, err := h.db.SearchCourses(c.Request.Context(), query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -162,7 +172,7 @@ func (h *Handler) SearchCourses(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"term":       term,
-		"query":      query,
+		"query":      searchQuery,
 		"count":      len(courses),
 		"courses":    courses,
 		"pagination": pagination,

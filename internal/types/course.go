@@ -92,3 +92,15 @@ type Course struct {
 	Syllabus  string `json:"syllabus" firestore:"syllabus"`   // Syllabus URL or content
 	Textbooks string `json:"textbooks" firestore:"textbooks"` // Required textbooks
 }
+
+// CourseQuery contains parameters for querying courses
+type CourseQuery struct {
+	Term         string // e.g., "23f"
+	CoursePrefix string // e.g., "cs"
+	CourseNumber string // e.g., "2305"
+	Section      string // e.g., "001"
+	School       string // School code
+	Search       string // Search query for title, topic, instructors
+	Limit        int    // Max results to return (0 for no limit)
+	Offset       int    // Number of results to skip
+}
