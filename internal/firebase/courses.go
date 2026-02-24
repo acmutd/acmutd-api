@@ -38,7 +38,10 @@ type preparedCourse struct {
 	SectionID string
 }
 
-func prepareCourseForTerm(course types.Course, normalizedTerm string) (preparedCourse, bool) {
+func prepareCourseForTerm(course types.Course, term string) (preparedCourse, bool) {
+
+	normalizedTerm := strings.ToLower(strings.TrimSpace(term))
+
 	if normalizedTerm == "" {
 		return preparedCourse{}, false
 	}
@@ -155,8 +158,8 @@ func (c *Firestore) QueryCourses(ctx context.Context, q types.CourseQuery) ([]ty
 		query = query.Where("course_number", "==", number)
 	}
 	if section != "" {
-		// our firestore data adds an extra space after the section for some reason
-		query = query.Where("section", "==", section+" ")
+		// our firestore data sometimes adds an extra space after the section for some reason
+		query = query.Where("section", ">=", section)
 	}
 	if school != "" {
 		query = query.Where("school", "==", school)
@@ -213,7 +216,9 @@ func (c *Firestore) QueryCourses(ctx context.Context, q types.CourseQuery) ([]ty
 			}
 
 			// Apply location filter
-			if location != "" && !strings.Contains(strings.ToLower(course.Location), location) {
+			// sometimes location is "building_number" and sometimes is "building number" in firestore
+			// this checks for matches of both
+			if location != "" && !strings.Contains(strings.ReplaceAll(strings.ToLower(course.Location), "_", " "), location) {
 				continue
 			}
 
