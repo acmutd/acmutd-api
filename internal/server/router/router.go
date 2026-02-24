@@ -26,8 +26,7 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 	{
 		courses := v1.Group("/courses")
 		{
-			courses.GET("/", handler.GetAllCourses)
-			courses.GET("/:term", handler.GetCourses)
+			courses.GET("/", handler.GetCourses)
 		}
 
 		terms := v1.Group("/terms")

@@ -158,8 +158,9 @@ func (c *Firestore) QueryCourses(ctx context.Context, q types.CourseQuery) ([]ty
 		query = query.Where("course_number", "==", number)
 	}
 	if section != "" {
-		// our firestore data sometimes adds an extra space after the section for some reason
-		query = query.Where("section", ">=", section)
+		// our firestore data sometimes has an extra space after the section for some reason
+		// this will query for both section and section with extra whitespace
+		query = query.Where("section", "in", []string{section, section + " "})
 	}
 	if school != "" {
 		query = query.Where("school", "==", school)
@@ -218,7 +219,7 @@ func (c *Firestore) QueryCourses(ctx context.Context, q types.CourseQuery) ([]ty
 			// Apply location filter
 			// sometimes location is "building_number" and sometimes is "building number" in firestore
 			// this checks for matches of both
-			if location != "" && !strings.Contains(strings.ReplaceAll(strings.ToLower(course.Location), "_", " "), location) {
+			if location != "" && !strings.Contains(strings.ReplaceAll(strings.ToLower(course.Location), "_", " "), strings.ReplaceAll(location, "_", " ")) {
 				continue
 			}
 

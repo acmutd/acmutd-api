@@ -8,18 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetAllCourses returns a helpful error since callers must provide a term.
-func (h *Handler) GetAllCourses(c *gin.Context) {
-	c.JSON(http.StatusBadRequest, gin.H{
-		"error": "Term parameter is required. Use /api/v1/courses/{term}",
-	})
-}
-
-// MAYBE TODO: Add term as a query parameter also but limit it so that you can't just get all courses in firestore cause that'll rack up costs
-
 // GetCourses fetches courses with optional filtering by query parameters.
-// Path parameter: term (required)
-// Query parameters (all optional, can be combined):
+// Query parameters:
+//   - term: the term to query (required, e.g., "25s", "24f")
+//
+// Optional query parameters (can be combined):
 //   - prefix: filters by course prefix (e.g., "cs")
 //   - number: filters by course number (e.g., "1337") - works with or without prefix
 //   - section: filters by section (e.g., "001") - works with or without prefix/number
@@ -32,9 +25,9 @@ func (h *Handler) GetAllCourses(c *gin.Context) {
 //   - location: filters by location (e.g., "SCI_1.210", supports spaces or underscores)
 //   - q: search query for title, topic, or instructor name
 func (h *Handler) GetCourses(c *gin.Context) {
-	term := strings.ToLower(strings.TrimSpace(c.Param("term")))
+	term := strings.ToLower(strings.TrimSpace(c.Query("term")))
 	if term == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Term parameter is required"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Term query parameter is required (e.g., ?term=25s)"})
 		return
 	}
 
