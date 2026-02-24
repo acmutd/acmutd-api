@@ -15,6 +15,8 @@ func (h *Handler) GetAllCourses(c *gin.Context) {
 	})
 }
 
+// MAYBE TODO: Add term as a query parameter also but limit it so that you can't just get all courses in firestore cause that'll rack up costs
+
 // GetCourses fetches courses with optional filtering by query parameters.
 // Path parameter: term (required)
 // Query parameters: prefix, number, section, school, q (all optional, can be combined)
@@ -26,17 +28,26 @@ func (h *Handler) GetAllCourses(c *gin.Context) {
 //   - school: filters by school code (e.g., "ecs", "nsm")
 //   - q: search query for title, topic, or instructor name
 func (h *Handler) GetCourses(c *gin.Context) {
-	term := normalizeTerm(c.Param("term"))
+	term := strings.ToLower(strings.TrimSpace(c.Param("term")))
 	if term == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Term parameter is required"})
 		return
 	}
 
 	// Parse optional query parameters
-	prefix := normalizePrefix(c.Query("prefix"))
-	number := normalizeCourseNumber(c.Query("number"))
-	section := normalizeSection(c.Query("section"))
-	school := normalizeSchool(c.Query("school"))
+	prefix := strings.ToLower(strings.TrimSpace(c.Query("prefix")))
+	number := strings.ToLower(strings.TrimSpace(c.Query("number")))
+	section := strings.ToLower(strings.TrimSpace(c.Query("section")))
+	school := strings.ToLower(strings.TrimSpace(c.Query("school")))
+	instructor := strings.TrimSpace(c.Query("instructor"))
+	instructorID := strings.TrimSpace(c.Query("instructor_id"))
+	days := strings.TrimSpace(c.Query("days"))
+	times := strings.TrimSpace(c.Query("times"))
+	times12h := strings.TrimSpace(c.Query("times_12h")) // PM needs to be capital in call, need to fix TODO
+	location := strings.TrimSpace(c.Query("location"))
+	// supports substring match of BUILDINGNAME_ROOMNUMBER, needs underscore between.
+	// should change firestore to have building name and room number as separate values
+	// plus the location parameter it already has
 	search := strings.TrimSpace(c.Query("q"))
 
 	// For all other queries, parse pagination
@@ -52,6 +63,12 @@ func (h *Handler) GetCourses(c *gin.Context) {
 		CourseNumber: number,
 		Section:      section,
 		School:       school,
+		Instructor:   instructor,
+		InstructorID: instructorID,
+		Days:         days,
+		Times:        times,
+		Times12h:     times12h,
+		Location:     location,
 		Search:       search,
 		Limit:        params.Limit,
 		Offset:       params.Offset,
@@ -101,6 +118,24 @@ func (h *Handler) GetCourses(c *gin.Context) {
 	}
 	if school != "" {
 		responseMeta["school"] = school
+	}
+	if instructor != "" {
+		responseMeta["instructor"] = instructor
+	}
+	if instructorID != "" {
+		responseMeta["instructor_id"] = instructorID
+	}
+	if days != "" {
+		responseMeta["days"] = days
+	}
+	if times != "" {
+		responseMeta["times"] = times
+	}
+	if times12h != "" {
+		responseMeta["times_12h"] = times12h
+	}
+	if location != "" {
+		responseMeta["location"] = location
 	}
 	if search != "" {
 		responseMeta["query"] = search
