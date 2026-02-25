@@ -539,16 +539,16 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     items = int(items[0]) if items else 0
 
                     # NEW PARSE METHOD
-                    # class_overview = get_class_overview(response.text, session_id)
+                    class_overview = get_class_overview(response.text, session_id)
 
-                    # if class_overview:
-                    #     # with open(f"{option_value}.json", "w", encoding="utf-8") as f:
-                    #     #     json.dump(class_overview, f, indent=4)
+                    if class_overview:
+                        # with open(f"{option_value}.json", "w", encoding="utf-8") as f:
+                        #     json.dump(class_overview, f, indent=4)
 
-                    #     for d in class_overview:
-                    #         all_data[d['section_address']] = d
+                        for d in class_overview:
+                            all_data[d['section_address']] = d
                     
-                    # break
+                    break
 
                     # try to get the report monkey endpoint to get the JSON data
                     print(

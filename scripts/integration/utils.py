@@ -31,6 +31,12 @@ def extract_first_instructor(instructor_string, instructor_id_string):
         return names[0], ids[0]
     return None, None
 
+def extract_first_instructor_new(instructor_arr, instructor_id_arr):
+    """Extracts the first instructor's name from arrays of names and IDs."""
+    if instructor_arr and instructor_id_arr and len(instructor_arr) > 0 and len(instructor_id_arr) > 0:
+        return normalize_name(instructor_arr[0]), instructor_id_arr[0].strip()
+    return None, None
+
 
 def extract_course_department(course_code):
     """Extracts the department from a course code."""

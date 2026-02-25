@@ -55,24 +55,14 @@ The coursebook scraper operates in several stages to collect comprehensive cours
 **Phase C: Data Extraction**
 The scraper handles three different response scenarios:
 
-1. **Multiple Classes (Standard Case)**:
-   - Coursebook returns a "report monkey" export ID
-   - Makes a follow-up request to `/reportmonkey/cb11-export/{report_id}/json`
-   - Extracts comprehensive class data including enrollment, location, instructors, etc.
+1. **Scrape Each Class (Standard Case)**:
+   - Coursebook request gives a list of classes
+   - Get class overview html for each class `https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog`
+   - Parse the html for all class data.
 
-2. **Single Class (Edge Case)**:
-   - No report monkey ID is generated
-   - Manually parses the HTML response using BeautifulSoup
-   - Extracts limited fields: section, title, days, times, location, instructors
-
-3. **Retry Logic**:
+2. **Retry Logic**:
    - If a request fails (network error, expired session), automatically refreshes the session token
    - Retries up to 3 times before giving up
-
-**Phase D: Instructor Netid Extraction**
-- Parses HTML to find instructor profile links
-- Extracts netIDs from URLs like `http://coursebook.utdallas.edu/search/{netid}`
-- Maps instructor names to their netIDs for the `instructor_ids` field
 
 ### 3. Deduplication & Output
 - Uses `section_address` (e.g., `acct2301.001.24f`) as a unique key
@@ -94,46 +84,42 @@ For most classes, we can get this data:
 
 ```json
     {
-        "section_address": "lit1301.001.24f",
-        "course_prefix": "lit",
-        "course_number": "1301",
-        "section": "001 ",
-        "class_number": "80970",
-        "title": "Introduction to Literature ",
-        "topic": "",
-        "enrolled_status": "Open",
-        "enrolled_current": "128",
-        "enrolled_max": "130",
-        "instructors": "Peter Ingrao",
-        "assistants": "",
-        "term": "24f",
-        "session": "1",
-        "days": "Monday, Wednesday",
-        "times": "10:00 - 11:15",
-        "times_12h": "10:00am - 11:15am",
-        "location": "JO_3.516",
-        "core_area": "Texas Core Areas 040+090 - Language, Philosophy and Culture + CAO",
+        "section_address": "acct2302.010.26s",
+        "course_prefix": "acct",
+        "course_number": "2302",
+        "section": "010",
+        "class_number": "28741",
+        "class_level": "Undergraduate",
+        "instruction_mode": "Face-to-Face",
+        "title": "Introductory Management Accounting",
+        "description": "ACCT 2302- Introductory Management Accounting(3 semester credit hours) This course helps students to build the necessary skills in the managerial use of accounting information for planning, decision making, performance evaluation, and controlling operations. The course uses a general framework for product costing systems, budgeting and variance analysis in order to benefit all students with a wide variety of career paths. A minimum grade of C is required to take upper-division ACCT courses. Prerequisite:ACCT 2301. (3-0) S",
+        "enrolled_status": "OPEN",
+        "enrolled_current": 62,
+        "enrolled_max": 63,
+        "waitlist": 0,
+        "term": "26s",
+        "days": "Tuesday, Thursday",
+        "times_12h": "1:00pm-2:15pm",
+        "location": "JSOM 2.106",
         "activity_type": "Lecture",
-        "school": "aht",
-        "dept": "ahtc",
-        "syllabus": "syl149039",
-        "textbooks": "9780593450086, 9780804172448, 9780871403315, 9780871403629, 9781538732182 "
-    }
+        "instructors": [
+            "Christopher Hes"
+        ],
+        "instructor_netids": [
+            "cah041000"
+        ],
+        "tas": [
+            "Meghana Sri Vedala"
+        ],
+        "ta_netids": [
+            "mxv200018"
+        ],
+        "school": "Naveen Jindal School of Management"
+    },
 ```
 
-However, there are TWO edge cases (bruh) that can only get this data:
-
-```json
-    {
-        "section_address": "lats6300.001.24f",
-        "course_prefix": "lats",
-        "course_number": "6300",
-        "section": "001",
-        "title": "Introduction to Latin American Studies  (3 Semester Credit Hours)",
-        "term": "24f",
-        "instructors": "Humberto Gonzalez Nunez",
-        "days": "Tuesday",
-        "times_12h": "4:00pm - 6:45pm",
-        "location": "JO 3.536"
-    }
-```
+**Possible future data:**
+- syllabus
+- textbooks
+- core_area
+- topic
