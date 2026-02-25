@@ -14,7 +14,7 @@ def process_section_data(coursebook_data):
     
     for section in coursebook_data:
         instructor_names = section.get("instructors", [])
-        instructor_ids = section.get("instructor_netids", [])
+        instructor_ids = section.get("instructor_ids", [])
         instructor_name, instructor_id = extract_first_instructor_new(instructor_names, instructor_ids) # Primary instructor
         course = f"{section['course_prefix'].upper()}{section['course_number']}"
 

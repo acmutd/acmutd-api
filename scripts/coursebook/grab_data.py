@@ -285,8 +285,8 @@ def parse_class_overview(html, section_addr):
     def parse_people():
         """Parse Instructors and TAs"""
         people = {
-            'instructors': [], 'instructor_netids': [],
-            'tas': [], 'ta_netids': []
+            'instructors': [], 'instructor_ids': [],
+            'tas': [], 'ta_ids': []
         }
         
         # Iterate all divs with id starting with 'inst-'
@@ -300,10 +300,10 @@ def parse_class_overview(html, section_addr):
             
             if "Teaching Assistant" in text_content:
                 people['tas'].append(name)
-                if net_id: people['ta_netids'].append(net_id)
+                if net_id: people['ta_ids'].append(net_id)
             else:
                 people['instructors'].append(name)
-                if net_id: people['instructor_netids'].append(net_id)
+                if net_id: people['instructor_ids'].append(net_id)
                 
         return people
 
@@ -371,7 +371,7 @@ def parse_class_overview(html, section_addr):
 
     # Missing: topic, session, schedule_combined, core_area, textbook, syllabus, dept
     # Different: school
-    # New: description, waitlist, ta_netid, 
+    # New: description, waitlist, TAs
     return {
         'section_address': section_addr,
         'course_prefix': prefix,
@@ -392,9 +392,9 @@ def parse_class_overview(html, section_addr):
         'location': schedule_data['location'],
         'activity_type': get_val("Activity Type"),
         'instructors': people_data['instructors'],
-        'instructor_netids': people_data['instructor_netids'],
+        'instructor_ids': people_data['instructor_ids'],
         'tas': people_data['tas'],
-        'ta_netids': people_data['ta_netids'],
+        'ta_ids': people_data['ta_ids'],
         'school': get_val("College")
     }
 
