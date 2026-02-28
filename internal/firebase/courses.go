@@ -16,13 +16,13 @@ func ensureSectionDocID(course types.Course, term string) string {
 		return strings.ToLower(section)
 	}
 
-	prefix := sanitizeDocID(normalizeCoursePrefix(course.CoursePrefix))
-	number := sanitizeDocID(normalizeCourseNumber(course.CourseNumber))
+	prefix := sanitizeDocID(strings.ToLower(strings.TrimSpace(course.CoursePrefix)))
+	number := sanitizeDocID(strings.ToLower(strings.TrimSpace(course.CourseNumber)))
 	section := sanitizeDocID(strings.ToLower(course.Section))
 	if section == "" {
 		section = "000"
 	}
-	normalizedTerm := sanitizeDocID(normalizeTerm(term))
+	normalizedTerm := sanitizeDocID(strings.ToLower(strings.TrimSpace(term)))
 
 	generated := fmt.Sprintf("%s%s.%s.%s", prefix, number, section, normalizedTerm)
 	generated = strings.ReplaceAll(generated, "..", ".")
@@ -38,14 +38,17 @@ type preparedCourse struct {
 	SectionID string
 }
 
-func prepareCourseForTerm(course types.Course, normalizedTerm string) (preparedCourse, bool) {
+func prepareCourseForTerm(course types.Course, term string) (preparedCourse, bool) {
+
+	normalizedTerm := strings.ToLower(strings.TrimSpace(term))
+
 	if normalizedTerm == "" {
 		return preparedCourse{}, false
 	}
 
 	course.Term = normalizedTerm
-	course.CoursePrefix = normalizeCoursePrefix(course.CoursePrefix)
-	course.CourseNumber = normalizeCourseNumber(course.CourseNumber)
+	course.CoursePrefix = strings.ToLower(strings.TrimSpace(course.CoursePrefix))
+	course.CourseNumber = strings.ToLower(strings.TrimSpace(course.CourseNumber))
 	course.Section = strings.ToLower(strings.TrimSpace(course.Section))
 
 	prefixID := sanitizeDocID(course.CoursePrefix)
@@ -88,7 +91,7 @@ func (c *Firestore) InsertClassesWithIndexes(ctx context.Context, courses []type
 	writer := c.BulkWriter(ctx)
 	defer writer.End()
 
-	normalizedTerm := normalizeTerm(term)
+	normalizedTerm := strings.ToLower(strings.TrimSpace(term))
 	if normalizedTerm == "" {
 		return
 	}
@@ -128,87 +131,127 @@ func (c *Firestore) InsertClassesWithIndexes(ctx context.Context, courses []type
 	}
 }
 
-func (c *Firestore) QueryByCourseNumber(ctx context.Context, term, coursePrefix, courseNumber string, limit, offset int) ([]types.Course, bool, error) {
-	term = normalizeTerm(term)
-	coursePrefix = normalizeCoursePrefix(coursePrefix)
-	courseNumber = normalizeCourseNumber(courseNumber)
-	if term == "" || coursePrefix == "" || courseNumber == "" {
-		return []types.Course{}, false, nil
-	}
-
-	query := c.CollectionGroup("sections").
-		Where("term", "==", term).
-		Where("course_prefix", "==", coursePrefix).
-		Where("course_number", "==", courseNumber)
-
-	return c.collectCourses(ctx, query, limit, offset)
-}
-
-func (c *Firestore) QueryByCoursePrefix(ctx context.Context, term, coursePrefix string, limit, offset int) ([]types.Course, bool, error) {
-	term = normalizeTerm(term)
-	coursePrefix = normalizeCoursePrefix(coursePrefix)
-	if term == "" || coursePrefix == "" {
-		return []types.Course{}, false, nil
-	}
-
-	query := c.CollectionGroup("sections").
-		Where("term", "==", term).
-		Where("course_prefix", "==", coursePrefix)
-
-	return c.collectCourses(ctx, query, limit, offset)
-}
-
-// GetAllCoursesByTerm returns all courses for a given term
-func (c *Firestore) GetAllCoursesByTerm(ctx context.Context, term string, limit, offset int) ([]types.Course, bool, error) {
-	term = normalizeTerm(term)
+func (c *Firestore) QueryCourses(ctx context.Context, q types.CourseQuery) ([]types.Course, bool, error) {
+	term := strings.ToLower(strings.TrimSpace(q.Term))
 	if term == "" {
 		return []types.Course{}, false, nil
 	}
 
-	query := c.CollectionGroup("sections").
-		Where("term", "==", term)
+	prefix := strings.ToLower(strings.TrimSpace(q.CoursePrefix))
+	number := strings.ToLower(strings.TrimSpace(q.CourseNumber))
+	section := strings.ToLower(strings.TrimSpace(q.Section))
+	school := strings.ToLower(strings.TrimSpace(q.School))
+	search := strings.ToLower(strings.TrimSpace(q.Search))
+	instructor := strings.ToLower(strings.TrimSpace(q.Instructor))
+	instructorID := strings.ToLower(strings.TrimSpace(q.InstructorID))
+	days := strings.ToLower(strings.TrimSpace(q.Days))
+	times := strings.TrimSpace(q.Times)
+	times12h := strings.TrimSpace(q.Times12h)
+	location := strings.ToLower(strings.TrimSpace(q.Location))
 
-	return c.collectCourses(ctx, query, limit, offset)
-}
+	query := c.CollectionGroup("sections").Where("term", "==", term)
 
-// QueryBySchool returns courses by school for a given term
-func (c *Firestore) QueryBySchool(ctx context.Context, term, school string, limit, offset int) ([]types.Course, bool, error) {
-	term = normalizeTerm(term)
-	school = normalizeSchool(school)
-	if term == "" || school == "" {
-		return []types.Course{}, false, nil
+	if prefix != "" {
+		query = query.Where("course_prefix", "==", prefix)
+	}
+	if number != "" {
+		query = query.Where("course_number", "==", number)
+	}
+	if section != "" {
+		// our firestore data sometimes has an extra space after the section for some reason
+		// this will query for both section and section with extra whitespace
+		query = query.Where("section", "in", []string{section, section + " "})
+	}
+	if school != "" {
+		query = query.Where("school", "==", school)
 	}
 
-	query := c.CollectionGroup("sections").
-		Where("term", "==", term).
-		Where("school", "==", school)
+	// Check if any manual filtering is needed (substring matching not supported by Firestore)
+	needsManualFilter := search != "" || instructor != "" || instructorID != "" || days != "" || times != "" || times12h != "" || location != ""
 
-	return c.collectCourses(ctx, query, limit, offset)
-}
-
-func (c *Firestore) GetCourseBySection(ctx context.Context, term string, prefix string, number string, section string) (*types.Course, error) {
-	term = normalizeTerm(term)
-	prefix = normalizeCoursePrefix(prefix)
-	number = normalizeCourseNumber(number)
-	section = normalizeSection(section)
-
-	id := fmt.Sprintf("%s%s.%s.%s", prefix, number, section, term)
-
-	doc, err := c.Collection("courses").Doc(prefix).Collection("numbers").Doc(number).Collection("sections").Doc(id).Get(ctx)
+	courses, hasNext, err := c.collectCourses(ctx, query, q.Limit, q.Offset, needsManualFilter)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	var course types.Course
-	if err := doc.DataTo(&course); err != nil {
-		return nil, err
+	// Apply manual filters if needed
+	if needsManualFilter {
+		var filteredCourses []types.Course
+		for _, course := range courses {
+			// Apply search filter
+			if search != "" {
+				title := strings.ToLower(course.Title)
+				topic := strings.ToLower(course.Topic)
+				instructors := strings.ToLower(course.Instructors)
+
+				if !strings.Contains(title, search) &&
+					!strings.Contains(topic, search) &&
+					!strings.Contains(instructors, search) {
+					continue
+				}
+			}
+
+			// Apply instructor filter
+			if instructor != "" && !strings.Contains(strings.ToLower(course.Instructors), instructor) {
+				continue
+			}
+
+			// Apply instructor_id filter
+			if instructorID != "" && !strings.Contains(strings.ToLower(course.InstructorIDs), instructorID) {
+				continue
+			}
+
+			// Apply days filter
+			if days != "" && !strings.Contains(strings.ToLower(course.Days), days) {
+				continue
+			}
+
+			// Apply times filter
+			if times != "" && !strings.Contains(course.Times, times) {
+				continue
+			}
+
+			// Apply times_12h filter
+			if times12h != "" && !strings.Contains(course.Times12h, times12h) {
+				continue
+			}
+
+			// Apply location filter
+			// sometimes location is "building_number" and sometimes is "building number" in firestore
+			// this checks for matches of both
+			if location != "" && !strings.Contains(strings.ReplaceAll(strings.ToLower(course.Location), "_", " "), strings.ReplaceAll(location, "_", " ")) {
+				continue
+			}
+
+			filteredCourses = append(filteredCourses, course)
+		}
+		courses = filteredCourses
+
+		// Apply pagination for manually filtered results
+		if q.Limit <= 0 {
+			return courses, false, nil
+		}
+
+		start := q.Offset
+		if start >= len(courses) {
+			return []types.Course{}, false, nil
+		}
+
+		end := q.Offset + q.Limit
+		if end > len(courses) {
+			end = len(courses)
+		}
+
+		hasNext = end < len(courses)
+		return courses[start:end], hasNext, nil
 	}
 
-	return &course, nil
+	return courses, hasNext, nil
 }
 
-func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, limit, offset int) ([]types.Course, bool, error) {
-	if limit > 0 {
+func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, limit, offset int, skipPagination bool) ([]types.Course, bool, error) {
+	// If pagination not skipped, apply pagination at the query level
+	if !skipPagination && limit > 0 {
 		query = query.Offset(offset).Limit(limit + 1)
 	}
 
@@ -232,6 +275,12 @@ func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, l
 		courses = append(courses, course)
 	}
 
+	// If pagination was skipped, return all results for further filtering
+	if skipPagination {
+		return courses, false, nil
+	}
+
+	// Check if there are more results
 	hasNext := false
 	if limit > 0 && len(courses) > limit {
 		hasNext = true
@@ -239,64 +288,4 @@ func (c *Firestore) collectCourses(ctx context.Context, query firestore.Query, l
 	}
 
 	return courses, hasNext, nil
-}
-
-// SearchCourses searches courses by title, topic, or instructor name
-func (c *Firestore) SearchCourses(ctx context.Context, term, searchQuery string, limit, offset int) ([]types.Course, bool, error) {
-	// TODO: Figure out a nicer way to do this
-	normalizedTerm := normalizeTerm(term)
-	courses, _, err := c.GetAllCoursesByTerm(ctx, normalizedTerm, 0, 0)
-	if err != nil {
-		return nil, false, err
-	}
-
-	query := strings.ToLower(strings.TrimSpace(searchQuery))
-	if query == "" {
-		if limit <= 0 {
-			return courses, false, nil
-		}
-		start := offset
-		if start >= len(courses) {
-			return []types.Course{}, false, nil
-		}
-		end := offset + limit
-		if end > len(courses) {
-			end = len(courses)
-		}
-		hasNext := end < len(courses)
-		return courses[start:end], hasNext, nil
-	}
-
-	var filteredCourses []types.Course
-
-	for _, course := range courses {
-		title := strings.ToLower(course.Title)
-		topic := strings.ToLower(course.Topic)
-		instructors := strings.ToLower(course.Instructors)
-
-		// Search in title, topic, and instructors
-		if strings.Contains(title, query) ||
-			strings.Contains(topic, query) ||
-			strings.Contains(instructors, query) {
-			filteredCourses = append(filteredCourses, course)
-		}
-	}
-
-	if limit <= 0 {
-		return filteredCourses, false, nil
-	}
-
-	start := offset
-	if start >= len(filteredCourses) {
-		return []types.Course{}, false, nil
-	}
-
-	end := offset + limit
-	if end > len(filteredCourses) {
-		end = len(filteredCourses)
-	}
-
-	hasNext := end < len(filteredCourses)
-
-	return filteredCourses[start:end], hasNext, nil
 }

@@ -162,30 +162,35 @@ curl http://localhost:8080/admin/apikeys/api-key-here \
 
 ## Course Endpoints
 
-### Get All Courses by Term
+### Get Courses
 
-**GET** `/api/v1/courses/{term}`
+**GET** `/api/v1/courses/`
 
-Retrieve all courses for a specific term.
+Retrieve courses for a specific term with optional filtering.
 
 **Headers:**
 
 - `X-API-Key`: Your API key (required)
 
-**Path Parameters:**
-
-- `term` (required): The academic term (e.g., "24f", "25s")
-
 **Query Parameters:**
 
+- `term` (required): The academic term (e.g., "24f", "25s")
 - `prefix` (optional): Filter by course prefix (e.g., "cs", "math")
 - `number` (optional): Filter by course number (e.g., "1337", "2305")
+- `section` (optional): Filter by section (e.g., "001")
+- `school` (optional): Filter by school code (e.g., "ecs", "nsm")
+- `instructor` (optional): Filter by instructor name (substring match)
+- `instructor_id` (optional): Filter by instructor ID (substring match)
+- `days` (optional): Filter by days of the week (e.g., "monday", "monday, wednesday")
+- `times` (optional): Filter by time in 24h format (e.g., "14:00 - 14:50")
+- `times_12h` (optional): Filter by time in 12h format (e.g., "2:00 PM - 2:50 PM")
+- `location` (optional): Filter by location (e.g., "SCI_1.210", supports spaces or underscores)
+- `q` (optional): Search query for title, topic, or instructor name
 
 **Response:**
 
 ```json
 {
-  "term": "2024FALL",
   "count": 150,
   "courses": [
     {
@@ -215,7 +220,9 @@ Retrieve all courses for a specific term.
       "textbooks": "Required textbook information",
       "instructor_ids": "12345"
     }
-  ]
+  ],
+  "pagination": { ... },
+  "query": { ... }
 }
 ```
 
@@ -223,91 +230,19 @@ Retrieve all courses for a specific term.
 
 ```bash
 # Get all courses for Fall 2024
-curl http://localhost:8080/api/v1/courses/24f \
+curl "http://localhost:8080/api/v1/courses/?term=24f" \
   -H "X-API-Key: your-api-key-here"
 
 # Get all CS courses for Fall 2024
-curl "http://localhost:8080/api/v1/courses/24f?prefix=cs" \
+curl "http://localhost:8080/api/v1/courses/?term=24f&prefix=cs" \
   -H "X-API-Key: your-api-key-here"
 
 # Get CS 1337 for Fall 2024
-curl "http://localhost:8080/api/v1/courses/24f?prefix=cs&number=1337" \
+curl "http://localhost:8080/api/v1/courses/?term=24f&prefix=cs&number=1337" \
   -H "X-API-Key: your-api-key-here"
 
-
-### Get Courses by Prefix
-
-**GET** `/api/v1/courses/{term}/prefix/{prefix}`
-
-Retrieve all courses with a specific prefix for a term.
-
-**Headers:**
-
-- `X-API-Key`: Your API key (required)
-
-**Path Parameters:**
-
-- `term` (required): The academic term
-- `prefix` (required): The course prefix (e.g., "CS", "MATH", "PHYS")
-
-**Response:** Same format as above, but filtered by prefix.
-
-**Example:**
-
-```bash
-curl http://localhost:8080/api/v1/courses/24f/prefix/cs \
-  -H "X-API-Key: your-api-key-here"
-```
-
-### Get Courses by Number
-
-**GET** `/api/v1/courses/{term}/prefix/{prefix}/number/{number}`
-
-Retrieve specific courses by prefix and number for a term.
-
-**Headers:**
-
-- `X-API-Key`: Your API key (required)
-
-**Path Parameters:**
-
-- `term` (required): The academic term
-- `prefix` (required): The course prefix
-- `number` (required): The course number
-
-**Response:** Same format as above, but filtered by prefix and number.
-
-**Example:**
-
-```bash
-curl http://localhost:8080/api/v1/courses/24f/prefix/cs/number/1337 \
-  -H "X-API-Key: your-api-key-here"
-```
-
-### Search Courses
-
-**GET** `/api/v1/courses/{term}/search`
-
-Search courses by title, instructor, or other text fields.
-
-**Headers:**
-
-- `X-API-Key`: Your API key (required)
-
-**Path Parameters:**
-
-- `term` (required): The academic term
-
-**Query Parameters:**
-
-- `q` (required): Search query string
-
-**Response:** Same format as above, but filtered by search query.
-
-**Example:**
-
-```bash
-curl "http://localhost:8080/api/v1/courses/24f/search?q=Computer Science" \
+# Search courses by title/instructor
+curl "http://localhost:8080/api/v1/courses/?term=24f&q=Computer Science" \
   -H "X-API-Key: your-api-key-here"
 ```
 
@@ -330,11 +265,7 @@ Retrieve all available academic terms in the database.
 ```json
 {
   "count": 3,
-  "terms": [
-    "24f",
-    "25s",
-    "23f"
-  ]
+  "terms": ["24f", "25s", "23f"]
 }
 ```
 
@@ -471,33 +402,33 @@ curl http://localhost:8080/api/v1/professors/name/john \
 
 Each course object contains the following fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `section_address` | string | Unique identifier for the course section |
-| `course_prefix` | string | Course prefix (e.g., "CS", "MATH") |
-| `course_number` | string | Course number (e.g., "1337", "2305") |
-| `section` | string | Section number (e.g., "001", "002") |
-| `class_number` | string | Unique class number |
-| `title` | string | Course title |
-| `topic` | string | Special topic (if applicable) |
-| `enrolled_status` | string | Enrollment status ("Open", "Closed", etc.) |
-| `enrolled_current` | string | Current enrollment count |
-| `enrolled_max` | string | Maximum enrollment capacity |
-| `instructors` | string | Instructor names |
-| `assistants` | string | Teaching assistant names |
-| `term` | string | Academic term |
-| `session` | string | Session type ("Regular", "Summer", etc.) |
-| `days` | string | Class days ("MW", "TR", "F", etc.) |
-| `times` | string | Class times in 24-hour format |
-| `times_12h` | string | Class times in 12-hour format |
-| `location` | string | Classroom location |
-| `core_area` | string | Core curriculum area code |
-| `activity_type` | string | Activity type ("Lecture", "Lab", etc.) |
-| `school` | string | School code |
-| `dept` | string | Department name |
-| `syllabus` | string | Syllabus URL |
-| `textbooks` | string | Textbook information |
-| `instructor_ids` | string | Instructor ID numbers |
+| Field              | Type   | Description                                |
+| ------------------ | ------ | ------------------------------------------ |
+| `section_address`  | string | Unique identifier for the course section   |
+| `course_prefix`    | string | Course prefix (e.g., "CS", "MATH")         |
+| `course_number`    | string | Course number (e.g., "1337", "2305")       |
+| `section`          | string | Section number (e.g., "001", "002")        |
+| `class_number`     | string | Unique class number                        |
+| `title`            | string | Course title                               |
+| `topic`            | string | Special topic (if applicable)              |
+| `enrolled_status`  | string | Enrollment status ("Open", "Closed", etc.) |
+| `enrolled_current` | string | Current enrollment count                   |
+| `enrolled_max`     | string | Maximum enrollment capacity                |
+| `instructors`      | string | Instructor names                           |
+| `assistants`       | string | Teaching assistant names                   |
+| `term`             | string | Academic term                              |
+| `session`          | string | Session type ("Regular", "Summer", etc.)   |
+| `days`             | string | Class days ("MW", "TR", "F", etc.)         |
+| `times`            | string | Class times in 24-hour format              |
+| `times_12h`        | string | Class times in 12-hour format              |
+| `location`         | string | Classroom location                         |
+| `core_area`        | string | Core curriculum area code                  |
+| `activity_type`    | string | Activity type ("Lecture", "Lab", etc.)     |
+| `school`           | string | School code                                |
+| `dept`             | string | Department name                            |
+| `syllabus`         | string | Syllabus URL                               |
+| `textbooks`        | string | Textbook information                       |
+| `instructor_ids`   | string | Instructor ID numbers                      |
 
 ---
 
@@ -505,35 +436,35 @@ Each course object contains the following fields:
 
 Each professor object contains the following fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `instructor_id` | string | Unique instructor identifier |
-| `normalized_coursebook_name` | string | Professor's name in standard format |
-| `original_rmp_format` | string | Professor's name as it appears on RateMyProfessors |
-| `department` | string | Department affiliation |
-| `url` | string | RateMyProfessors profile URL |
-| `quality_rating` | float64 | Overall quality rating (0-5 scale) |
-| `difficulty_rating` | float64 | Difficulty rating (0-5 scale) |
-| `would_take_again` | int | Percentage of students who would take again (0-100) |
-| `ratings_count` | int | Total number of ratings on RateMyProfessors |
-| `tags` | []string | Common tags/descriptors from student reviews |
-| `rmp_id` | string | RateMyProfessors unique identifier |
-| `overall_grade_rating` | float64 | Average grade given (GPA scale) |
-| `total_grade_count` | int | Total number of grades recorded |
-| `course_ratings` | map[string]float64 | Per-course ratings (course code → rating) |
+| Field                        | Type               | Description                                         |
+| ---------------------------- | ------------------ | --------------------------------------------------- |
+| `instructor_id`              | string             | Unique instructor identifier                        |
+| `normalized_coursebook_name` | string             | Professor's name in standard format                 |
+| `original_rmp_format`        | string             | Professor's name as it appears on RateMyProfessors  |
+| `department`                 | string             | Department affiliation                              |
+| `url`                        | string             | RateMyProfessors profile URL                        |
+| `quality_rating`             | float64            | Overall quality rating (0-5 scale)                  |
+| `difficulty_rating`          | float64            | Difficulty rating (0-5 scale)                       |
+| `would_take_again`           | int                | Percentage of students who would take again (0-100) |
+| `ratings_count`              | int                | Total number of ratings on RateMyProfessors         |
+| `tags`                       | []string           | Common tags/descriptors from student reviews        |
+| `rmp_id`                     | string             | RateMyProfessors unique identifier                  |
+| `overall_grade_rating`       | float64            | Average grade given (GPA scale)                     |
+| `total_grade_count`          | int                | Total number of grades recorded                     |
+| `course_ratings`             | map[string]float64 | Per-course ratings (course code → rating)           |
 
 ---
 
 ## Error Codes
 
-| Status Code | Description |
-|-------------|-------------|
-| 200 | Success |
-| 400 | Bad Request - Missing or invalid parameters |
-| 401 | Unauthorized - Missing or invalid API key |
-| 403 | Forbidden - Admin access required |
-| 429 | Too Many Requests - Rate limit exceeded |
-| 500 | Internal Server Error - Database or server error |
+| Status Code | Description                                      |
+| ----------- | ------------------------------------------------ |
+| 200         | Success                                          |
+| 400         | Bad Request - Missing or invalid parameters      |
+| 401         | Unauthorized - Missing or invalid API key        |
+| 403         | Forbidden - Admin access required                |
+| 429         | Too Many Requests - Rate limit exceeded          |
+| 500         | Internal Server Error - Database or server error |
 
 ---
 
@@ -551,7 +482,7 @@ The API implements rate limiting based on your API key configuration:
 
 The API supports Cross-Origin Resource Sharing (CORS) and allows requests from any origin with the following headers:
 
-- Access-Control-Allow-Origin: *
+- Access-Control-Allow-Origin: \*
 - Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
 - Access-Control-Allow-Headers: Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key
 
@@ -563,34 +494,34 @@ The API supports Cross-Origin Resource Sharing (CORS) and allows requests from a
 
 ```javascript
 // Get all CS courses for Fall 2024
-fetch('http://localhost:8080/api/v1/courses/24f?prefix=cs', {
+fetch("http://localhost:8080/api/v1/courses/?term=24f&prefix=cs", {
   headers: {
-    'X-API-Key': 'your-api-key-here'
-  }
+    "X-API-Key": "your-api-key-here",
+  },
 })
-  .then(response => response.json())
-  .then(data => console.log(data))
-  .catch(error => console.error('Error:', error));
+  .then((response) => response.json())
+  .then((data) => console.log(data))
+  .catch((error) => console.error("Error:", error));
 
 // Get professor by ID
-fetch('http://localhost:8080/api/v1/professors/id/12345', {
+fetch("http://localhost:8080/api/v1/professors/id/12345", {
   headers: {
-    'X-API-Key': 'your-api-key-here'
-  }
+    "X-API-Key": "your-api-key-here",
+  },
 })
-  .then(response => response.json())
-  .then(data => console.log(data))
-  .catch(error => console.error('Error:', error));
+  .then((response) => response.json())
+  .then((data) => console.log(data))
+  .catch((error) => console.error("Error:", error));
 
 // Get professors by name
-fetch('http://localhost:8080/api/v1/professors/name/john', {
+fetch("http://localhost:8080/api/v1/professors/name/john", {
   headers: {
-    'X-API-Key': 'your-api-key-here'
-  }
+    "X-API-Key": "your-api-key-here",
+  },
 })
-  .then(response => response.json())
-  .then(data => console.log(data))
-  .catch(error => console.error('Error:', error));
+  .then((response) => response.json())
+  .then((data) => console.log(data))
+  .catch((error) => console.error("Error:", error));
 ```
 
 ### Python (requests)
@@ -600,7 +531,7 @@ import requests
 
 # Get all CS courses for Fall 2024
 headers = {'X-API-Key': 'your-api-key-here'}
-response = requests.get('http://localhost:8080/api/v1/courses/24f',
+response = requests.get('http://localhost:8080/api/v1/courses/?term=24f',
                        params={'prefix': 'cs'},
                        headers=headers)
 data = response.json()
@@ -627,11 +558,11 @@ curl http://localhost:8080/api/v1/terms/ \
   -H "X-API-Key: your-api-key-here"
 
 # Get all courses for a term
-curl http://localhost:8080/api/v1/courses/24f \
+curl http://localhost:8080/api/v1/courses/?term=24f \
   -H "X-API-Key: your-api-key-here"
 
 # Search for courses
-curl "http://localhost:8080/api/v1/courses/24f/search?q=Computer Science" \
+curl "http://localhost:8080/api/v1/courses/?term=24f&q=Computer Science" \
   -H "X-API-Key: your-api-key-here"
 
 # Get professor by ID

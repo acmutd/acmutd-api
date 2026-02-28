@@ -26,29 +26,6 @@ func NewFirestore(ctx context.Context, app *firebase.App) (*Firestore, error) {
 	}, nil
 }
 
-// normalizeCoursePrefix normalizes a course prefix to lowercase
-func normalizeCoursePrefix(prefix string) string {
-	return strings.ToLower(strings.TrimSpace(prefix))
-}
-
-// normalizeCourseNumber normalizes a course number to lowercase
-func normalizeCourseNumber(number string) string {
-	return strings.ToLower(strings.TrimSpace(number))
-}
-
-func normalizeSection(section string) string {
-	return strings.ToLower(strings.TrimSpace(section))
-}
-
-// normalizeTerm normalizes a term value to lowercase
-func normalizeTerm(term string) string {
-	return strings.ToLower(strings.TrimSpace(term))
-}
-
-func normalizeSchool(school string) string {
-	return strings.ToLower((strings.TrimSpace(school)))
-}
-
 // sanitizeDocID sanitizes a value for use as a Firestore document ID
 func sanitizeDocID(value string) string {
 	sanitized := strings.TrimSpace(value)

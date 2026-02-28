@@ -16,7 +16,7 @@ func (c *Firestore) InsertTerms(ctx context.Context, terms []string) {
 	defer writer.End()
 
 	for _, term := range terms {
-		normalized := normalizeTerm(term)
+		normalized := strings.ToLower(strings.TrimSpace(term))
 		if normalized == "" {
 			continue
 		}
@@ -72,7 +72,7 @@ func (c *Firestore) QueryAllTerms(ctx context.Context, limit, offset int) ([]str
 
 // GetSchoolsByTerm returns all schools for a given term
 func (c *Firestore) GetSchoolsByTerm(ctx context.Context, term string) ([]string, error) {
-	term = normalizeTerm(term)
+	term = strings.ToLower(strings.TrimSpace(term))
 	if term == "" {
 		return nil, nil
 	}

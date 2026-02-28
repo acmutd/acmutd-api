@@ -92,3 +92,21 @@ type Course struct {
 	Syllabus  string `json:"syllabus" firestore:"syllabus"`   // Syllabus URL or content
 	Textbooks string `json:"textbooks" firestore:"textbooks"` // Required textbooks
 }
+
+// CourseQuery contains parameters for querying courses
+type CourseQuery struct {
+	Term         string // e.g., "23f"
+	CoursePrefix string // e.g., "cs"
+	CourseNumber string // e.g., "2305"
+	Section      string // e.g., "001"
+	School       string // School code
+	Instructor   string // Filter by instructor name
+	InstructorID string // Filter by instructor ID
+	Days         string // Filter by days (e.g., "Monday, Wednesday")
+	Times        string // Filter by times (24h format, e.g., "14:00 - 14:50")
+	Times12h     string // Filter by times (12h format, e.g., "2:00 PM - 2:50 PM")
+	Location     string // Filter by location (e.g., "SCI_1.210")
+	Search       string // Search query for title, topic, instructors
+	Limit        int    // Max results to return (0 for no limit)
+	Offset       int    // Number of results to skip
+}
