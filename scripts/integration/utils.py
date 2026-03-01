@@ -23,15 +23,7 @@ def normalize_name(name):
         return name.strip().lower()
 
 
-def extract_first_instructor(instructor_string, instructor_id_string):
-    """Extracts the first instructor's name and ID from strings."""
-    names = [normalize_name(name.strip()) for name in instructor_string.split(",")]
-    ids = [id.strip() for id in instructor_id_string.split(",")]
-    if names and ids:
-        return names[0], ids[0]
-    return None, None
-
-def extract_first_instructor_new(instructor_arr, instructor_id_arr):
+def extract_first_instructor(instructor_arr, instructor_id_arr):
     """Extracts the first instructor's name from arrays of names and IDs."""
     if instructor_arr and instructor_id_arr and len(instructor_arr) > 0 and len(instructor_id_arr) > 0:
         return normalize_name(instructor_arr[0]), instructor_id_arr[0].strip()

@@ -23,20 +23,6 @@ def find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, 
     """Finds instructor ID using section address matching (more reliable approach)."""
     # build section key: e.g., acct2301.002
     key = f"{subject}{catalog_nbr}.{section}".lower()
-    
-    # find the section for our given key in the coursebook data
-    for section_address, section_data in section_lookup.items():
-        if section_address.startswith(key):
-            # retrieve the id of the instructor for this section
-            instructor_ids = section_data.get('instructor_ids', '').split(',')
-            return instructor_ids[0].strip() if instructor_ids and instructor_ids[0].strip() else ''
-    
-    return ''
-
-def find_instructor_id_by_section_address_new(section_lookup, subject, catalog_nbr, section):
-    """Finds instructor ID using section address matching (more reliable approach)."""
-    # build section key: e.g., acct2301.002
-    key = f"{subject}{catalog_nbr}.{section}".lower()
 
     # find the section for our given key in the coursebook data
     for section_address, section_data in section_lookup.items():
@@ -157,7 +143,7 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                 enhanced_row["instructor_name_normalized"] = ""
 
                 # Try section address lookup (more reliable method)
-                instructor_id = find_instructor_id_by_section_address_new(section_lookup, subject, catalog_nbr, section)
+                instructor_id = find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section)
                 #print(f"Instructor Id: {instructor_id} for {subject} {catalog_nbr} section {section}")
                 enhanced_row["instructor_id"] = instructor_id
 

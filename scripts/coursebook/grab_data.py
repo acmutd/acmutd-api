@@ -144,99 +144,6 @@ def make_monkey_request(session_id, report_id):
     return monkey_response
 
 
-def get_instructor_netids(data):
-    # Parse the string as JSON to get the HTML part
-    data_json = json.loads(data)
-    html_content = data_json["sethtml"]["#sr"]
-
-    # Parse the HTML using BeautifulSoup
-    soup = BeautifulSoup(html_content, 'html.parser')
-
-    # Extract the netid field
-    rows = soup.find_all('tr', class_='cb-row')
-    netids = []
-    names = []
-    for row in rows:
-        matches = re.findall(
-            r'http:\/\/coursebook.utdallas.edu\/search\/(.*?)" title="(.*?)"', str(row))
-        if len(matches) == 0:
-            netids.append('')
-            names.append('')
-            continue
-        match_zipped = list(zip(*matches))
-        netids.append(', '.join(match_zipped[0]))
-        names.append(', '.join(match_zipped[1]))
-
-    return netids, names
-
-
-# If only one class is found, no report monkey thing
-# is generated, which means we have to MANUALLY find the data smh
-def get_single_class(data, term, filter):
-    # Parse the string as JSON to get the HTML part
-    data_json = json.loads(data)
-    html_content = data_json["sethtml"]["#sr"]
-
-    # Parse the HTML using BeautifulSoup
-    soup = BeautifulSoup(html_content, 'html.parser')
-
-    # Extract the required fields
-    class_section = get_text_or_none(soup.find_all('a', class_='stopbubble'))
-    class_title = get_text_or_none(soup.find_all(
-        'td', style="line-height: 1.1rem;")).strip()
-    schedule_day = get_text_or_none(soup.find_all(
-        'span', class_='clstbl__resultrow__day'))
-    schedule_time = get_text_or_none(soup.find_all(
-        'span', class_='clstbl__resultrow__time'))
-    location = get_text_or_none(soup.find_all(
-        'div', class_='clstbl__resultrow__location'))
-
-    # Parse prefix, number, section from class_section
-    # Example: "ACCT 2301.001"
-    prefix, number, section = '', '', ''
-    try:
-        parts = class_section.split()
-        if len(parts) == 2:
-            prefix = parts[0]
-            num_sec = parts[1].split('.')
-            if len(num_sec) == 2:
-                number = num_sec[0]
-                section = num_sec[1]
-    except Exception:
-        print(f"Failed to parse class section: {class_section}")
-
-    section_addr = f"{prefix.lower()}{number}.{section}{term}"
-
-    # EDGE EDGE CASE
-    # For all "utd" prefixes, the course number is always "STAB" even though it doesn't show in the UI...
-    if (filter == 'utd' or prefix == 'utd') and number == '':
-        number = 'stab'
-        # might be section_addr = 'utdstab' + section_addr
-        section_addr = f"utdstab.{section}{term}"
-
-    print(f"Parsed single class: {prefix} {number}.{section}")
-
-    # Get the instructor netid
-    instructor_netids, instructors = get_instructor_netids(data)
-    if len(instructor_netids) == 0:
-        instructors = ['']
-        instructor_netids = ['']
-
-    # Return the extracted values
-    return {
-        'section_address': section_addr,
-        'course_prefix': prefix,
-        'course_number': number,
-        'section': section,
-        'title': class_title.replace(r'\(.*\)', ''),
-        'term': term,
-        'instructors': instructors[0],
-        'instructor_ids': instructor_netids[0],
-        'days': schedule_day.replace(' & ', ','),
-        'times_12h': schedule_time,
-        'location': location
-    }
-
 # Get extra class overview detail for waitlist)
 def get_class_detail(session_id, section_address, data_req, div_id):
     url = "https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog"
@@ -432,27 +339,6 @@ def get_class_overview(data, session_id):
     return all_courses
 
 
-def manually_parse_html_data(html_content, term, filter_value, all_data):
-    """
-    Manually extracts and processes class data from raw HTML content.
-    """
-    try:
-        data_json = json.loads(html_content)
-        html_content = data_json["sethtml"]["#sr"]
-    except json.JSONDecodeError:
-        pass
-
-    soup = BeautifulSoup(html_content, 'html.parser')
-    course_links = soup.find_all('a', class_='stopbubble')
-    for link in course_links:
-        parent_row = link.find_parent('tr')
-        if parent_row:
-            mini_html = str(parent_row)
-            mini_json = json.dumps({"sethtml": {"#sr": mini_html}})
-            class_data = get_single_class(mini_json, term, filter_value)
-            all_data[class_data['section_address']] = class_data
-
-
 def get_text_or_none(out):
     if not out:
         return ""
@@ -548,53 +434,6 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                         for d in class_overview:
                             all_data[d['section_address']] = d
                     
-                    break
-
-                    # try to get the report monkey endpoint to get the JSON data
-                    print(
-                        f'\tFound {items} classes for filters {new_filters}. Attempting to get report...')
-                    matches = re.findall(
-                        r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
-                    report_data = []
-
-                    if matches:
-                        report_id = matches[-1]
-
-                        try:
-                            monkey_response, session_id = make_request_with_retry(
-                                make_monkey_request, session_id, report_id)
-                            new_data = monkey_response.json()
-                            report_data = new_data.get('report_data', [])
-
-                        except json.JSONDecodeError:
-                            print(
-                                f'\tFailed to get report monkey data for {new_filters}: Expecting value: line 1 column 1 (char 0). Falling back to HTML parsing.')
-
-                        # if the report data is empty or missing then we scrape the html from coursebook, happens for certain reports of size 2-3 sometimes
-                        if not report_data:
-                            print(
-                                '\tReport monkey returned no classes, manually extracting each class from original HTML...')
-                            manually_parse_html_data(response.text, term, new_filters.get(
-                                'prefix', new_filters.get('school')), all_data)
-                        else:
-                            # If the report data is valid, process it
-                            print(
-                                f'\tSuccessfully retrieved {len(report_data)} classes from report.')
-                            ids, names = get_instructor_netids(response.text)
-                            for j, d in enumerate(report_data):
-                                d['instructors'] = names[j] if j < len(
-                                    names) else ''
-                                d['instructor_ids'] = ids[j] if j < len(
-                                    ids) else ''
-                                all_data[d['section_address']] = d
-                    else:
-                        # if the report is missing, we have to manually scrape the html from coursebook, happens when there is only 1 class found
-                        print(
-                            f'\tFailed to find report ID from the response. Manually extracting...')
-                        manually_parse_html_data(response.text, term, new_filters.get(
-                            'prefix', new_filters.get('school')), all_data)
-
-                    # Break the while loop if a valid response was processed
                     break
 
                 except Exception as e:

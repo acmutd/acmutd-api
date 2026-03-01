@@ -5,7 +5,7 @@ Handles the aggregation of grade distributions across semesters.
 
 import csv
 import os
-from utils import extract_first_instructor_new, normalize_name, extract_first_instructor
+from utils import normalize_name, extract_first_instructor
 
 
 def process_section_data(coursebook_data):
@@ -15,7 +15,7 @@ def process_section_data(coursebook_data):
     for section in coursebook_data:
         instructor_names = section.get("instructors", [])
         instructor_ids = section.get("instructor_ids", [])
-        instructor_name, instructor_id = extract_first_instructor_new(instructor_names, instructor_ids) # Primary instructor
+        instructor_name, instructor_id = extract_first_instructor(instructor_names, instructor_ids) # Primary instructor
         course = f"{section['course_prefix'].upper()}{section['course_number']}"
 
         if instructor_name:
