@@ -105,13 +105,13 @@ For most classes, we can get this data:
         "instructors": [
             "Christopher Hes"
         ],
-        "instructor_netids": [
+        "instructor_ids": [
             "cah041000"
         ],
         "tas": [
             "Meghana Sri Vedala"
         ],
-        "ta_netids": [
+        "ta_ids": [
             "mxv200018"
         ],
         "school": "Naveen Jindal School of Management"

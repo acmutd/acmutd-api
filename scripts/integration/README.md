@@ -70,7 +70,7 @@ The integration process follows a sequential pipeline:
 
 **Instructor-to-Course Mapping**
 - Parses `instructors` and `instructor_ids` fields from coursebook sections
-- Extracts the first instructor from comma-separated lists
+- Extracts the first instructor from instructor list
 - Normalizes instructor names for consistent matching
 - Groups sections by instructor, tracking which courses each teaches
 - Handles instructors who teach multiple courses or have multiple IDs
