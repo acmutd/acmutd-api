@@ -24,8 +24,14 @@ def normalize_name(name):
 
 
 def extract_first_instructor(instructor_arr, instructor_id_arr):
-    """Extracts the first instructor's name from arrays of names and IDs."""
-    if instructor_arr and instructor_id_arr and len(instructor_arr) > 0 and len(instructor_id_arr) > 0:
+    """Extracts the first instructor's name from arrays or CSV strings of names and IDs."""
+    # Normalize to lists if CSV strings
+    if isinstance(instructor_arr, str):
+        instructor_arr = instructor_arr.split(",") if instructor_arr else []
+    if isinstance(instructor_id_arr, str):
+        instructor_id_arr = instructor_id_arr.split(",") if instructor_id_arr else []
+
+    if instructor_arr and instructor_id_arr:
         return normalize_name(instructor_arr[0]), instructor_id_arr[0].strip()
     return None, None
 

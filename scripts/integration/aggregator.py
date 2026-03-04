@@ -13,9 +13,21 @@ def process_section_data(coursebook_data):
     professor_name_map = {} # key: profname, value: list of {instructor_id, [list of courses]}
     
     for section in coursebook_data:
-        instructor_names = section.get("instructors", [])
-        instructor_ids = section.get("instructor_ids", [])
-        instructor_name, instructor_id = extract_first_instructor(instructor_names, instructor_ids) # Primary instructor
+        instructor_names = section.get("instructors", "")
+        instructor_ids = section.get("instructor_ids", "")
+
+        # Handle both CSV strings and array formats
+        if isinstance(instructor_names, list):
+            instructor_names = instructor_names
+        else:
+            instructor_names = instructor_names.split(",") if instructor_names else []
+
+        if isinstance(instructor_ids, list):
+            instructor_ids = instructor_ids
+        else:
+            instructor_ids = instructor_ids.split(",") if instructor_ids else []
+
+        instructor_name, instructor_id = extract_first_instructor(instructor_names, instructor_ids)  # Primary instructor
         course = f"{section['course_prefix'].upper()}{section['course_number']}"
 
         if instructor_name:

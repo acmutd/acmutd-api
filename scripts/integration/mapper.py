@@ -21,14 +21,14 @@ def create_section_lookup(coursebook_data):
 
 def find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section):
     """Finds instructor ID using section address matching (more reliable approach)."""
-    # build section key: e.g., acct2301.002
     key = f"{subject}{catalog_nbr}.{section}".lower()
 
-    # find the section for our given key in the coursebook data
     for section_address, section_data in section_lookup.items():
         if section_address.startswith(key):
-            # retrieve the id of the instructor for this section
-            instructor_ids = section_data.get('instructor_ids', [])
+            instructor_ids = section_data.get('instructor_ids', '')
+            # Normalize to list if CSV string
+            if isinstance(instructor_ids, str):
+                instructor_ids = instructor_ids.split(",") if instructor_ids else []
             return instructor_ids[0].strip() if instructor_ids and instructor_ids[0].strip() else ''
     
     return ''
