@@ -219,9 +219,12 @@ def parse_class_overview(html, section_addr):
         meeting_div = soup.find('div', class_='courseinfo__meeting-item--multiple')
         if not meeting_div:
             print(f"meeting div not found for {section_addr}")
-            return { 'days': "", 'times_12h': "", 'location': ""}
+            return { 'days': [], 'times_12h': "", 'location': ""}
 
         lines = list(meeting_div.stripped_strings)
+
+        days_raw = lines[1] if len(lines) > 1 else None                                                                                                                                                                                        
+        days = [d.strip() for d in days_raw.split(',')] if days_raw else []   
         
         loc_link = meeting_div.find('a', href=re.compile(r"locator\.utdallas\.edu"))
 
@@ -237,7 +240,7 @@ def parse_class_overview(html, section_addr):
                 location = lines[3] if len(lines) > 3 else ""
 
         return {
-            'days': lines[1] if len(lines) > 1 else None,
+            'days': days,
             'times_12h': lines[2] if len(lines) > 2 else None,
             'location': location
         }
@@ -334,6 +337,7 @@ def get_class_overview(data, session_id):
         print(f"({i+1}/{len(rows)}): overview for section_address: {section_address}")
 
         class_overview = parse_class_overview(overview_html, section_address)
+        print(f"{class_overview}")
         all_courses.append(class_overview)
 
     return all_courses
