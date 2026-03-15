@@ -182,11 +182,49 @@ def parse_class_overview(html, section_addr):
     
     # Some sections are separated by th title then td content
     def get_val(label):
-        """Finds label text (in th or td) and returns the next td's text"""
-        tag = soup.find(string=re.compile(re.escape(label), re.I))
-        if tag:
-            val_cell = tag.parent.find_next('td') 
-            return val_cell.get_text(strip=True) if val_cell else None
+        """Finds label in header cells and returns the next td's text"""
+        for th in soup.find_all('th'):
+            if re.search(re.escape(label), th.get_text(), re.I):
+                val_cell = th.find_next('td')
+                return val_cell.get_text(strip=True) if val_cell else None
+        for td in soup.find_all('td', class_='courseinfo__classsubtable__th'):
+            if re.search(re.escape(label), td.get_text(), re.I):
+                val_cell = td.find_next_sibling('td')
+                return val_cell.get_text(strip=True) if val_cell else None
+        return None
+
+    def get_list_val(label):
+        """Finds label in header cells and returns a list of <li> text values from the next td."""
+        for th in soup.find_all('th'):
+            if re.search(re.escape(label), th.get_text(), re.I):
+                val_cell = th.find_next('td')
+                if val_cell:
+                    return [li.get_text(strip=True) for li in val_cell.find_all('li')]
+        return []
+
+    def get_school():
+        for th in soup.find_all('th'):
+            if re.search(r'College', th.get_text(), re.I):
+                td = th.find_next('td')
+                if td:
+                    name = td.get_text(strip=True)
+                    a = td.find('a', href=True)
+                    school_id = None
+                    if a:
+                        match = re.search(r'https?://(\w+)\.utdallas', a['href'])
+                        school_id = match.group(1) if match else None
+                    return name, school_id
+        return None, None
+
+    def get_syllabus():
+        for th in soup.find_all('th'):
+            if re.search(r'Syllabus', th.get_text(), re.I):
+                td = th.find_next('td')
+                if td:
+                    a = td.find('a', href=True)
+                    if a:
+                        match = re.search(r'/(syl\w+)', a['href'])
+                        return match.group(1) if match else None
         return None
 
     def parse_people():
@@ -276,18 +314,17 @@ def parse_class_overview(html, section_addr):
         people_data = parse_people()
         schedule_data = parse_location_and_schedule()
         class_num_raw = get_val("Class/Course Number")
+        school_name, school_id = get_school()
     except Exception:
         print(f"Failed to parse")
 
-    # Missing: topic, session, schedule_combined, core_area, textbook, syllabus, dept
-    # Different: school
-    # New: description, waitlist, TAs
+    # Missing: topic, textbook?
     return {
         'section_address': section_addr,
         'course_prefix': prefix,
         'course_number': number,
         'section': section,
-        'class_number': class_num_raw.split('/')[0].strip() if class_num_raw else None,
+        'class_course_number': class_num_raw if class_num_raw else None,
         'class_level': get_val("Class Level"),
         'instruction_mode': get_val("Instruction Mode"),
         'title': soup.find('td', class_='courseinfo__overviewtable__coursetitle').get_text(strip=True),
@@ -301,11 +338,21 @@ def parse_class_overview(html, section_addr):
         'times_12h': schedule_data['times_12h'],
         'location': schedule_data['location'],
         'activity_type': get_val("Activity Type"),
+        'semester_credit_hours': get_val("Semester Credit Hours"),
+        'core': get_val("Core"),
+        'grading': get_val("Grading"),
+        'session_type': get_val("Session Type"),
+        'add_consent': get_val("Add Consent"),
+        'enrollment_reqs': get_list_val("Enrollment Reqs"),
+        'class_attributes': get_list_val("Class Attributes"),
+        'class_notes': get_val("Class Notes"),
         'instructors': people_data['instructors'],
         'instructor_ids': people_data['instructor_ids'],
         'tas': people_data['tas'],
         'ta_ids': people_data['ta_ids'],
-        'school': get_val("College")
+        'school': school_name,
+        'school_id': school_id,
+        'syllabus': get_syllabus()
     }
 
 # we have to click the overview button on each class to get waitlist cause report monkey doesn't give that info
@@ -335,9 +382,11 @@ def get_class_overview(data, session_id):
         session_id = new_session_id
 
         print(f"({i+1}/{len(rows)}): overview for section_address: {section_address}")
+        # with open(f"{section_address}.html", "w", encoding="utf-8") as f:
+        #     f.write(overview_html)
 
         class_overview = parse_class_overview(overview_html, section_address)
-        print(f"{class_overview}")
+        # print(f"{class_overview}")
         all_courses.append(class_overview)
 
     return all_courses
@@ -390,7 +439,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
 
         for i, option_value in enumerate(options):
             new_filters = filters.copy()
-            # option_value = "cp_biol"
+            # option_value = "cp_ecs"
             new_filters[current_filter_type] = option_value
             print(
                 f"[{i+1}/{len(options)}] Processing {current_filter_type}: {option_value}")
@@ -428,11 +477,11 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
                     items = int(items[0]) if items else 0
 
-                    # NEW PARSE METHOD
                     class_overview = get_class_overview(response.text, session_id)
 
                     if class_overview:
-                        # with open(f"{option_value}.json", "w", encoding="utf-8") as f:
+                        # os.makedirs(term, exist_ok=True)
+                        # with open(f"{term}/{option_value}.json", "w", encoding="utf-8") as f:
                         #     json.dump(class_overview, f, indent=4)
 
                         for d in class_overview:
