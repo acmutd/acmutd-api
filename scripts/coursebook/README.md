@@ -18,6 +18,8 @@ PASSWORD=[Your password]
 
 > For CLASS_TERMS, we need to use the format specified by Coursebook. It should be a 2-digit year number followed by either 'f', 's', or 'u' for "fall", "spring", "summer" (eg. 23f, 24s, 24u, 24f). Note that the terms can listed be in any order.
 
+> Optional: RESUME_FILTER, resume from a specific filter. Note that if the filter doesn't appear in prefix or school filters it will start from the beginning.
+
 Then, run the code with:
 
 ```bash
@@ -53,11 +55,11 @@ The coursebook scraper operates in several stages to collect comprehensive cours
 - Uses authenticated session cookies to access protected data
 
 **Phase C: Data Extraction**
-The scraper handles three different response scenarios:
+The scraper handles two different response scenarios:
 
-1. **Scrape Each Class (Standard Case)**:
+1. **Scrape Each Class**:
    - Coursebook request gives a list of classes
-   - Get class overview html for each class `https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog`
+   - Get class overview html for each class in the list `https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog`
    - Parse the html for all class data.
 
 2. **Retry Logic**:
@@ -65,14 +67,16 @@ The scraper handles three different response scenarios:
    - Retries up to 3 times before giving up
 
 ### 3. Deduplication & Output
-- Uses `section_address` (e.g., `acct2301.001.24f`) as a unique key
-- Automatically deduplicates classes found across multiple filter combinations
-- Writes final JSON array to `out/classes_{term}.json`
+1. After each list is completed, saves output to `{term}/{filter}.json`. If further filtered by day or level, results are saved to `{term}/{filter}/{sub_filter}.json`.
+
+2. After all filters are completed, it combines all JSON in `{term}/`
+    - Uses `section_address` (e.g., `acct2301.001.24f`) as a unique key
+    - Automatically deduplicates classes found across multiple filter combinations
+    - Writes final JSON array to `out/classes_{term}.json`
 
 ### Key Technical Details
 - **Session Management**: The PTGSESSID cookie has a limited lifetime (~100 requests). The scraper detects failures and automatically re-authenticates.
 - **Filter Strategy**: Two-pass approach (prefix + school) ensures all classes are captured, even those that might be missed by a single filter type.
-- **Edge Case Handling**: Special logic for single-class results and courses with prefix "utd" (which have hidden course number "STAB").
 
 ## Output
 
@@ -80,46 +84,57 @@ The output will be placed in the root of the project, in a file called `classes_
 
 ### Output Format
 
-For most classes, we can get this data:
-
 ```json
     {
-        "section_address": "acct2302.010.26s",
+        "section_address": "acct2301.001.25s",
         "course_prefix": "acct",
-        "course_number": "2302",
-        "section": "010",
-        "class_number": "28741",
+        "course_number": "2301",
+        "section": "001",
+        "class_course_number": "26595 / 000061",
         "class_level": "Undergraduate",
         "instruction_mode": "Face-to-Face",
-        "title": "Introductory Management Accounting",
-        "description": "ACCT 2302- Introductory Management Accounting(3 semester credit hours) This course helps students to build the necessary skills in the managerial use of accounting information for planning, decision making, performance evaluation, and controlling operations. The course uses a general framework for product costing systems, budgeting and variance analysis in order to benefit all students with a wide variety of career paths. A minimum grade of C is required to take upper-division ACCT courses. Prerequisite:ACCT 2301. (3-0) S",
+        "title": "Introductory Financial Accounting",
+        "description": "ACCT 2301- Introductory Financial Accounting(3 semester credit hours) An introduction to financial reporting designed to create an awareness of the accounting concepts and principles for preparing the three basic financial statements: the income statement, balance sheet, and statement of cash flows. A minimum grade of C is required to take upper-division ACCT courses. (3-0) S",
         "enrolled_status": "OPEN",
-        "enrolled_current": 62,
-        "enrolled_max": 63,
+        "enrolled_current": 64,
+        "enrolled_max": 67,
         "waitlist": 0,
-        "term": "26s",
-        "days": "Tuesday, Thursday",
-        "times_12h": "1:00pm-2:15pm",
-        "location": "JSOM 2.106",
+        "term": "25s",
+        "days": [
+            "Tuesday",
+            "Thursday"
+        ],
+        "times_12h": "8:30am-9:45am",
+        "location": "JSOM 2.717",
         "activity_type": "Lecture",
+        "semester_credit_hours": "3",
+        "core": null,
+        "grading": "Graded - Undergraduate",
+        "session_type": "Regular Academic Session",
+        "add_consent": "No Consent",
+        "enrollment_reqs": [
+            "ACCT 2301 Repeat Restriction"
+        ],
+        "class_attributes": [],
+        "class_notes": null,
         "instructors": [
-            "Christopher Hes"
+            "Jieying Zhang",
+            "Naim Bugra Ozel"
         ],
         "instructor_ids": [
-            "cah041000"
+            "jxz146230",
+            "nbo150030"
         ],
         "tas": [
-            "Meghana Sri Vedala"
+            "Galymzhan Tazhibayev",
+            "Dipta Banik"
         ],
         "ta_ids": [
-            "mxv200018"
+            "gxt230023",
+            "dxb220047"
         ],
-        "school": "Naveen Jindal School of Management"
+        "school": "Naveen Jindal School of Management",
+        "school_id": "jsom",
+        "syllabus": "syl152552"
     },
 ```
-
-**Possible future data:**
-- syllabus
-- textbooks
-- core_area
-- topic
