@@ -420,7 +420,7 @@ def make_request_with_retry(request_func, session_id, *args, **kwargs):
     raise Exception(f'Failed to complete request after {max_retries} retries.')
 
 
-def process_filters(session_id, term, all_data, dropdown_options, filters, filter_order):
+def process_filters(session_id, term, all_data, dropdown_options, filters, filter_order, resume_filter=None):
     """
     Recursively processes filters to scrape course data.
     """
@@ -437,12 +437,20 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
         options_key = FILTER_TYPES_MAP.get(current_filter_type)
         options = dropdown_options.get(options_key, [])
 
-        for i, option_value in enumerate(options):
+        # Optional: resume from a specific filter value
+        if resume_filter and not filters:
+            print(f"Resuming from filter: {resume_filter}")
+            resume_index = options.index(resume_filter)
+            process_options = options[resume_index:]
+        else:
+            resume_index = 0
+            process_options = options
+
+        for i, option_value in enumerate(process_options):
             new_filters = filters.copy()
-            # option_value = "cp_ecs"
             new_filters[current_filter_type] = option_value
             print(
-                f"[{i+1}/{len(options)}] Processing {current_filter_type}: {option_value}")
+                f"[{resume_index+i+1}/{len(options)}] Processing {current_filter_type}: {option_value}")
 
             while True:
                 try:
@@ -480,13 +488,12 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     class_overview = get_class_overview(response.text, session_id)
 
                     if class_overview:
-                        # os.makedirs(term, exist_ok=True)
-                        # with open(f"{term}/{option_value}.json", "w", encoding="utf-8") as f:
-                        #     json.dump(class_overview, f, indent=4)
+                        filter_path = os.path.join(term, *filters.values()) if filters else term
+    
+                        os.makedirs(filter_path, exist_ok=True)
+                        with open(os.path.join(filter_path, f"{option_value}.json"), "w", encoding="utf-8") as f:
+                            json.dump(class_overview, f, indent=4)
 
-                        for d in class_overview:
-                            all_data[d['section_address']] = d
-                    
                     break
 
                 except Exception as e:
@@ -496,7 +503,36 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
         return session_id
 
 
-def scrape(session_id, term):
+def combine_data(all_data, schools, prefixes, term):
+    # Get first level directory names and .json files
+    present = set()
+    if os.path.exists(term):
+        for entry in os.listdir(term):
+            full_path = os.path.join(term, entry)
+            if os.path.isdir(full_path):
+                present.add(entry)
+            elif entry.endswith(".json"):
+                present.add(os.path.splitext(entry)[0])
+
+    missing_schools = [s for s in schools if s not in present]
+    missing_prefixes = [p for p in prefixes if p not in present]
+
+    if missing_schools or missing_prefixes:
+        print(f"Missing data for prefixes: {missing_prefixes})")
+        print(f"Missing data for schools: {missing_schools}")
+        return missing_prefixes, missing_schools
+
+    for root, dirs, files in os.walk(term):
+        for file in files:
+            if file.endswith(".json"):
+                with open(os.path.join(root, file), "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                for d in data:
+                    all_data[d['section_address']] = d
+
+    return missing_prefixes, missing_schools
+    
+def scrape(session_id, term, resume_filter):
     all_data = {}
     dropdown_ids = ['combobox_cp', 'combobox_col',
                     'combobox_days', 'combobox_clevel']
@@ -521,12 +557,28 @@ def scrape(session_id, term):
 
     print(f'Found {len(prefixes)} prefixes, {len(schools)} schools, {len(days)} days, and {len(levels)} levels')
 
-    print("processing prefixes")
-    session_id = process_filters(session_id, term, all_data, dropdown_options, {}, [
-                                 'prefix', 'day', 'level'])
-    print("processing schools")
-    session_id = process_filters(session_id, term, all_data, dropdown_options, {}, [
-                                 'school', 'day', 'level'])
+    if resume_filter and resume_filter not in prefixes and resume_filter not in schools:
+        print(f"RESUME_FILTER '{resume_filter}' not found in prefixes or schools. Starting from beginning.")
+        resume_filter = None
+
+    
+    if resume_filter not in schools:
+        print("Processing prefixes...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {}, 
+                                ['prefix', 'day', 'level'], 
+                                resume_filter if resume_filter in prefixes else None)
+    else:
+        print("Skipping prefix processing...")
+    
+    print("Processing schools...")
+    session_id = process_filters(session_id, term, all_data, dropdown_options, {}, 
+                                ['school', 'day', 'level'],
+                                resume_filter if resume_filter in schools else None)
+
+    missing_prefixes, missing_schools = combine_data(all_data, schools, prefixes, term)
+    if missing_prefixes or missing_schools:
+        print("Missing filters. Exiting.")
+        return
 
     final_data = list(all_data.values())
     print(f'\tGot {len(final_data)} unique classes for term {term}')
