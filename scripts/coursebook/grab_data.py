@@ -177,6 +177,7 @@ def get_class_detail(session_id, section_address, data_req, div_id):
 
     return response.text
 
+
 def parse_class_overview(html, section_addr):
     soup = BeautifulSoup(html, "html.parser")
     
@@ -215,6 +216,16 @@ def parse_class_overview(html, section_addr):
                         school_id = match.group(1) if match else None
                     return name, school_id
         return None, None
+    
+    def get_enrolled_status(status_text):
+        if not status_text:
+            return 'CLOSED'
+        if 'CANCELLED' in status_text:
+            return 'CANCELLED'
+        if 'OPEN' in status_text:
+            return 'OPEN'
+        return 'CLOSED'
+
 
     def get_syllabus():
         for th in soup.find_all('th'):
@@ -226,7 +237,8 @@ def parse_class_overview(html, section_addr):
                         match = re.search(r'/(syl\w+)', a['href'])
                         return match.group(1) if match else None
         return None
-
+    
+    
     def parse_people():
         """Parse Instructors and TAs"""
         people = {
@@ -252,12 +264,16 @@ def parse_class_overview(html, section_addr):
                 
         return people
 
+
     def parse_location_and_schedule():
         """Gets location code and schedule details"""
         meeting_div = soup.find('div', class_='courseinfo__meeting-item--multiple')
         if not meeting_div:
-            print(f"meeting div not found for {section_addr}")
-            return { 'days': [], 'times_12h': "", 'location': ""}
+            if status_row_text and 'CANCELLED' in status_row_text:
+                print(f"Cancelled class (no meeting): {section_addr}")
+            else:
+                print(f"Warning: meeting div not found for {section_addr}")
+            return {'days': [], 'times_12h': "", 'location': ""}
 
         lines = list(meeting_div.stripped_strings)
 
@@ -309,8 +325,10 @@ def parse_class_overview(html, section_addr):
     
     class_num_raw = ""
     people_data = {}
-    schedule_data = {}
-    try: 
+    schedule_data = {'days': [], 'times_12h': None, 'location': ""}
+    school_name = None
+    school_id = None
+    try:
         people_data = parse_people()
         schedule_data = parse_location_and_schedule()
         class_num_raw = get_val("Class/Course Number")
@@ -329,7 +347,7 @@ def parse_class_overview(html, section_addr):
         'instruction_mode': get_val("Instruction Mode"),
         'title': soup.find('td', class_='courseinfo__overviewtable__coursetitle').get_text(strip=True),
         'description': get_val("Description"),
-        'enrolled_status': 'OPEN' if 'OPEN' in status_row_text else 'CLOSED',
+        'enrolled_status': get_enrolled_status(status_row_text),
         'enrolled_current': curr,
         'enrolled_max': curr + avail,
         'waitlist': wait,
@@ -354,6 +372,7 @@ def parse_class_overview(html, section_addr):
         'school_id': school_id,
         'syllabus': get_syllabus()
     }
+
 
 # we have to click the overview button on each class to get waitlist cause report monkey doesn't give that info
 def get_class_overview(data, session_id):
@@ -420,11 +439,13 @@ def make_request_with_retry(request_func, session_id, *args, **kwargs):
 
     raise Exception(f'Failed to complete request after {max_retries} retries.')
 
+
 def save_json(data, filters, option_value, term):
     filter_path = os.path.join(term, *filters.values()) if filters else term
     os.makedirs(filter_path, exist_ok=True)
     with open(os.path.join(filter_path, f"{option_value}.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
+
 
 def process_filters(session_id, term, all_data, dropdown_options, filters, filter_order, resume=None):
     """
