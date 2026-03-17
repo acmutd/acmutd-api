@@ -18,7 +18,7 @@ def main():
         print("PASSWORD environmental variable not set.")
         exit(1)
 
-    resume_filter = environ['RESUME_FILTER'] if 'RESUME_FILTER' in environ else None
+    resume_filter = environ['RESUME'] if 'RESUME' in environ else None
 
     # Get the terms (comma-separated)
     terms = [term.strip() for term in environ['CLASS_TERMS'].split(',') if term.strip()]

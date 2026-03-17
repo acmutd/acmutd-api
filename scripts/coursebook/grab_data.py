@@ -381,7 +381,8 @@ def get_class_overview(data, session_id):
 
         session_id = new_session_id
 
-        print(f"({i+1:len(str(len(rows)))}/{len(rows)}): {section_address}")
+        width = len(str(len(rows)))
+        print(f"({i+1:0{width}}/{len(rows)}): {section_address}")
         # with open(f"{section_address}.html", "w", encoding="utf-8") as f:
         #     f.write(overview_html)
 
@@ -425,7 +426,7 @@ def save_json(data, filters, option_value, term):
     with open(os.path.join(filter_path, f"{option_value}.json"), "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
 
-def process_filters(session_id, term, all_data, dropdown_options, filters, filter_order, resume_filter=None):
+def process_filters(session_id, term, all_data, dropdown_options, filters, filter_order, resume=None):
     """
     Recursively processes filters to scrape course data.
     """
@@ -443,9 +444,9 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
         options = dropdown_options.get(options_key, [])
 
         # Optional: resume from a specific filter value
-        if resume_filter and not filters:
-            print(f"Resuming from filter: {resume_filter}")
-            resume_index = options.index(resume_filter)
+        if resume and not filters:
+            print(f"Resuming from filter: {resume}")
+            resume_index = options.index(resume)
             process_options = options[resume_index:]
         else:
             resume_index = 0
@@ -530,7 +531,8 @@ def combine_data(all_data, schools, prefixes, term):
 
     return missing_prefixes, missing_schools
     
-def scrape(session_id, term, resume_filter):
+
+def scrape(session_id, term, resume):
     all_data = {}
     dropdown_ids = ['combobox_cp', 'combobox_col',
                     'combobox_days', 'combobox_clevel']
@@ -555,25 +557,30 @@ def scrape(session_id, term, resume_filter):
 
     print(f'Found {len(prefixes)} prefixes, {len(schools)} schools, {len(days)} days, and {len(levels)} levels')
 
-    if resume_filter and resume_filter not in prefixes and resume_filter not in schools:
-        print(f"RESUME_FILTER '{resume_filter}' not found in prefixes or schools. Starting from beginning.")
-        resume_filter = None
-    else:
-        print(f"RESUME_FILTER set to '{resume_filter}'. Resuming from '{resume_filter}'.")
-    
-    if resume_filter not in schools:
-        print("Processing prefixes...")
-        session_id = process_filters(session_id, term, all_data, dropdown_options, {}, 
-                                ['prefix', 'day', 'level'], 
-                                resume_filter if resume_filter in prefixes else None)
-    else:
-        print("Skipping prefix processing...")
-    
-    print("Processing schools...")
-    session_id = process_filters(session_id, term, all_data, dropdown_options, {}, 
-                                ['school', 'day', 'level'],
-                                resume_filter if resume_filter in schools else None)
 
+    if resume == "combine":
+        print("RESUME set to 'combine'. Skipping scraping...")
+    else:
+        if resume not in prefixes and resume not in schools:
+            print(f"RESUME '{resume}' not found in prefixes or schools. Starting from beginning.")
+            resume = None
+        elif resume:
+            print(f"RESUME set to '{resume}'. Resuming from '{resume}'.")
+
+        if resume not in schools:
+            print("Processing prefixes...")
+            session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                        ['prefix', 'day', 'level'],
+                                        resume if resume in prefixes else None)
+        else:
+            print("Skipping prefix processing...")
+
+        print("Processing schools...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                    ['school', 'day', 'level'],
+                                    resume if resume in schools else None)
+
+    print(f"Combining data for {term}...")
     missing_prefixes, missing_schools = combine_data(all_data, schools, prefixes, term)
     if missing_prefixes or missing_schools:
         print("Missing filters. Exiting.")
