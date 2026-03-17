@@ -381,7 +381,7 @@ def get_class_overview(data, session_id):
 
         session_id = new_session_id
 
-        print(f"({i+1}/{len(rows)}): overview for section_address: {section_address}")
+        print(f"({i+1:len(str(len(rows)))}/{len(rows)}): {section_address}")
         # with open(f"{section_address}.html", "w", encoding="utf-8") as f:
         #     f.write(overview_html)
 
@@ -419,6 +419,11 @@ def make_request_with_retry(request_func, session_id, *args, **kwargs):
 
     raise Exception(f'Failed to complete request after {max_retries} retries.')
 
+def save_json(data, filters, option_value, term):
+    filter_path = os.path.join(term, *filters.values()) if filters else term
+    os.makedirs(filter_path, exist_ok=True)
+    with open(os.path.join(filter_path, f"{option_value}.json"), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
 
 def process_filters(session_id, term, all_data, dropdown_options, filters, filter_order, resume_filter=None):
     """
@@ -471,6 +476,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     # if no items are found, continue to the next option
                     if '(no items found)' in response.text:
                         print('\tNo items found.')
+                        save_json([], filters, option_value, term)
                         break
 
                     # if the query is too large, we break it down with more filters recursively by moving down the filter order
@@ -481,18 +487,10 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                             session_id, term, all_data, dropdown_options, new_filters, remaining_filter_order)
                         break
 
-                    # check if there is only one item (report monkey download link not generated) --> nvm i handled this with the if/else below
-                    items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
-                    items = int(items[0]) if items else 0
-
                     class_overview = get_class_overview(response.text, session_id)
 
                     if class_overview:
-                        filter_path = os.path.join(term, *filters.values()) if filters else term
-    
-                        os.makedirs(filter_path, exist_ok=True)
-                        with open(os.path.join(filter_path, f"{option_value}.json"), "w", encoding="utf-8") as f:
-                            json.dump(class_overview, f, indent=4)
+                        save_json(class_overview, filters, option_value, term)
 
                     break
 
@@ -560,7 +558,8 @@ def scrape(session_id, term, resume_filter):
     if resume_filter and resume_filter not in prefixes and resume_filter not in schools:
         print(f"RESUME_FILTER '{resume_filter}' not found in prefixes or schools. Starting from beginning.")
         resume_filter = None
-
+    else:
+        print(f"RESUME_FILTER set to '{resume_filter}'. Resuming from '{resume_filter}'.")
     
     if resume_filter not in schools:
         print("Processing prefixes...")
