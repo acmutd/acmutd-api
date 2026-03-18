@@ -181,17 +181,21 @@ def get_class_detail(session_id, section_address, data_req, div_id):
 def parse_class_overview(html, section_addr):
     soup = BeautifulSoup(html, "html.parser")
     
+    def clean(text):
+        # some classes use ∅ (U+2205) for some reason...
+        return None if text == '\u2205' else text
+
     # Some sections are separated by th title then td content
     def get_val(label):
         """Finds label in header cells and returns the next td's text"""
         for th in soup.find_all('th'):
             if re.search(re.escape(label), th.get_text(), re.I):
                 val_cell = th.find_next('td')
-                return val_cell.get_text(strip=True) if val_cell else None
+                return clean(val_cell.get_text(strip=True)) if val_cell else None
         for td in soup.find_all('td', class_='courseinfo__classsubtable__th'):
             if re.search(re.escape(label), td.get_text(), re.I):
                 val_cell = td.find_next_sibling('td')
-                return val_cell.get_text(strip=True) if val_cell else None
+                return clean(val_cell.get_text(strip=True)) if val_cell else None
         return None
 
     def get_list_val(label):
@@ -302,7 +306,7 @@ def parse_class_overview(html, section_addr):
     # Parse Section Address
     try:
         parts = section_addr.split('.')
-        match = re.match(r"([A-Za-z]+)(\d+)", parts[0])
+        match = re.match(r"([A-Za-z]+)(.+)", parts[0])
         prefix = match.group(1)
         number = match.group(2)
         section = parts[1]
