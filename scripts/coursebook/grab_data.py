@@ -2,6 +2,8 @@ import requests
 import re
 import json
 import os
+import time
+from datetime import datetime
 from bs4 import BeautifulSoup
 from login import get_cookie
 
@@ -490,6 +492,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
             print(
                 f"[{resume_index+i+1}/{len(options)}] Processing {current_filter_type}: {option_value}")
 
+            timeout = 60
             while True:
                 try:
                     print(f"Making request with filters: {new_filters}")
@@ -525,10 +528,15 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     if class_overview:
                         save_json(class_overview, filters, option_value, term)
 
+                    timeout = 60  # reset on success
                     break
 
                 except Exception as e:
-                    print(f'Failed to get data for filters {new_filters}: {e}')
+                    start_time = datetime.now().strftime('%H:%M:%S')
+                    print(f'Failed to get data for filters: {new_filters} (term: {term}): {e}')
+                    print(f'Waiting {timeout}s before retry (started at {start_time})...')
+                    time.sleep(timeout)
+                    timeout *= 2
                     print('Attempting to get a new session token...')
                     session_id = get_cookie()
         return session_id
