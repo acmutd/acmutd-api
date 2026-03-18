@@ -306,9 +306,16 @@ def parse_class_overview(html, section_addr):
     # Parse Section Address
     try:
         parts = section_addr.split('.')
-        match = re.match(r"([A-Za-z]+)(.+)", parts[0])
-        prefix = match.group(1)
-        number = match.group(2)
+        course_id = parts[0]
+        if re.search(r'\d', course_id):
+            # Normal case: split at first digit (e.g. acct2301, mech6v49)
+            match = re.match(r"([A-Za-z]+)(\d.*)", course_id)
+            prefix = match.group(1)
+            number = match.group(2)
+        else:
+            # all letter identifier: utd prefix (e.g. utdexcm)
+            prefix = 'utd'
+            number = course_id[3:]
         section = parts[1]
         term = parts[2]
     except Exception:
