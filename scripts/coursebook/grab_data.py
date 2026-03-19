@@ -146,7 +146,7 @@ def make_monkey_request(session_id, report_id):
     return monkey_response
 
 
-# Get extra class overview detail for waitlist)
+# Get extra class overview detail
 def get_class_detail(session_id, section_address, data_req, div_id):
     url = "https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog"
 
@@ -537,8 +537,18 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     print(f'Waiting {timeout}s before retry (started at {start_time})...')
                     time.sleep(timeout)
                     timeout *= 2
+
                     print('Attempting to get a new session token...')
-                    session_id = get_cookie()
+                    while True:
+                        try:
+                            session_id = get_cookie()
+                            break
+                        except Exception as e:
+                            start_time = datetime.now().strftime('%H:%M:%S')
+                            print(f'Failed to get a new session token: {e}')
+                            print(f'Waiting {timeout}s before retry (started at {start_time})...')
+                            time.sleep(timeout)
+                            timeout *= 2
         return session_id
 
 
