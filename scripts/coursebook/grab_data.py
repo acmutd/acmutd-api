@@ -24,6 +24,9 @@ FILTER_TYPES_MAP = {
     'level': DROPDOWN_LEVELS_ID,
 }
 
+MAX_TIMEOUT = 1800  # 30 minutes
+INITIAL_TIMEOUT = 60
+
 
 def get_latest_term():
     try:
@@ -431,24 +434,43 @@ def get_text_or_none(out):
     return out[0].text.strip()
 
 
+def timeout_sleep(timeout):
+    """
+    Sleep for timeout seconds, double the next timeout (capped at MAX_TIMEOUT).
+    """
+    start_time = datetime.now().strftime('%H:%M:%S')
+    print(f'Waiting {timeout}s before retry (started at {start_time})...')
+    time.sleep(timeout)
+    return min(timeout * 2, MAX_TIMEOUT)
+
+
+def get_cookie_with_timeout(timeout=INITIAL_TIMEOUT):
+    """
+    Keep trying to get a session cookie with increasing timeout.
+    """
+    while True:
+        try:
+            return get_cookie(), timeout
+        except Exception as e:
+            print(f'Failed to get a new session token: {e}')
+            timeout = timeout_sleep(timeout)
+
+
 def make_request_with_retry(request_func, session_id, *args, **kwargs):
     """
     Wraps a request function and retries on failure, refreshing the session ID.
     """
     max_retries = 3
-    retries = 0
     current_session_id = session_id
 
-    while retries < max_retries:
+    for attempt in range(1, max_retries + 1):
         try:
             response = request_func(current_session_id, *args, **kwargs)
             return response, current_session_id
-        except (requests.exceptions.RequestException, Exception) as e:
-            print(
-                f'An error occurred: {e}. Retrying with a new session token...')
-            retries += 1
+        except Exception as e:
+            print(f'An error occurred: {e}. Retrying with a new session token...')
             current_session_id = get_cookie()
-            print(f'Attempt {retries}/{max_retries} with new session ID.')
+            print(f'Attempt {attempt}/{max_retries} with new session ID.')
 
     raise Exception(f'Failed to complete request after {max_retries} retries.')
 
@@ -492,7 +514,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
             print(
                 f"[{resume_index+i+1}/{len(options)}] Processing {current_filter_type}: {option_value}")
 
-            timeout = 60
+            timeout = INITIAL_TIMEOUT
             while True:
                 try:
                     print(f"Making request with filters: {new_filters}")
@@ -528,27 +550,15 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     if class_overview:
                         save_json(class_overview, filters, option_value, term)
 
-                    timeout = 60  # reset on success
+                    timeout = INITIAL_TIMEOUT
                     break
 
                 except Exception as e:
-                    start_time = datetime.now().strftime('%H:%M:%S')
                     print(f'Failed to get data for filters: {new_filters} (term: {term}): {e}')
-                    print(f'Waiting {timeout}s before retry (started at {start_time})...')
-                    time.sleep(timeout)
-                    timeout *= 2
-
+                    timeout = timeout_sleep(timeout)
                     print('Attempting to get a new session token...')
-                    while True:
-                        try:
-                            session_id = get_cookie()
-                            break
-                        except Exception as e:
-                            start_time = datetime.now().strftime('%H:%M:%S')
-                            print(f'Failed to get a new session token: {e}')
-                            print(f'Waiting {timeout}s before retry (started at {start_time})...')
-                            time.sleep(timeout)
-                            timeout *= 2
+                    session_id, timeout = get_cookie_with_timeout(timeout)
+
         return session_id
 
 
@@ -610,25 +620,31 @@ def scrape(session_id, term, resume):
 
     if resume == "combine":
         print("RESUME set to 'combine'. Skipping scraping...")
-    else:
-        if resume not in prefixes and resume not in schools:
-            print(f"RESUME '{resume}' not found in prefixes or schools. Starting from beginning.")
-            resume = None
-        elif resume:
-            print(f"RESUME set to '{resume}'. Resuming from '{resume}'.")
 
-        if resume not in schools:
-            print("Processing prefixes...")
-            session_id = process_filters(session_id, term, all_data, dropdown_options, {},
-                                        ['prefix', 'day', 'level'],
-                                        resume if resume in prefixes else None)
-        else:
-            print("Skipping prefix processing...")
-
+    elif resume in prefixes:
+        print(f"Resuming from prefix '{resume}'.")
+        print("Processing prefixes...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                    ['prefix', 'day', 'level'], resume)
         print("Processing schools...")
         session_id = process_filters(session_id, term, all_data, dropdown_options, {},
-                                    ['school', 'day', 'level'],
-                                    resume if resume in schools else None)
+                                    ['school', 'day', 'level'])
+
+    elif resume in schools:
+        print(f"Resuming from school '{resume}'. Skipping prefix processing...")
+        print("Processing schools...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                    ['school', 'day', 'level'], resume)
+
+    else:
+        if resume:
+            print(f"RESUME '{resume}' not found in prefixes or schools. Starting from beginning.")
+        print("Processing prefixes...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                    ['prefix', 'day', 'level'])
+        print("Processing schools...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                    ['school', 'day', 'level'])
 
     print(f"Combining data for {term}...")
     missing_prefixes, missing_schools = combine_data(all_data, schools, prefixes, term)
