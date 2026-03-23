@@ -18,6 +18,8 @@ def main():
         print("PASSWORD environmental variable not set.")
         exit(1)
 
+    resume_filter = environ['RESUME'] if 'RESUME' in environ else None
+
     # Get the terms (comma-separated)
     terms = [term.strip() for term in environ['CLASS_TERMS'].split(',') if term.strip()]
 
@@ -27,7 +29,7 @@ def main():
     # Loop over each term and scrape data
     for term in terms:
         print(f"Scraping data for term: {term}")
-        scrape(session_id, term)
+        scrape(session_id, term, resume_filter)
 
 if __name__ == '__main__':
     main()

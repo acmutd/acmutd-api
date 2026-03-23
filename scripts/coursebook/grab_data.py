@@ -2,6 +2,8 @@ import requests
 import re
 import json
 import os
+import time
+from datetime import datetime
 from bs4 import BeautifulSoup
 from login import get_cookie
 
@@ -144,119 +146,283 @@ def make_monkey_request(session_id, report_id):
     return monkey_response
 
 
-def get_instructor_netids(data):
-    # Parse the string as JSON to get the HTML part
-    data_json = json.loads(data)
-    html_content = data_json["sethtml"]["#sr"]
+# Get extra class overview detail
+def get_class_detail(session_id, section_address, data_req, div_id):
+    url = "https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog"
 
-    # Parse the HTML using BeautifulSoup
-    soup = BeautifulSoup(html_content, 'html.parser')
+    headers = {
+        'accept': '*/*',
+        'accept-language': 'en-US,en;q=0.9',
+        'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'cookie': f'PTGSESSID={session_id}',
+        'origin': 'https://coursebook.utdallas.edu',
+        'priority': 'u=1, i',
+        'referer': 'https://coursebook.utdallas.edu/guidedsearch',
+        'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Linux"',
+        'sec-fetch-dest': 'empty',
+        'sec-fetch-mode': 'cors',
+        'sec-fetch-site': 'same-origin',
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'x-requested-with': 'XMLHttpRequest',
+    }
+    
+    data = {
+        "id": section_address,
+        "req": data_req,
+        "action": "info",
+        "div": div_id
+    }
 
-    # Extract the netid field
-    rows = soup.find_all('tr', class_='cb-row')
-    netids = []
-    names = []
-    for row in rows:
-        matches = re.findall(
-            r'http:\/\/coursebook.utdallas.edu\/search\/(.*?)" title="(.*?)"', str(row))
-        if len(matches) == 0:
-            netids.append('')
-            names.append('')
-            continue
-        match_zipped = list(zip(*matches))
-        netids.append(', '.join(match_zipped[0]))
-        names.append(', '.join(match_zipped[1]))
+    response = requests.post(url, headers=headers, data=data, timeout=12)
 
-    return netids, names
+    return response.text
 
 
-# If only one class is found, no report monkey thing
-# is generated, which means we have to MANUALLY find the data smh
-def get_single_class(data, term, filter):
-    # Parse the string as JSON to get the HTML part
-    data_json = json.loads(data)
-    html_content = data_json["sethtml"]["#sr"]
+def parse_class_overview(html, section_addr):
+    soup = BeautifulSoup(html, "html.parser")
+    
+    def clean(text):
+        # some classes use ∅ (U+2205) for some reason...
+        return None if text == '\u2205' else text
 
-    # Parse the HTML using BeautifulSoup
-    soup = BeautifulSoup(html_content, 'html.parser')
+    # Some sections are separated by th title then td content
+    def get_val(label):
+        """Finds label in header cells and returns the next td's text"""
+        for th in soup.find_all('th'):
+            if re.search(re.escape(label), th.get_text(), re.I):
+                val_cell = th.find_next('td')
+                return clean(val_cell.get_text(strip=True)) if val_cell else None
+        for td in soup.find_all('td', class_='courseinfo__classsubtable__th'):
+            if re.search(re.escape(label), td.get_text(), re.I):
+                val_cell = td.find_next_sibling('td')
+                return clean(val_cell.get_text(strip=True)) if val_cell else None
+        return None
 
-    # Extract the required fields
-    class_section = get_text_or_none(soup.find_all('a', class_='stopbubble'))
-    class_title = get_text_or_none(soup.find_all(
-        'td', style="line-height: 1.1rem;")).strip()
-    schedule_day = get_text_or_none(soup.find_all(
-        'span', class_='clstbl__resultrow__day'))
-    schedule_time = get_text_or_none(soup.find_all(
-        'span', class_='clstbl__resultrow__time'))
-    location = get_text_or_none(soup.find_all(
-        'div', class_='clstbl__resultrow__location'))
+    def get_list_val(label):
+        """Finds label in header cells and returns a list of <li> text values from the next td."""
+        for th in soup.find_all('th'):
+            if re.search(re.escape(label), th.get_text(), re.I):
+                val_cell = th.find_next('td')
+                if val_cell:
+                    return [li.get_text(strip=True) for li in val_cell.find_all('li')]
+        return []
 
-    # Parse prefix, number, section from class_section
-    # Example: "ACCT 2301.001"
-    prefix, number, section = '', '', ''
+    def get_school():
+        for th in soup.find_all('th'):
+            if re.search(r'College', th.get_text(), re.I):
+                td = th.find_next('td')
+                if td:
+                    name = td.get_text(strip=True)
+                    a = td.find('a', href=True)
+                    school_id = None
+                    if a:
+                        match = re.search(r'https?://(\w+)\.utdallas', a['href'])
+                        school_id = match.group(1) if match else None
+                    return name, school_id
+        return None, None
+    
+    def get_enrolled_status(status_text):
+        if not status_text:
+            return 'CLOSED'
+        if 'CANCELLED' in status_text:
+            return 'CANCELLED'
+        if 'OPEN' in status_text:
+            return 'OPEN'
+        return 'CLOSED'
+
+
+    def get_syllabus():
+        for th in soup.find_all('th'):
+            if re.search(r'Syllabus', th.get_text(), re.I):
+                td = th.find_next('td')
+                if td:
+                    a = td.find('a', href=True)
+                    if a:
+                        match = re.search(r'/(syl\w+)', a['href'])
+                        return match.group(1) if match else None
+        return None
+    
+    
+    def parse_people():
+        """Parse Instructors and TAs"""
+        people = {
+            'instructors': [], 'instructor_ids': [],
+            'tas': [], 'ta_ids': []
+        }
+        
+        # Iterate all divs with id starting with 'inst-'
+        for div in soup.select("div[id^='inst-']"):
+            text_content = div.get_text(separator="・", strip=True)
+            name = text_content.split("・")[0].strip()
+            
+            # Parse netid from mailto link
+            email_link = div.find("a", href=re.compile("mailto:"))
+            net_id = email_link['href'].replace('mailto:', '').split('@')[0] if email_link else ""
+            
+            if "Teaching Assistant" in text_content:
+                people['tas'].append(name)
+                if net_id: people['ta_ids'].append(net_id)
+            else:
+                people['instructors'].append(name)
+                if net_id: people['instructor_ids'].append(net_id)
+                
+        return people
+
+
+    def parse_location_and_schedule():
+        """Gets location code and schedule details"""
+        meeting_div = soup.find('div', class_='courseinfo__meeting-item--multiple')
+        if not meeting_div:
+            if status_row_text and 'CANCELLED' in status_row_text:
+                print(f"Cancelled class (no meeting): {section_addr}")
+            else:
+                print(f"Warning: meeting div not found for {section_addr}")
+            return {'days': [], 'times_12h': "", 'location': ""}
+
+        lines = list(meeting_div.stripped_strings)
+
+        days_raw = lines[1] if len(lines) > 1 else None                                                                                                                                                                                        
+        days = [d.strip() for d in days_raw.split(',')] if days_raw else []   
+        
+        loc_link = meeting_div.find('a', href=re.compile(r"locator\.utdallas\.edu"))
+
+        if loc_link:
+            location = loc_link.get_text(strip=True)
+        else:
+            # Fallback for when there is no link ("See instructor for room assignment")
+            map_div = meeting_div.find('div', class_='courseinfo__map')
+            if map_div and map_div.get_text(strip=True):
+                location = map_div.get_text(strip=True)
+            else:
+                # just grab the 4th line of text if it exists
+                location = lines[3] if len(lines) > 3 else ""
+
+        return {
+            'days': days,
+            'times_12h': lines[2] if len(lines) > 2 else None,
+            'location': location
+        }
+    
+    # Parse Section Address
     try:
-        parts = class_section.split()
-        if len(parts) == 2:
-            prefix = parts[0]
-            num_sec = parts[1].split('.')
-            if len(num_sec) == 2:
-                number = num_sec[0]
-                section = num_sec[1]
+        parts = section_addr.split('.')
+        course_id = parts[0]
+        if re.search(r'\d', course_id):
+            # Normal case: split at first digit (e.g. acct2301, mech6v49)
+            match = re.match(r"([A-Za-z]+)(\d.*)", course_id)
+            prefix = match.group(1)
+            number = match.group(2)
+        else:
+            # all letter identifier: utd prefix (e.g. utdexcm)
+            prefix = 'utd'
+            number = course_id[3:]
+        section = parts[1]
+        term = parts[2]
     except Exception:
-        print(f"Failed to parse class section: {class_section}")
+        print(f"Failed to parse section address: {section_addr}")
+        prefix = number = section = term = ""
 
-    section_addr = f"{prefix.lower()}{number}.{section}{term}"
+    # Enrollment
+    curr = 0
+    avail = 0
+    wait = 0
+    status_row_text = get_val("Status")
+    try: 
+        curr = int(re.search(r'Enrolled Total:\s*(-?\d+)', status_row_text).group(1)) if "Enrolled Total" in status_row_text else 0
+        avail = int(re.search(r'Available Seats:\s*(-?\d+)', status_row_text).group(1)) if "Available Seats" in status_row_text else 0
+        wait = int(re.search(r'Waitlist:\s*(-?\d+)', status_row_text).group(1)) if "Waitlist" in status_row_text else 0
+    except Exception:
+        print(f"Failed to parse enrollment info for {section_addr}: '{status_row_text}'")
+    
+    class_num_raw = ""
+    people_data = {}
+    schedule_data = {'days': [], 'times_12h': None, 'location': ""}
+    school_name = None
+    school_id = None
+    try:
+        people_data = parse_people()
+        schedule_data = parse_location_and_schedule()
+        class_num_raw = get_val("Class/Course Number")
+        school_name, school_id = get_school()
+    except Exception:
+        print(f"Failed to parse")
 
-    # EDGE EDGE CASE
-    # For all "utd" prefixes, the course number is always "STAB" even though it doesn't show in the UI...
-    if (filter == 'utd' or prefix == 'utd') and number == '':
-        number = 'stab'
-        # might be section_addr = 'utdstab' + section_addr
-        section_addr = f"utdstab.{section}{term}"
-
-    print(f"Parsed single class: {prefix} {number}.{section}")
-
-    # Get the instructor netid
-    instructor_netids, instructors = get_instructor_netids(data)
-    if len(instructor_netids) == 0:
-        instructors = ['']
-        instructor_netids = ['']
-
-    # Return the extracted values
+    # Missing: topic, textbook?
     return {
         'section_address': section_addr,
         'course_prefix': prefix,
         'course_number': number,
         'section': section,
-        'title': class_title.replace(r'\(.*\)', ''),
+        'class_course_number': class_num_raw if class_num_raw else None,
+        'class_level': get_val("Class Level"),
+        'instruction_mode': get_val("Instruction Mode"),
+        'title': soup.find('td', class_='courseinfo__overviewtable__coursetitle').get_text(strip=True),
+        'description': get_val("Description"),
+        'enrolled_status': get_enrolled_status(status_row_text),
+        'enrolled_current': curr,
+        'enrolled_max': curr + avail,
+        'waitlist': wait,
         'term': term,
-        'instructors': instructors[0],
-        'instructor_ids': instructor_netids[0],
-        'days': schedule_day.replace(' & ', ','),
-        'times_12h': schedule_time,
-        'location': location
+        'days': schedule_data['days'],
+        'times_12h': schedule_data['times_12h'],
+        'location': schedule_data['location'],
+        'activity_type': get_val("Activity Type"),
+        'semester_credit_hours': get_val("Semester Credit Hours"),
+        'core': get_val("Core"),
+        'grading': get_val("Grading"),
+        'session_type': get_val("Session Type"),
+        'add_consent': get_val("Add Consent"),
+        'enrollment_reqs': get_list_val("Enrollment Reqs"),
+        'class_attributes': get_list_val("Class Attributes"),
+        'class_notes': get_val("Class Notes"),
+        'instructors': people_data['instructors'],
+        'instructor_ids': people_data['instructor_ids'],
+        'tas': people_data['tas'],
+        'ta_ids': people_data['ta_ids'],
+        'school': school_name,
+        'school_id': school_id,
+        'syllabus': get_syllabus()
     }
 
 
-def manually_parse_html_data(html_content, term, filter_value, all_data):
-    """
-    Manually extracts and processes class data from raw HTML content.
-    """
-    try:
-        data_json = json.loads(html_content)
-        html_content = data_json["sethtml"]["#sr"]
-    except json.JSONDecodeError:
-        pass
-
+# we have to click the overview button on each class to get waitlist cause report monkey doesn't give that info
+def get_class_overview(data, session_id):
+    data_json = json.loads(data)
+    html_content = data_json["sethtml"]["#sr"]
     soup = BeautifulSoup(html_content, 'html.parser')
-    course_links = soup.find_all('a', class_='stopbubble')
-    for link in course_links:
-        parent_row = link.find_parent('tr')
-        if parent_row:
-            mini_html = str(parent_row)
-            mini_json = json.dumps({"sethtml": {"#sr": mini_html}})
-            class_data = get_single_class(mini_json, term, filter_value)
-            all_data[class_data['section_address']] = class_data
+
+    rows = soup.find_all('tr', class_='cb-row')
+
+    all_courses = []
+    print(f"Getting overview for {len(rows)} classes")
+    for i, row in enumerate(rows):
+        section_address = row.get("data-id")
+        data_req = row.get("data-req") # needed in request for overview
+        row_id = row.get("id")
+        div_id = f"{row_id}childcontent"
+        
+        overview_html, new_session_id = make_request_with_retry(
+            get_class_detail, 
+            session_id, 
+            section_address, 
+            data_req, 
+            div_id
+        )
+
+        session_id = new_session_id
+
+        width = len(str(len(rows)))
+        print(f"({i+1:0{width}}/{len(rows)}): {section_address}")
+        # with open(f"{section_address}.html", "w", encoding="utf-8") as f:
+        #     f.write(overview_html)
+
+        class_overview = parse_class_overview(overview_html, section_address)
+        # print(f"{class_overview}")
+        all_courses.append(class_overview)
+
+    return all_courses
 
 
 def get_text_or_none(out):
@@ -287,7 +453,14 @@ def make_request_with_retry(request_func, session_id, *args, **kwargs):
     raise Exception(f'Failed to complete request after {max_retries} retries.')
 
 
-def process_filters(session_id, term, all_data, dropdown_options, filters, filter_order):
+def save_json(data, filters, option_value, term):
+    filter_path = os.path.join(term, *filters.values()) if filters else term
+    os.makedirs(filter_path, exist_ok=True)
+    with open(os.path.join(filter_path, f"{option_value}.json"), "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=4)
+
+
+def process_filters(session_id, term, all_data, dropdown_options, filters, filter_order, resume=None):
     """
     Recursively processes filters to scrape course data.
     """
@@ -304,12 +477,22 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
         options_key = FILTER_TYPES_MAP.get(current_filter_type)
         options = dropdown_options.get(options_key, [])
 
-        for i, option_value in enumerate(options):
+        # Optional: resume from a specific filter value
+        if resume and not filters:
+            print(f"Resuming from filter: {resume}")
+            resume_index = options.index(resume)
+            process_options = options[resume_index:]
+        else:
+            resume_index = 0
+            process_options = options
+
+        for i, option_value in enumerate(process_options):
             new_filters = filters.copy()
             new_filters[current_filter_type] = option_value
             print(
-                f"[{i+1}/{len(options)}] Processing {current_filter_type}: {option_value}")
+                f"[{resume_index+i+1}/{len(options)}] Processing {current_filter_type}: {option_value}")
 
+            timeout = 60
             while True:
                 try:
                     print(f"Making request with filters: {new_filters}")
@@ -329,6 +512,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     # if no items are found, continue to the next option
                     if '(no items found)' in response.text:
                         print('\tNo items found.')
+                        save_json([], filters, option_value, term)
                         break
 
                     # if the query is too large, we break it down with more filters recursively by moving down the filter order
@@ -339,65 +523,66 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                             session_id, term, all_data, dropdown_options, new_filters, remaining_filter_order)
                         break
 
-                    # check if there is only one item (report monkey download link not generated) --> nvm i handled this with the if/else below
-                    items = re.findall(r'(\d+)\s*item(?:s)?', response.text)
-                    items = int(items[0]) if items else 0
+                    class_overview = get_class_overview(response.text, session_id)
 
-                    # try to get the report monkey endpoint to get the JSON data
-                    print(
-                        f'\tFound {items} classes for filters {new_filters}. Attempting to get report...')
-                    matches = re.findall(
-                        r'\/reportmonkey\\\/cb11-export\\\/(.*?)\\\"', response.text)
-                    report_data = []
+                    if class_overview:
+                        save_json(class_overview, filters, option_value, term)
 
-                    if matches:
-                        report_id = matches[-1]
-
-                        try:
-                            monkey_response, session_id = make_request_with_retry(
-                                make_monkey_request, session_id, report_id)
-                            new_data = monkey_response.json()
-                            report_data = new_data.get('report_data', [])
-
-                        except json.JSONDecodeError:
-                            print(
-                                f'\tFailed to get report monkey data for {new_filters}: Expecting value: line 1 column 1 (char 0). Falling back to HTML parsing.')
-
-                        # if the report data is empty or missing then we scrape the html from coursebook, happens for certain reports of size 2-3 sometimes
-                        if not report_data:
-                            print(
-                                '\tReport monkey returned no classes, manually extracting each class from original HTML...')
-                            manually_parse_html_data(response.text, term, new_filters.get(
-                                'prefix', new_filters.get('school')), all_data)
-                        else:
-                            # If the report data is valid, process it
-                            print(
-                                f'\tSuccessfully retrieved {len(report_data)} classes from report.')
-                            ids, names = get_instructor_netids(response.text)
-                            for j, d in enumerate(report_data):
-                                d['instructors'] = names[j] if j < len(
-                                    names) else ''
-                                d['instructor_ids'] = ids[j] if j < len(
-                                    ids) else ''
-                                all_data[d['section_address']] = d
-                    else:
-                        # if the report is missing, we have to manually scrape the html from coursebook, happens when there is only 1 class found
-                        print(
-                            f'\tFailed to find report ID from the response. Manually extracting...')
-                        manually_parse_html_data(response.text, term, new_filters.get(
-                            'prefix', new_filters.get('school')), all_data)
-
-                    # Break the while loop if a valid response was processed
+                    timeout = 60  # reset on success
                     break
 
                 except Exception as e:
-                    print(f'Failed to get data for filters {new_filters}: {e}')
+                    start_time = datetime.now().strftime('%H:%M:%S')
+                    print(f'Failed to get data for filters: {new_filters} (term: {term}): {e}')
+                    print(f'Waiting {timeout}s before retry (started at {start_time})...')
+                    time.sleep(timeout)
+                    timeout *= 2
+
                     print('Attempting to get a new session token...')
-                    session_id = get_cookie()
+                    while True:
+                        try:
+                            session_id = get_cookie()
+                            break
+                        except Exception as e:
+                            start_time = datetime.now().strftime('%H:%M:%S')
+                            print(f'Failed to get a new session token: {e}')
+                            print(f'Waiting {timeout}s before retry (started at {start_time})...')
+                            time.sleep(timeout)
+                            timeout *= 2
         return session_id
 
 
-def scrape(session_id, term):
+def combine_data(all_data, schools, prefixes, term):
+    # Get first level directory names and .json files
+    present = set()
+    if os.path.exists(term):
+        for entry in os.listdir(term):
+            full_path = os.path.join(term, entry)
+            if os.path.isdir(full_path):
+                present.add(entry)
+            elif entry.endswith(".json"):
+                present.add(os.path.splitext(entry)[0])
+
+    missing_schools = [s for s in schools if s not in present]
+    missing_prefixes = [p for p in prefixes if p not in present]
+
+    if missing_schools or missing_prefixes:
+        print(f"Missing data for prefixes: {missing_prefixes})")
+        print(f"Missing data for schools: {missing_schools}")
+        return missing_prefixes, missing_schools
+
+    for root, dirs, files in os.walk(term):
+        for file in files:
+            if file.endswith(".json"):
+                with open(os.path.join(root, file), "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                for d in data:
+                    all_data[d['section_address']] = d
+
+    return missing_prefixes, missing_schools
+    
+
+def scrape(session_id, term, resume):
     all_data = {}
     dropdown_ids = ['combobox_cp', 'combobox_col',
                     'combobox_days', 'combobox_clevel']
@@ -422,12 +607,34 @@ def scrape(session_id, term):
 
     print(f'Found {len(prefixes)} prefixes, {len(schools)} schools, {len(days)} days, and {len(levels)} levels')
 
-    print("processing prefixes")
-    session_id = process_filters(session_id, term, all_data, dropdown_options, {}, [
-                                 'prefix', 'day', 'level'])
-    print("processing schools")
-    session_id = process_filters(session_id, term, all_data, dropdown_options, {}, [
-                                 'school', 'day', 'level'])
+
+    if resume == "combine":
+        print("RESUME set to 'combine'. Skipping scraping...")
+    else:
+        if resume not in prefixes and resume not in schools:
+            print(f"RESUME '{resume}' not found in prefixes or schools. Starting from beginning.")
+            resume = None
+        elif resume:
+            print(f"RESUME set to '{resume}'. Resuming from '{resume}'.")
+
+        if resume not in schools:
+            print("Processing prefixes...")
+            session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                        ['prefix', 'day', 'level'],
+                                        resume if resume in prefixes else None)
+        else:
+            print("Skipping prefix processing...")
+
+        print("Processing schools...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                    ['school', 'day', 'level'],
+                                    resume if resume in schools else None)
+
+    print(f"Combining data for {term}...")
+    missing_prefixes, missing_schools = combine_data(all_data, schools, prefixes, term)
+    if missing_prefixes or missing_schools:
+        print("Missing filters. Exiting.")
+        return
 
     final_data = list(all_data.values())
     print(f'\tGot {len(final_data)} unique classes for term {term}')

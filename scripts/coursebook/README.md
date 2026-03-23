@@ -18,6 +18,8 @@ PASSWORD=[Your password]
 
 > For CLASS_TERMS, we need to use the format specified by Coursebook. It should be a 2-digit year number followed by either 'f', 's', or 'u' for "fall", "spring", "summer" (eg. 23f, 24s, 24u, 24f). Note that the terms can listed be in any order.
 
+> Optional: RESUME_FILTER, resume from a specific filter. Note that if the filter doesn't appear in prefix or school filters it will start from the beginning.
+
 Then, run the code with:
 
 ```bash
@@ -53,36 +55,28 @@ The coursebook scraper operates in several stages to collect comprehensive cours
 - Uses authenticated session cookies to access protected data
 
 **Phase C: Data Extraction**
-The scraper handles three different response scenarios:
+The scraper handles two different response scenarios:
 
-1. **Multiple Classes (Standard Case)**:
-   - Coursebook returns a "report monkey" export ID
-   - Makes a follow-up request to `/reportmonkey/cb11-export/{report_id}/json`
-   - Extracts comprehensive class data including enrollment, location, instructors, etc.
+1. **Scrape Each Class**:
+   - Coursebook request gives a list of classes
+   - Get class overview html for each class in the list `https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog`
+   - Parse the html for all class data.
 
-2. **Single Class (Edge Case)**:
-   - No report monkey ID is generated
-   - Manually parses the HTML response using BeautifulSoup
-   - Extracts limited fields: section, title, days, times, location, instructors
-
-3. **Retry Logic**:
+2. **Retry Logic**:
    - If a request fails (network error, expired session), automatically refreshes the session token
    - Retries up to 3 times before giving up
 
-**Phase D: Instructor Netid Extraction**
-- Parses HTML to find instructor profile links
-- Extracts netIDs from URLs like `http://coursebook.utdallas.edu/search/{netid}`
-- Maps instructor names to their netIDs for the `instructor_ids` field
-
 ### 3. Deduplication & Output
-- Uses `section_address` (e.g., `acct2301.001.24f`) as a unique key
-- Automatically deduplicates classes found across multiple filter combinations
-- Writes final JSON array to `out/classes_{term}.json`
+1. After each list is completed, saves output to `{term}/{filter}.json`. If further filtered by day or level, results are saved to `{term}/{filter}/{sub_filter}.json`.
+
+2. After all filters are completed, it combines all JSON in `{term}/`
+    - Uses `section_address` (e.g., `acct2301.001.24f`) as a unique key
+    - Automatically deduplicates classes found across multiple filter combinations
+    - Writes final JSON array to `out/classes_{term}.json`
 
 ### Key Technical Details
 - **Session Management**: The PTGSESSID cookie has a limited lifetime (~100 requests). The scraper detects failures and automatically re-authenticates.
 - **Filter Strategy**: Two-pass approach (prefix + school) ensures all classes are captured, even those that might be missed by a single filter type.
-- **Edge Case Handling**: Special logic for single-class results and courses with prefix "utd" (which have hidden course number "STAB").
 
 ## Output
 
@@ -90,50 +84,57 @@ The output will be placed in the root of the project, in a file called `classes_
 
 ### Output Format
 
-For most classes, we can get this data:
-
 ```json
     {
-        "section_address": "lit1301.001.24f",
-        "course_prefix": "lit",
-        "course_number": "1301",
-        "section": "001 ",
-        "class_number": "80970",
-        "title": "Introduction to Literature ",
-        "topic": "",
-        "enrolled_status": "Open",
-        "enrolled_current": "128",
-        "enrolled_max": "130",
-        "instructors": "Peter Ingrao",
-        "assistants": "",
-        "term": "24f",
-        "session": "1",
-        "days": "Monday, Wednesday",
-        "times": "10:00 - 11:15",
-        "times_12h": "10:00am - 11:15am",
-        "location": "JO_3.516",
-        "core_area": "Texas Core Areas 040+090 - Language, Philosophy and Culture + CAO",
-        "activity_type": "Lecture",
-        "school": "aht",
-        "dept": "ahtc",
-        "syllabus": "syl149039",
-        "textbooks": "9780593450086, 9780804172448, 9780871403315, 9780871403629, 9781538732182 "
-    }
-```
-
-However, there are TWO edge cases (bruh) that can only get this data:
-
-```json
-    {
-        "section_address": "lats6300.001.24f",
-        "course_prefix": "lats",
-        "course_number": "6300",
+        "section_address": "acct2301.001.25s",
+        "course_prefix": "acct",
+        "course_number": "2301",
         "section": "001",
-        "title": "Introduction to Latin American Studies  (3 Semester Credit Hours)",
-        "term": "24f",
-        "instructors": "Humberto Gonzalez Nunez",
-        "days": "Tuesday",
-        "times_12h": "4:00pm - 6:45pm",
-        "location": "JO 3.536"
-    }
+        "class_course_number": "26595 / 000061",
+        "class_level": "Undergraduate",
+        "instruction_mode": "Face-to-Face",
+        "title": "Introductory Financial Accounting",
+        "description": "ACCT 2301- Introductory Financial Accounting(3 semester credit hours) An introduction to financial reporting designed to create an awareness of the accounting concepts and principles for preparing the three basic financial statements: the income statement, balance sheet, and statement of cash flows. A minimum grade of C is required to take upper-division ACCT courses. (3-0) S",
+        "enrolled_status": "OPEN",
+        "enrolled_current": 64,
+        "enrolled_max": 67,
+        "waitlist": 0,
+        "term": "25s",
+        "days": [
+            "Tuesday",
+            "Thursday"
+        ],
+        "times_12h": "8:30am-9:45am",
+        "location": "JSOM 2.717",
+        "activity_type": "Lecture",
+        "semester_credit_hours": "3",
+        "core": null,
+        "grading": "Graded - Undergraduate",
+        "session_type": "Regular Academic Session",
+        "add_consent": "No Consent",
+        "enrollment_reqs": [
+            "ACCT 2301 Repeat Restriction"
+        ],
+        "class_attributes": [],
+        "class_notes": null,
+        "instructors": [
+            "Jieying Zhang",
+            "Naim Bugra Ozel"
+        ],
+        "instructor_ids": [
+            "jxz146230",
+            "nbo150030"
+        ],
+        "tas": [
+            "Galymzhan Tazhibayev",
+            "Dipta Banik"
+        ],
+        "ta_ids": [
+            "gxt230023",
+            "dxb220047"
+        ],
+        "school": "Naveen Jindal School of Management",
+        "school_id": "jsom",
+        "syllabus": "syl152552"
+    },
 ```

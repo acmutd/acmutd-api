@@ -7,7 +7,6 @@ import csv
 import os
 from utils import normalize_name
 
-
 def create_section_lookup(coursebook_data):
     """Creates a lookup dictionary for section data using section_address."""
     section_lookup = {}
@@ -22,14 +21,14 @@ def create_section_lookup(coursebook_data):
 
 def find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section):
     """Finds instructor ID using section address matching (more reliable approach)."""
-    # build section key: e.g., acct2301.002
     key = f"{subject}{catalog_nbr}.{section}".lower()
-    
-    # find the section for our given key in the coursebook data
+
     for section_address, section_data in section_lookup.items():
         if section_address.startswith(key):
-            # retrieve the id of the instructor for this section
-            instructor_ids = section_data.get('instructor_ids', '').split(',')
+            instructor_ids = section_data.get('instructor_ids', '')
+            # Normalize to list if CSV string
+            if isinstance(instructor_ids, str):
+                instructor_ids = instructor_ids.split(",") if instructor_ids else []
             return instructor_ids[0].strip() if instructor_ids and instructor_ids[0].strip() else ''
     
     return ''
@@ -94,6 +93,7 @@ def handle_no_grades(grades_files):
 def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_data, target_semesters=None):
     """Maps grade CSV rows to coursebook sections and extracts instructor IDs."""
     section_lookup = create_section_lookup(coursebook_data)
+
     enhanced_grades_by_file = {}
     
     total_grades = 0
@@ -144,6 +144,7 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
 
                 # Try section address lookup (more reliable method)
                 instructor_id = find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section)
+                #print(f"Instructor Id: {instructor_id} for {subject} {catalog_nbr} section {section}")
                 enhanced_row["instructor_id"] = instructor_id
 
                 # Check if we have professor data for this instructor
