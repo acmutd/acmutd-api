@@ -6,6 +6,7 @@ import time
 from datetime import datetime
 from bs4 import BeautifulSoup
 from login import get_cookie
+from parse import parse_class_overview
 
 base_url = 'https://coursebook.utdallas.edu'
 url = 'https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog'
@@ -23,6 +24,9 @@ FILTER_TYPES_MAP = {
     'day': DROPDOWN_DAYS_ID,
     'level': DROPDOWN_LEVELS_ID,
 }
+
+MAX_TIMEOUT = 1800  # 30 minutes
+INITIAL_TIMEOUT = 60
 
 
 def get_latest_term():
@@ -180,213 +184,6 @@ def get_class_detail(session_id, section_address, data_req, div_id):
     return response.text
 
 
-def parse_class_overview(html, section_addr):
-    soup = BeautifulSoup(html, "html.parser")
-    
-    def clean(text):
-        # some classes use ∅ (U+2205) for some reason...
-        return None if text == '\u2205' else text
-
-    # Some sections are separated by th title then td content
-    def get_val(label):
-        """Finds label in header cells and returns the next td's text"""
-        for th in soup.find_all('th'):
-            if re.search(re.escape(label), th.get_text(), re.I):
-                val_cell = th.find_next('td')
-                return clean(val_cell.get_text(strip=True)) if val_cell else None
-        for td in soup.find_all('td', class_='courseinfo__classsubtable__th'):
-            if re.search(re.escape(label), td.get_text(), re.I):
-                val_cell = td.find_next_sibling('td')
-                return clean(val_cell.get_text(strip=True)) if val_cell else None
-        return None
-
-    def get_list_val(label):
-        """Finds label in header cells and returns a list of <li> text values from the next td."""
-        for th in soup.find_all('th'):
-            if re.search(re.escape(label), th.get_text(), re.I):
-                val_cell = th.find_next('td')
-                if val_cell:
-                    return [li.get_text(strip=True) for li in val_cell.find_all('li')]
-        return []
-
-    def get_school():
-        for th in soup.find_all('th'):
-            if re.search(r'College', th.get_text(), re.I):
-                td = th.find_next('td')
-                if td:
-                    name = td.get_text(strip=True)
-                    a = td.find('a', href=True)
-                    school_id = None
-                    if a:
-                        match = re.search(r'https?://(\w+)\.utdallas', a['href'])
-                        school_id = match.group(1) if match else None
-                    return name, school_id
-        return None, None
-    
-    def get_enrolled_status(status_text):
-        if not status_text:
-            return 'CLOSED'
-        if 'CANCELLED' in status_text:
-            return 'CANCELLED'
-        if 'OPEN' in status_text:
-            return 'OPEN'
-        return 'CLOSED'
-
-
-    def get_syllabus():
-        for th in soup.find_all('th'):
-            if re.search(r'Syllabus', th.get_text(), re.I):
-                td = th.find_next('td')
-                if td:
-                    a = td.find('a', href=True)
-                    if a:
-                        match = re.search(r'/(syl\w+)', a['href'])
-                        return match.group(1) if match else None
-        return None
-    
-    
-    def parse_people():
-        """Parse Instructors and TAs"""
-        people = {
-            'instructors': [], 'instructor_ids': [],
-            'tas': [], 'ta_ids': []
-        }
-        
-        # Iterate all divs with id starting with 'inst-'
-        for div in soup.select("div[id^='inst-']"):
-            text_content = div.get_text(separator="・", strip=True)
-            name = text_content.split("・")[0].strip()
-            
-            # Parse netid from mailto link
-            email_link = div.find("a", href=re.compile("mailto:"))
-            net_id = email_link['href'].replace('mailto:', '').split('@')[0] if email_link else ""
-            
-            if "Teaching Assistant" in text_content:
-                people['tas'].append(name)
-                if net_id: people['ta_ids'].append(net_id)
-            else:
-                people['instructors'].append(name)
-                if net_id: people['instructor_ids'].append(net_id)
-                
-        return people
-
-
-    def parse_location_and_schedule():
-        """Gets location code and schedule details"""
-        meeting_div = soup.find('div', class_='courseinfo__meeting-item--multiple')
-        if not meeting_div:
-            if status_row_text and 'CANCELLED' in status_row_text:
-                print(f"Cancelled class (no meeting): {section_addr}")
-            else:
-                print(f"Warning: meeting div not found for {section_addr}")
-            return {'days': [], 'times_12h': "", 'location': ""}
-
-        lines = list(meeting_div.stripped_strings)
-
-        days_raw = lines[1] if len(lines) > 1 else None                                                                                                                                                                                        
-        days = [d.strip() for d in days_raw.split(',')] if days_raw else []   
-        
-        loc_link = meeting_div.find('a', href=re.compile(r"locator\.utdallas\.edu"))
-
-        if loc_link:
-            location = loc_link.get_text(strip=True)
-        else:
-            # Fallback for when there is no link ("See instructor for room assignment")
-            map_div = meeting_div.find('div', class_='courseinfo__map')
-            if map_div and map_div.get_text(strip=True):
-                location = map_div.get_text(strip=True)
-            else:
-                # just grab the 4th line of text if it exists
-                location = lines[3] if len(lines) > 3 else ""
-
-        return {
-            'days': days,
-            'times_12h': lines[2] if len(lines) > 2 else None,
-            'location': location
-        }
-    
-    # Parse Section Address
-    try:
-        parts = section_addr.split('.')
-        course_id = parts[0]
-        if re.search(r'\d', course_id):
-            # Normal case: split at first digit (e.g. acct2301, mech6v49)
-            match = re.match(r"([A-Za-z]+)(\d.*)", course_id)
-            prefix = match.group(1)
-            number = match.group(2)
-        else:
-            # all letter identifier: utd prefix (e.g. utdexcm)
-            prefix = 'utd'
-            number = course_id[3:]
-        section = parts[1]
-        term = parts[2]
-    except Exception:
-        print(f"Failed to parse section address: {section_addr}")
-        prefix = number = section = term = ""
-
-    # Enrollment
-    curr = 0
-    avail = 0
-    wait = 0
-    status_row_text = get_val("Status")
-    try: 
-        curr = int(re.search(r'Enrolled Total:\s*(-?\d+)', status_row_text).group(1)) if "Enrolled Total" in status_row_text else 0
-        avail = int(re.search(r'Available Seats:\s*(-?\d+)', status_row_text).group(1)) if "Available Seats" in status_row_text else 0
-        wait = int(re.search(r'Waitlist:\s*(-?\d+)', status_row_text).group(1)) if "Waitlist" in status_row_text else 0
-    except Exception:
-        print(f"Failed to parse enrollment info for {section_addr}: '{status_row_text}'")
-    
-    class_num_raw = ""
-    people_data = {}
-    schedule_data = {'days': [], 'times_12h': None, 'location': ""}
-    school_name = None
-    school_id = None
-    try:
-        people_data = parse_people()
-        schedule_data = parse_location_and_schedule()
-        class_num_raw = get_val("Class/Course Number")
-        school_name, school_id = get_school()
-    except Exception:
-        print(f"Failed to parse")
-
-    # Missing: topic, textbook?
-    return {
-        'section_address': section_addr,
-        'course_prefix': prefix,
-        'course_number': number,
-        'section': section,
-        'class_course_number': class_num_raw if class_num_raw else None,
-        'class_level': get_val("Class Level"),
-        'instruction_mode': get_val("Instruction Mode"),
-        'title': soup.find('td', class_='courseinfo__overviewtable__coursetitle').get_text(strip=True),
-        'description': get_val("Description"),
-        'enrolled_status': get_enrolled_status(status_row_text),
-        'enrolled_current': curr,
-        'enrolled_max': curr + avail,
-        'waitlist': wait,
-        'term': term,
-        'days': schedule_data['days'],
-        'times_12h': schedule_data['times_12h'],
-        'location': schedule_data['location'],
-        'activity_type': get_val("Activity Type"),
-        'semester_credit_hours': get_val("Semester Credit Hours"),
-        'core': get_val("Core"),
-        'grading': get_val("Grading"),
-        'session_type': get_val("Session Type"),
-        'add_consent': get_val("Add Consent"),
-        'enrollment_reqs': get_list_val("Enrollment Reqs"),
-        'class_attributes': get_list_val("Class Attributes"),
-        'class_notes': get_val("Class Notes"),
-        'instructors': people_data['instructors'],
-        'instructor_ids': people_data['instructor_ids'],
-        'tas': people_data['tas'],
-        'ta_ids': people_data['ta_ids'],
-        'school': school_name,
-        'school_id': school_id,
-        'syllabus': get_syllabus()
-    }
-
-
 # we have to click the overview button on each class to get waitlist cause report monkey doesn't give that info
 def get_class_overview(data, session_id):
     data_json = json.loads(data)
@@ -431,24 +228,43 @@ def get_text_or_none(out):
     return out[0].text.strip()
 
 
+def timeout_sleep(timeout):
+    """
+    Sleep for timeout seconds, double the next timeout (capped at MAX_TIMEOUT).
+    """
+    start_time = datetime.now().strftime('%H:%M:%S')
+    print(f'Waiting {timeout}s before retry (started at {start_time})...')
+    time.sleep(timeout)
+    return min(timeout * 2, MAX_TIMEOUT)
+
+
+def get_cookie_with_timeout(timeout=INITIAL_TIMEOUT):
+    """
+    Keep trying to get a session cookie with increasing timeout.
+    """
+    while True:
+        try:
+            return get_cookie(), timeout
+        except Exception as e:
+            print(f'Failed to get a new session token: {e}')
+            timeout = timeout_sleep(timeout)
+
+
 def make_request_with_retry(request_func, session_id, *args, **kwargs):
     """
     Wraps a request function and retries on failure, refreshing the session ID.
     """
     max_retries = 3
-    retries = 0
     current_session_id = session_id
 
-    while retries < max_retries:
+    for attempt in range(1, max_retries + 1):
         try:
             response = request_func(current_session_id, *args, **kwargs)
             return response, current_session_id
-        except (requests.exceptions.RequestException, Exception) as e:
-            print(
-                f'An error occurred: {e}. Retrying with a new session token...')
-            retries += 1
+        except Exception as e:
+            print(f'An error occurred: {e}. Retrying with a new session token...')
             current_session_id = get_cookie()
-            print(f'Attempt {retries}/{max_retries} with new session ID.')
+            print(f'Attempt {attempt}/{max_retries} with new session ID.')
 
     raise Exception(f'Failed to complete request after {max_retries} retries.')
 
@@ -492,7 +308,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
             print(
                 f"[{resume_index+i+1}/{len(options)}] Processing {current_filter_type}: {option_value}")
 
-            timeout = 60
+            timeout = INITIAL_TIMEOUT
             while True:
                 try:
                     print(f"Making request with filters: {new_filters}")
@@ -528,27 +344,15 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     if class_overview:
                         save_json(class_overview, filters, option_value, term)
 
-                    timeout = 60  # reset on success
+                    timeout = INITIAL_TIMEOUT
                     break
 
                 except Exception as e:
-                    start_time = datetime.now().strftime('%H:%M:%S')
                     print(f'Failed to get data for filters: {new_filters} (term: {term}): {e}')
-                    print(f'Waiting {timeout}s before retry (started at {start_time})...')
-                    time.sleep(timeout)
-                    timeout *= 2
-
+                    timeout = timeout_sleep(timeout)
                     print('Attempting to get a new session token...')
-                    while True:
-                        try:
-                            session_id = get_cookie()
-                            break
-                        except Exception as e:
-                            start_time = datetime.now().strftime('%H:%M:%S')
-                            print(f'Failed to get a new session token: {e}')
-                            print(f'Waiting {timeout}s before retry (started at {start_time})...')
-                            time.sleep(timeout)
-                            timeout *= 2
+                    session_id, timeout = get_cookie_with_timeout(timeout)
+
         return session_id
 
 
@@ -610,25 +414,31 @@ def scrape(session_id, term, resume):
 
     if resume == "combine":
         print("RESUME set to 'combine'. Skipping scraping...")
-    else:
-        if resume not in prefixes and resume not in schools:
-            print(f"RESUME '{resume}' not found in prefixes or schools. Starting from beginning.")
-            resume = None
-        elif resume:
-            print(f"RESUME set to '{resume}'. Resuming from '{resume}'.")
 
-        if resume not in schools:
-            print("Processing prefixes...")
-            session_id = process_filters(session_id, term, all_data, dropdown_options, {},
-                                        ['prefix', 'day', 'level'],
-                                        resume if resume in prefixes else None)
-        else:
-            print("Skipping prefix processing...")
-
+    elif resume in prefixes:
+        print(f"Resuming from prefix '{resume}'.")
+        print("Processing prefixes...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                    ['prefix', 'day', 'level'], resume)
         print("Processing schools...")
         session_id = process_filters(session_id, term, all_data, dropdown_options, {},
-                                    ['school', 'day', 'level'],
-                                    resume if resume in schools else None)
+                                    ['school', 'day', 'level'])
+
+    elif resume in schools:
+        print(f"Resuming from school '{resume}'. Skipping prefix processing...")
+        print("Processing schools...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                    ['school', 'day', 'level'], resume)
+
+    else:
+        if resume:
+            print(f"RESUME '{resume}' not found in prefixes or schools. Starting from beginning.")
+        print("Processing prefixes...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                    ['prefix', 'day', 'level'])
+        print("Processing schools...")
+        session_id = process_filters(session_id, term, all_data, dropdown_options, {},
+                                    ['school', 'day', 'level'])
 
     print(f"Combining data for {term}...")
     missing_prefixes, missing_schools = combine_data(all_data, schools, prefixes, term)

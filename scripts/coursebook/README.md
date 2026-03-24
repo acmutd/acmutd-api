@@ -18,7 +18,7 @@ PASSWORD=[Your password]
 
 > For CLASS_TERMS, we need to use the format specified by Coursebook. It should be a 2-digit year number followed by either 'f', 's', or 'u' for "fall", "spring", "summer" (eg. 23f, 24s, 24u, 24f). Note that the terms can listed be in any order.
 
-> Optional: RESUME_FILTER, resume from a specific filter. Note that if the filter doesn't appear in prefix or school filters it will start from the beginning.
+> Optional: RESUME, resume from a specific filter or set to "combine" to skip the scraping and combine existing JSON data. Note that if the filter doesn't appear in prefix or school filters it will start from the beginning. (eg. cp_cs, col_mgt, combine)
 
 Then, run the code with:
 
@@ -60,14 +60,14 @@ The scraper handles two different response scenarios:
 1. **Scrape Each Class**:
    - Coursebook request gives a list of classes
    - Get class overview html for each class in the list `https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog`
-   - Parse the html for all class data.
+   - Parse the html for all class data (`parse.py`).
 
 2. **Retry Logic**:
    - If a request fails (network error, expired session), automatically refreshes the session token
    - Retries up to 3 times before giving up
 
 ### 3. Deduplication & Output
-1. After each list is completed, saves output to `{term}/{filter}.json`. If further filtered by day or level, results are saved to `{term}/{filter}/{sub_filter}.json`.
+1. After each filter is completed, saves output to `{term}/{filter}.json`. If further filtered by day or level, results are saved to `{term}/{filter}/{sub_filter}.json`.
 
 2. After all filters are completed, it combines all JSON in `{term}/`
     - Uses `section_address` (e.g., `acct2301.001.24f`) as a unique key
@@ -80,7 +80,7 @@ The scraper handles two different response scenarios:
 
 ## Output
 
-The output will be placed in the root of the project, in a file called `classes_[term].json`, ex: `classes_25f.json`.
+The output will be placed in `out/classes_[term].json`, ex: `classes_25f.json`.
 
 ### Output Format
 
