@@ -1,0 +1,121 @@
+openapi: 3.0.3
+info:
+  title: ACM UTD API
+  version: 1.0.0
+  description: API documentation for public endpoints, dashboard routes, and admin operations.
+servers:
+  - url: /
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+paths:
+  /health:
+    get:
+      summary: Service health check
+      tags: [Public]
+      responses:
+        "200":
+          description: Healthy
+
+  /api/v1/terms:
+    get:
+      summary: List available terms
+      tags: [API v1]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Terms list
+
+  /api/v1/courses:
+    get:
+      summary: Query courses by term and filters
+      tags: [API v1]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Courses list
+
+  /api/v1/professors/id/{id}:
+    get:
+      summary: Get professor by ID
+      tags: [API v1]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Professor details
+
+  /api/v1/professors/name/{name}:
+    get:
+      summary: Search professors by name
+      tags: [API v1]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Professor search results
+
+  /api/v1/grades/prof/id/{id}:
+    get:
+      summary: Get grades by professor ID
+      tags: [API v1]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Grade distributions
+
+  /api/v1/grades/prof/name/{name}:
+    get:
+      summary: Get grades by professor name
+      tags: [API v1]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Grade distributions
+
+  /api/v1/grades/term/{term}:
+    get:
+      summary: Get grades by term
+      tags: [API v1]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Grade distributions
+
+  /api/v1/grades/prefix/{prefix}:
+    get:
+      summary: Get grades by course prefix
+      tags: [API v1]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Grade distributions
+
+  /api/v1/grades/prefix/{prefix}/number/{number}:
+    get:
+      summary: Get grades by course prefix and number
+      tags: [API v1]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Grade distributions
+
+  /api/v1/grades/prefix/{prefix}/number/{number}/term/{term}/section/{section}:
+    get:
+      summary: Get grades by exact section
+      tags: [API v1]
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: Grade distributions

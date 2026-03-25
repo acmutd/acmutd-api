@@ -11,8 +11,13 @@ import (
 // New wires handlers and middleware into an HTTP router.
 func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 	router := gin.Default()
+	router.Static("/assets", "frontend/dist/assets")
 
+	router.GET("/", handler.Default)
+	router.GET("/openapi.yaml", handler.OpenAPISpec)
 	router.GET("/health", handler.Health)
+	router.GET("/dashboard", handler.UserDashboardPage)
+	router.GET("/admin", handler.AdminDashboardPage)
 
 	admin := router.Group("/admin")
 	admin.Use(mw.Auth(), mw.RateLimit(), mw.Admin())

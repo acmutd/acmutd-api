@@ -71,6 +71,9 @@ func (c *Firestore) UpdateKeyUsage(ctx context.Context, key string) error {
 func (c *Firestore) GetAPIKey(ctx context.Context, key string) (*types.APIKey, error) {
 	doc, err := c.Collection("api_keys").Doc(key).Get(ctx)
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 

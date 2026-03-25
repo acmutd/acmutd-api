@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+  background: radial-gradient(circle at 20% 0%, #eef6ff 0%, #f9fbff 40%, #ffffff 100%);
+  color: #0f172a;
+}
