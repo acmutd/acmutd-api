@@ -7,10 +7,13 @@ import { debugAdminDashboardData } from "./debug/adminDashboardData";
 export function DashboardApp() {
   const [debugViewRole, setDebugViewRole] = useState("user");
   const isAdminView = debugViewRole === "admin";
-  const activeUser = isAdminView ? debugAdminDashboardData.user : debugUserDashboardData.user;
   const userDashboard = debugUserDashboardData.dashboard;
   const userAuth = debugUserDashboardData.auth;
   const allowedActions = debugUserDashboardData.allowed_actions;
+
+  // Admin can view user dashboard for their own account + admin-specific features
+  const activeUser = isAdminView ? debugAdminDashboardData.user : debugUserDashboardData.user;
+  const adminAsUser = isAdminView ? debugAdminDashboardData.user : null;
 
   const status = userDashboard?.status || "none";
   const keyInfo = userDashboard?.key_info || null;
@@ -55,7 +58,7 @@ export function DashboardApp() {
             <span
               className="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700"
             >
-              Signed in as {activeUser.email || ""}
+              Signed in as {activeUser.email || ""} {isAdminView && "(admin account)"}
             </span>
           )}
           <span className="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
@@ -83,22 +86,49 @@ export function DashboardApp() {
       )}
 
       {isAdminView && (
-        <AdminDashboardSection
-          user={debugAdminDashboardData.user}
-          auth={debugAdminDashboardData.auth}
-          approval={debugAdminDashboardData.approval}
-          requests={debugAdminDashboardData.requests}
-          keys={debugAdminDashboardData.keys}
-          manualTokenForm={debugAdminDashboardData.manual_token_form}
-          server={debugAdminDashboardData.server}
-          scraperPipeline={debugAdminDashboardData.scraperPipeline}
-          analytics={debugAdminDashboardData.analytics}
-          scraperLogs={debugAdminDashboardData.scraperLogs}
-          cronLogs={debugAdminDashboardData.cronLogs}
-          approve={noop}
-          reject={noop}
-          deactivate={noop}
-        />
+        <>
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-white/90 p-7 shadow-sm backdrop-blur">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Your User Dashboard</h2>
+            <p className="mt-1 text-sm text-slate-600">View and manage your own keys as a user would, even while having admin privileges.</p>
+          </div>
+          <UserDashboardSection
+            user={adminAsUser}
+            auth={debugAdminDashboardData.auth}
+            hasActiveKey={hasActiveKey}
+            registrationMode={registrationMode}
+            keyInfo={keyInfo}
+            usage={userDashboard?.usage}
+            generatedKey={debugUserDashboardData.generatedKey}
+            expiryNotifications={userDashboard?.expiry_notifications}
+            hackutdMode={userDashboard?.hackutd_mode}
+            allowedActions={allowedActions}
+            loading={false}
+            requestOrRegenerateKey={noop}
+            revokeKey={noop}
+          />
+
+          <div className="mt-10 rounded-2xl border border-slate-200 bg-white/90 p-7 shadow-sm backdrop-blur">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Admin Controls & Monitoring</h2>
+            <p className="mt-1 text-sm text-slate-600">Officer-only operations for key approvals, server management, and analytics.</p>
+          </div>
+
+          <AdminDashboardSection
+            user={debugAdminDashboardData.user}
+            auth={debugAdminDashboardData.auth}
+            approval={debugAdminDashboardData.approval}
+            requests={debugAdminDashboardData.requests}
+            keys={debugAdminDashboardData.keys}
+            manualTokenForm={debugAdminDashboardData.manual_token_form}
+            server={debugAdminDashboardData.server}
+            scraperPipeline={debugAdminDashboardData.scraperPipeline}
+            analytics={debugAdminDashboardData.analytics}
+            scraperLogs={debugAdminDashboardData.scraperLogs}
+            cronLogs={debugAdminDashboardData.cronLogs}
+            approve={noop}
+            reject={noop}
+            deactivate={noop}
+          />
+        </>
       )}
     </div>
   );
