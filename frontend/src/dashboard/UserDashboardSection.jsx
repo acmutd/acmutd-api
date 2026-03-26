@@ -41,7 +41,7 @@ export function UserDashboardSection({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Authentication & Eligibility</h2>
-            <p className="mt-1 text-sm text-slate-600">Google OAuth via Firebase Auth with UTD domain enforcement.</p>
+            <p className="mt-1 text-sm text-slate-600">Google OAuth via Firebase Auth with open sign-up for all account domains.</p>
           </div>
           <StatusBadge active={auth?.firebase_token_status === "valid"} activeLabel="token valid" inactiveLabel="token invalid" />
         </div>
@@ -53,7 +53,7 @@ export function UserDashboardSection({
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Email domain policy</dt>
-            <dd className="mt-1 text-slate-900">@{auth?.allowed_domain || "-"}</dd>
+            <dd className="mt-1 text-slate-900">{auth?.open_signup ? "Open sign-up (all domains)" : "Restricted"}</dd>
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">OAuth provider</dt>
@@ -64,6 +64,10 @@ export function UserDashboardSection({
             <dd className="mt-1 text-slate-900">{registrationMode}</dd>
           </div>
         </dl>
+
+        <p className="mt-3 text-xs text-slate-600">
+          Important domains for approval policy: {(auth?.recognized_domains || []).map((domain) => `@${domain}`).join(", ") || "-"}
+        </p>
       </section>
 
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white/90 p-7 shadow-sm backdrop-blur">

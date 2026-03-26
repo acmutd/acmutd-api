@@ -1,19 +1,24 @@
 export const debugAdminDashboardData = {
   user: {
     uid: "debug-admin-001",
-    name: "Priya Officer",
-    email: "officer@utdallas.edu",
+    name: "Allen Zheng",
+    email: "allen.zheng@acmutd.co",
     is_admin: true
   },
   auth: {
     oauth_provider: "google.com",
     admin_gate_source: "firestore:isAdmin",
     admin_gate_status: "granted",
-    domain_restriction: "utdallas.edu"
+    domain_restriction: "none"
   },
   approval: {
     mode: "manual",
-    global_toggle_hint: "New key requests require officer approval when manual mode is active"
+    global_toggle_hint: "New key requests require officer approval when manual mode is active unless the request domain is auto-approved.",
+    auto_approve_by_domain: {
+      acmutd_co: true,
+      utdallas_edu: false,
+      other_domains: false
+    }
   },
   requests: [
     {
@@ -66,7 +71,7 @@ export const debugAdminDashboardData = {
     },
     {
       uid: "debug-admin-001-key-admin",
-      email: "officer@utdallas.edu",
+      email: "officer@acmutd.co",
       label: "Officer emergency admin key",
       type: "admin",
       masked_key: "acm_****_admin",
@@ -89,7 +94,7 @@ export const debugAdminDashboardData = {
     instance_type: "t3.large",
     public_ip: "34.130.220.91",
     uptime_human: "2d 14h 21m",
-    hackutd_mode_enabled: true,
+    hackutd_mode_enabled: false,
     hackutd_actions: [
       "stop instance",
       "set instance type to t3.large",

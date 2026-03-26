@@ -5,11 +5,12 @@ export const debugUserDashboardData = {
     email: "alex.morgan@utdallas.edu",
     photo_url: "https://i.pravatar.cc/96?img=12",
     auth_provider: "google.com",
-    domain_restricted: true
+    domain_restricted: false
   },
   auth: {
     oauth_enabled: true,
-    allowed_domain: "utdallas.edu",
+    open_signup: true,
+    recognized_domains: ["acmutd.co", "utdallas.edu"],
     firebase_token_status: "valid"
   },
   dashboard: {

@@ -41,7 +41,7 @@ export function AdminDashboardSection({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Admin Access & Policy</h2>
-            <p className="mt-1 text-sm text-slate-600">Officer access is gated by Firestore isAdmin and Google OAuth domain rules.</p>
+            <p className="mt-1 text-sm text-slate-600">Officer access is gated by Firestore isAdmin with Google OAuth. Account creation is open to all domains.</p>
           </div>
           <span className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
             {auth?.admin_gate_status || "granted"}
@@ -58,8 +58,8 @@ export function AdminDashboardSection({
             <dd className="mt-1 text-slate-900">{auth?.oauth_provider || "google.com"}</dd>
           </div>
           <div>
-            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Domain lock</dt>
-            <dd className="mt-1 text-slate-900">@{auth?.domain_restriction || "utdallas.edu"}</dd>
+            <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account domain policy</dt>
+            <dd className="mt-1 text-slate-900">{auth?.domain_restriction === "none" ? "Open sign-up (all domains)" : `@${auth?.domain_restriction}`}</dd>
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Approval mode</dt>
@@ -80,6 +80,31 @@ export function AdminDashboardSection({
         </div>
 
         <p className="mt-2 text-sm text-slate-600">{approval?.global_toggle_hint}</p>
+
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <h3 className="text-sm font-semibold text-slate-900">Domain Auto-Approve Rules</h3>
+          <p className="mt-1 text-xs text-slate-600">Configure which request domains bypass manual review.</p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <button className="flex items-center justify-between rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+              <span>@acmutd.co</span>
+              <span className={`rounded-full px-2 py-0.5 ${approval?.auto_approve_by_domain?.acmutd_co ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"}`}>
+                {approval?.auto_approve_by_domain?.acmutd_co ? "auto" : "manual"}
+              </span>
+            </button>
+            <button className="flex items-center justify-between rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+              <span>@utdallas.edu</span>
+              <span className={`rounded-full px-2 py-0.5 ${approval?.auto_approve_by_domain?.utdallas_edu ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"}`}>
+                {approval?.auto_approve_by_domain?.utdallas_edu ? "auto" : "manual"}
+              </span>
+            </button>
+            <button className="flex items-center justify-between rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+              <span>All other domains</span>
+              <span className={`rounded-full px-2 py-0.5 ${approval?.auto_approve_by_domain?.other_domains ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"}`}>
+                {approval?.auto_approve_by_domain?.other_domains ? "auto" : "manual"}
+              </span>
+            </button>
+          </div>
+        </div>
 
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full border-collapse text-left text-sm">

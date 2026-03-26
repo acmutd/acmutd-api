@@ -30,14 +30,22 @@ export function DashboardApp() {
     <div className="mx-auto max-w-7xl px-6 py-10 sm:px-8">
       <main className="rounded-2xl border border-slate-200 bg-white/90 p-7 shadow-sm backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">ACM UTD Dashboard Skeleton</h1>
-          <span
-            className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-              isAdminView ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
-            }`}
-          >
-            {isAdminView ? "admin" : "user"}
-          </span>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">ACM API Dashboard Skeleton</h1>
+          <div className="flex flex-wrap items-center gap-3">
+            <a
+              href="/"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+            >
+              Go to Documentation
+            </a>
+            <span
+              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                isAdminView ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"
+              }`}
+            >
+              {isAdminView ? "admin" : "user"}
+            </span>
+          </div>
         </div>
         <p className="mt-2 text-sm text-slate-600 sm:text-base">
           Debug-only UI preview for Cloudflare Pages frontend. All sections use static fixtures under src/dashboard/debug.
@@ -62,7 +70,7 @@ export function DashboardApp() {
             </span>
           )}
           <span className="rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
-            Frontend auth target: Firebase ID token + Google OAuth (@utdallas.edu)
+            Frontend auth target: Firebase ID token + Google OAuth (open sign-up; key domain groups for approvals)
           </span>
         </div>
       </main>
@@ -93,7 +101,7 @@ export function DashboardApp() {
           </div>
           <UserDashboardSection
             user={adminAsUser}
-            auth={debugAdminDashboardData.auth}
+            auth={userAuth}
             hasActiveKey={hasActiveKey}
             registrationMode={registrationMode}
             keyInfo={keyInfo}
