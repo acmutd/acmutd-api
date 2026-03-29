@@ -101,39 +101,72 @@ def parse_people(soup):
     return people
 
 
-def parse_schedule(soup, status_text, section_addr):
-    """Gets location code and schedule details."""
-    meeting_div = soup.find('div', class_='courseinfo__meeting-item--multiple')
-    if not meeting_div:
-        if status_text and 'CANCELLED' in status_text:
-            print(f"Cancelled class (no meeting): {section_addr}")
-        else:
-            print(f"Warning: meeting div not found for {section_addr}")
-        return {'days': [], 'times_12h': "", 'location': ""}
+def parse_meeting(meeting_div):
+    """Parse a single meeting div into a meeting dict."""
+    meeting_time = meeting_div.find('p', class_='courseinfo__meeting-time')
+    if not meeting_time:
+        return None
 
-    lines = list(meeting_div.stripped_strings)
+    lines = list(meeting_time.stripped_strings)
+    # lines[0] = date range (bold), lines[1] = days, lines[2] = time, lines[3+] = location
 
+    date_range = lines[0] if lines else ""
     days_raw = lines[1] if len(lines) > 1 else None
     days = [d.strip() for d in days_raw.split(',')] if days_raw else []
+    time = lines[2] if len(lines) > 2 else ""
 
     loc_link = meeting_div.find('a', href=re.compile(r"locator\.utdallas\.edu"))
-
     if loc_link:
         location = loc_link.get_text(strip=True)
     else:
-        # Fallback for when there is no link ("See instructor for room assignment")
         map_div = meeting_div.find('div', class_='courseinfo__map')
         if map_div and map_div.get_text(strip=True):
             location = map_div.get_text(strip=True)
         else:
-            # just grab the 4th line of text if it exists
             location = lines[3] if len(lines) > 3 else ""
 
     return {
+        'date_range': date_range,
         'days': days,
-        'times_12h': lines[2] if len(lines) > 2 else None,
+        'time': time,
         'location': location
     }
+
+
+def parse_schedule(soup, status_text, section_addr):
+    """Parse all schedule info: term dates and all meeting blocks."""
+    result = {
+        'start_date': None,
+        'end_date': None,
+        'meetings': []
+    }
+
+    # Parse term start/end from courseinfo__sectionterm
+    term_p = soup.find('p', class_='courseinfo__sectionterm')
+    if term_p:
+        term_text = str(term_p)
+        start_match = re.search(r'<b>Starts:</b>\s*(.+?)(?:<br|$)', term_text)
+        end_match = re.search(r'<b>Ends:</b>\s*(.+?)(?:<br|$)', term_text)
+        if start_match:
+            result['start_date'] = start_match.group(1).strip()
+        if end_match:
+            result['end_date'] = end_match.group(1).strip()
+
+    # Parse all meeting blocks
+    meeting_divs = soup.find_all('div', class_=re.compile(r'courseinfo__meeting-item--multiple'))
+    if not meeting_divs:
+        if status_text and 'CANCELLED' in status_text:
+            print(f"Cancelled class (no meeting): {section_addr}")
+        else:
+            print(f"Warning: meeting div not found for {section_addr}")
+        return result
+
+    for div in meeting_divs:
+        meeting = parse_meeting(div)
+        if meeting:
+            result['meetings'].append(meeting)
+
+    return result
 
 
 def parse_school(soup):
@@ -152,6 +185,14 @@ def parse_school(soup):
     return None, None
 
 
+def parse_cross_listed(soup):
+    """Returns list of cross-listed section addresses (excluding self)."""
+    cross_list = soup.find('ul', id='cross_sections')
+    if not cross_list:
+        return []
+    return [a.get_text(strip=True).split(' - ')[0] for a in cross_list.find_all('a')]
+
+
 def parse_syllabus(soup):
     """Returns the syllabus ID if found."""
     for th in soup.find_all('th'):
@@ -166,7 +207,7 @@ def parse_syllabus(soup):
 
 
 def parse_class_overview(html, section_addr):
-    """Parse a class detail HTML page into a course data dict."""
+    """Parse a class detail HTML page into course data"""
     soup = BeautifulSoup(html, "html.parser")
 
     prefix, number, section, term = parse_section_address(section_addr)
@@ -191,15 +232,17 @@ def parse_class_overview(html, section_addr):
         'enrolled_max': enrolled_max,
         'waitlist': wait,
         'term': term,
-        'days': schedule['days'],
-        'times_12h': schedule['times_12h'],
-        'location': schedule['location'],
+        'start_date': schedule['start_date'],
+        'end_date': schedule['end_date'],
+        'meetings': schedule['meetings'],
         'activity_type': get_val(soup, "Activity Type"),
         'semester_credit_hours': get_val(soup, "Semester Credit Hours"),
         'core': get_val(soup, "Core"),
         'grading': get_val(soup, "Grading"),
         'session_type': get_val(soup, "Session Type"),
         'add_consent': get_val(soup, "Add Consent"),
+        'orion_datetime': get_val(soup, "Orion Date/Time"),
+        'schedule_frequency': get_val(soup, "How often a course is scheduled"),
         'enrollment_reqs': get_list_val(soup, "Enrollment Reqs"),
         'class_attributes': get_list_val(soup, "Class Attributes"),
         'class_notes': get_val(soup, "Class Notes"),
@@ -209,5 +252,6 @@ def parse_class_overview(html, section_addr):
         'ta_ids': people['ta_ids'],
         'school': school_name,
         'school_id': school_id,
+        'cross_listed': parse_cross_listed(soup),
         'syllabus': parse_syllabus(soup)
     }

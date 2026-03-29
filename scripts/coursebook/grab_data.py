@@ -186,15 +186,15 @@ def make_overview_request(session_id, section_address, data_req, div_id):
     return response.text
 
 
-def save_html(html, section_address, filters, option_value, term):
-    filter_path = os.path.join(term, *filters.values(), option_value) if filters else os.path.join(term, option_value)                                                                                                               
-    os.makedirs(filter_path, exist_ok=True)                                                                         
-    with open(os.path.join(filter_path, f"{section_address}.html"), "w", encoding="utf-8") as f: 
+def save_html(html, section_address, filters, term):
+    filter_path = os.path.join(term, *filters.values())
+    os.makedirs(filter_path, exist_ok=True)
+    with open(os.path.join(filter_path, f"{section_address}.html"), "w", encoding="utf-8") as f:
         f.write(html)                                                                                               
                                                                                                                                                                                                                             
 
 # we have to click the overview button on each class to get waitlist cause report monkey doesn't give that info
-def get_class_overviews(data, session_id, filters, option_value, term):
+def get_class_overviews(data, session_id, filters, term):
     data_json = json.loads(data)
     html_content = data_json["sethtml"]["#sr"]
     soup = BeautifulSoup(html_content, 'html.parser')
@@ -208,7 +208,7 @@ def get_class_overviews(data, session_id, filters, option_value, term):
         data_req = row.get("data-req") # needed in request for overview
         row_id = row.get("id")
         div_id = f"{row_id}childcontent"
-        
+
         overview_html, new_session_id = make_request_with_retry(
             make_overview_request,
             session_id,
@@ -227,7 +227,7 @@ def get_class_overviews(data, session_id, filters, option_value, term):
             failed_sections.append(section_address)
             continue
 
-        save_html(overview_html, section_address, filters, option_value, term)
+        save_html(overview_html, section_address, filters, term)
 
     return failed_sections
 
@@ -333,7 +333,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                         print('\tNo items found.')
 
                         # add dummy directory to show its scraped but empty
-                        filter_path = os.path.join(term, *filters.values(), option_value) if filters else os.path.join(term, option_value)
+                        filter_path = os.path.join(term, *new_filters.values())
                         os.makedirs(filter_path, exist_ok=True)
                         break
 
@@ -345,7 +345,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                             session_id, term, all_data, dropdown_options, new_filters, remaining_filter_order)
                         break
 
-                    failed_courses = get_class_overviews(response.text, session_id, filters, option_value, term)
+                    failed_courses = get_class_overviews(response.text, session_id, new_filters, term)
 
                     timeout = INITIAL_TIMEOUT
                     break
