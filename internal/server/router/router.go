@@ -13,7 +13,7 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 	router := gin.Default()
 	router.Static("/assets", "frontend/dist/assets")
 
-	router.GET("/", handler.Default)
+	router.GET("/swagger", handler.Default)
 	router.GET("/openapi.yaml", handler.OpenAPISpec)
 	router.GET("/health", handler.Health)
 	router.GET("/dashboard", handler.UserDashboardPage)

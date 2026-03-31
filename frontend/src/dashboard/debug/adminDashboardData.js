@@ -91,7 +91,7 @@ export const debugAdminDashboardData = {
   server: {
     ec2_instance_id: "i-0abc123def4567890",
     state: "running",
-    instance_type: "t3.large",
+    instance_type: "t3.micro",
     public_ip: "34.130.220.91",
     uptime_human: "2d 14h 21m",
     hackutd_mode_enabled: false,
