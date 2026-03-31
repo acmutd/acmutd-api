@@ -11,13 +11,24 @@ import (
 // New wires handlers and middleware into an HTTP router.
 func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 	router := gin.Default()
+
+	// Serve static assets
 	router.Static("/assets", "frontend/dist/assets")
 
 	router.GET("/swagger", handler.Default)
 	router.GET("/openapi.yaml", handler.OpenAPISpec)
 	router.GET("/health", handler.Health)
-	router.GET("/dashboard", handler.UserDashboardPage)
-	router.GET("/admin", handler.AdminDashboardPage)
+
+	// Serve SPA pages - serve index.html for React Router to handle client-side routing
+	router.GET("/", func(c *gin.Context) {
+		c.File("frontend/dist/index.html")
+	})
+	router.GET("/dashboard", func(c *gin.Context) {
+		c.File("frontend/dist/index.html")
+	})
+	router.GET("/admin", func(c *gin.Context) {
+		c.File("frontend/dist/index.html")
+	})
 
 	admin := router.Group("/admin")
 	admin.Use(mw.Auth(), mw.RateLimit(), mw.Admin())

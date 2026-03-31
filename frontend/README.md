@@ -1,13 +1,28 @@
-# Frontend Dashboard (Vite + Tailwind)
+# ACM UTD API Portal Frontend (Vite + React + TypeScript)
 
-This folder contains the frontend pages served by the Go API.
+This frontend is a pure mocked skeleton of the ACM UTD API Portal.
 
-## Pages
+## Routes
 
-- Dashboard entry: `src/dashboard/dashboard.html` -> served at `/dashboard` and `/admin`
-- Docs landing page: `src/swagger/swagger.html` -> served at `/` by the backend
+- `/` Landing/auth stub
+- `/dashboard` User dashboard
+- `/admin` Admin dashboard (mock admin-only)
 
-The dashboard page uses Tailwind stylesheet at `src/dashboard/tailwind.css`.
+## Stack
+
+- Vite
+- React 18
+- TypeScript
+- React Router
+- Tailwind utility classes
+
+## Mock architecture
+
+- Mock Firestore-shaped models: `src/types/models.ts`
+- In-memory mock documents: `src/lib/mockData.ts`
+- Async no-op/mock API layer: `src/lib/api.ts`
+
+All API integration points return promises and include artificial delay for realistic UI behavior.
 
 ## Development
 
@@ -16,16 +31,10 @@ npm install
 npm run dev
 ```
 
-## Production Build
+## Production build
 
 ```bash
-npm install
 npm run build
 ```
 
-Build output is written to `frontend/dist`.
-
-The backend expects built files in:
-
-- `frontend/dist/src/dashboard/dashboard.html`
-- `frontend/dist/assets/*`
+Build output is generated in `frontend/dist`.
