@@ -26,9 +26,6 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 	router.GET("/dashboard", func(c *gin.Context) {
 		c.File("frontend/dist/index.html")
 	})
-	router.GET("/admin", func(c *gin.Context) {
-		c.File("frontend/dist/index.html")
-	})
 
 	admin := router.Group("/admin")
 	admin.Use(mw.Auth(), mw.RateLimit(), mw.Admin())
