@@ -1,14 +1,18 @@
+/*
+  Fake data used to create frontend skeleton
+  Will be deleted once integration is completed
+*/
+
 import {
   APIKey,
   AppConfig,
-  CatalogCourse,
-  CourseSection,
   CronLog,
   DailyStat,
   InstanceState,
   PromotionLog,
   RequestEvent,
   ScraperLog,
+  ServerStateLog,
   User
 } from "../types/models";
 
@@ -17,7 +21,6 @@ export const mockUsers: User[] = [
     uid: "u_001",
     email: "allen.zheng@utdallas.edu",
     displayName: "Allen Zheng",
-    photoURL: "https://storage.googleapis.com/acm-officer-database.firebasestorage.app/officers/F6vG5bnAUjctcMtxKQ6nYMPYntw2",
     isAdmin: false,
     approvalStatus: "approved",
     createdAt: "2026-01-10T15:24:00.000Z",
@@ -27,8 +30,25 @@ export const mockUsers: User[] = [
     uid: "u_002",
     email: "rei-shibatani@acmutd.co",
     displayName: "Rei Shibatani",
-    photoURL: "https://storage.googleapis.com/acm-officer-database.firebasestorage.app/officers/W3NS6yRINrRiFmSD84NKu4rHRGw1",
     isAdmin: true,
+    approvalStatus: "approved",
+    createdAt: "2025-09-08T11:10:00.000Z",
+    lastLoginAt: "2026-03-31T13:06:00.000Z"
+  },
+  {
+    uid: "u_003",
+    email: "random@gmail.com",
+    displayName: "Bob Joe",
+    isAdmin: false,
+    approvalStatus: "approved",
+    createdAt: "2025-09-08T11:10:00.000Z",
+    lastLoginAt: "2026-03-31T13:06:00.000Z"
+  },
+  {
+    uid: "u_004",
+    email: "snoop@nebulalabs.com",
+    displayName: "snoop",
+    isAdmin: false,
     approvalStatus: "approved",
     createdAt: "2025-09-08T11:10:00.000Z",
     lastLoginAt: "2026-03-31T13:06:00.000Z"
@@ -67,6 +87,38 @@ export const mockApiKeys: APIKey[] = [
     expiresAt: "2027-01-15T12:10:00.000Z",
     usageCount: 9901,
     lastUsedAt: "2026-03-31T16:02:00.000Z"
+  },
+  {
+    keyId: "key_3",
+    key: "acm_live_hjdfhb_dhbdjkfhdh",
+    userId: "u_003",
+    ownerEmail: "random@gmail.com",
+    label: "Class Analyzer",
+    description: "Used to make UTD Class analyzer",
+    status: "pending",
+    isAdmin: false,
+    rateLimit: 120,
+    windowSeconds: 60,
+    createdAt: "2026-01-15T12:10:00.000Z",
+    expiresAt: "2027-01-15T12:10:00.000Z",
+    usageCount: 0,
+    lastUsedAt: null
+  },
+  {
+    keyId: "key_4",
+    key: "acm_live_mvncbv_kdlfkdjshd",
+    userId: "u_004",
+    ownerEmail: "snoop@nebulalabs.com",
+    label: "snoop",
+    description: "gonna look at acm's data",
+    status: "pending",
+    isAdmin: false,
+    rateLimit: 120,
+    windowSeconds: 60,
+    createdAt: "2026-01-15T12:10:00.000Z",
+    expiresAt: "2027-01-15T12:10:00.000Z",
+    usageCount: 0,
+    lastUsedAt: null
   }
 ];
 
@@ -185,11 +237,11 @@ export const mockRecentRequests: RequestEvent[] = [
 ];
 
 export const mockAppConfig: AppConfig = {
-  autoApproveMode: "utdallas",
-  hackutdModeEnabled: true,
+  autoApproveMode: "@acmutd.co",
+  hackutdModeEnabled: false,
   hackutdEndDate: "2026-11-03T23:59:59.000Z",
   currentSemester: "26s",
-  instanceType: "t3.large",
+  instanceType: "t3.small",
   updatedAt: "2026-03-31T13:00:00.000Z",
   updatedBy: "u_002"
 };
@@ -233,31 +285,88 @@ export const mockScraperLogs: ScraperLog[] = [
 
 export const mockCronLogs: CronLog[] = [
   {
-    date: "2026-03-31",
+    logId: "cron_2026-03-31",
     runAt: "2026-03-31T09:00:00.000Z",
-    tokensChecked: 412,
-    validTokenCount: 376,
-    action: "started",
-    instanceState: "running",
-    notes: "HackUTD weekday auto-start"
+    jobName: "daily-token-check",
+    status: "success",
+    tokensChecked: 25,
+    validTokenCount: 0,
+    decision: "stop",
+    triggeredAction: true,
+    serverLogId: "srv_01JQSTOP001",
+    errorMessage: "",
+    durationMs: 812
   },
   {
-    date: "2026-03-30",
-    runAt: "2026-03-30T23:30:00.000Z",
-    tokensChecked: 391,
-    validTokenCount: 360,
-    action: "stopped",
-    instanceState: "stopped",
-    notes: "Outside active usage window"
+    logId: "cron_2026-03-30",
+    runAt: "2026-03-30T09:00:00.000Z",
+    jobName: "daily-token-check",
+    status: "success",
+    tokensChecked: 25,
+    validTokenCount: 4,
+    decision: "no-op",
+    triggeredAction: false,
+    serverLogId: "",
+    errorMessage: "",
+    durationMs: 679
   },
   {
-    date: "2026-03-29",
+    logId: "cron_2026-03-29",
     runAt: "2026-03-29T09:00:00.000Z",
-    tokensChecked: 405,
-    validTokenCount: 367,
-    action: "no-op",
-    instanceState: "running",
-    notes: "Server already running"
+    jobName: "daily-token-check",
+    status: "success",
+    tokensChecked: 25,
+    validTokenCount: 14,
+    decision: "no-op",
+    triggeredAction: false,
+    serverLogId: "",
+    errorMessage: "",
+    durationMs: 701
+  }
+];
+
+export const mockServerStateLogs: ServerStateLog[] = [
+  {
+    logId: "srv_01JQSTOP001",
+    timestamp: "2026-03-31T09:00:01.000Z",
+    action: "stop",
+    status: "success",
+    triggerSource: "cron",
+    actorType: "system",
+    actorId: "daily-token-check",
+    actorEmail: "",
+    reason: "No valid active tokens found during daily token check",
+    requestId: "req_cron_20260331",
+    cronLogId: "cron_2026-03-31",
+    previousState: "running",
+    newState: "stopped",
+    previousType: "t3.small",
+    newType: "t3.small",
+    instanceId: "i-0a1b2c3d4e5f67890",
+    publicIp: "34.72.188.19",
+    errorMessage: "",
+    durationMs: 590
+  },
+  {
+    logId: "srv_01JRADMIN001",
+    timestamp: "2026-03-30T19:42:10.000Z",
+    action: "stop",
+    status: "success",
+    triggerSource: "admin_dashboard",
+    actorType: "user",
+    actorId: "u_002",
+    actorEmail: "rei-shibatani@acmutd.co",
+    reason: "Manual stop requested from admin dashboard",
+    requestId: "req_admin_20260330",
+    cronLogId: "",
+    previousState: "running",
+    newState: "stopped",
+    previousType: "t3.small",
+    newType: "t3.small",
+    instanceId: "i-0a1b2c3d4e5f67890",
+    publicIp: "34.72.188.19",
+    errorMessage: "",
+    durationMs: 623
   }
 ];
 
@@ -282,64 +391,9 @@ export const mockPromotionLogs: PromotionLog[] = [
   }
 ];
 
-export const mockCatalogCourses: CatalogCourse[] = [
-  {
-    prefix: "CE",
-    number: "3345",
-    title: "Data Structures and Introduction to Algorithmic Analysis",
-    description: "Study of abstract data types, sorting, searching and asymptotic analysis.",
-    classLevel: "Undergraduate",
-    school: "Engineering and Computer Science",
-    schoolId: "ECS",
-    aggregatedGrades: { A: 112, B: 84, C: 33, D: 9, F: 4 },
-    sectionTypes: ["Lecture", "Lab"],
-    crossListed: []
-  }
-];
-
-export const mockCourseSections: CourseSection[] = [
-  {
-    prefix: "CE",
-    number: "3345",
-    section: "001",
-    term: "26s",
-    sectionAddress: "ce3345.001.26s",
-    title: "Data Structures",
-    description: "Implementation and analysis of classic data structures.",
-    enrolledStatus: "Open",
-    enrolledCurrent: 93,
-    enrolledMax: 100,
-    waitlist: 0,
-    startDate: "2026-01-20",
-    endDate: "2026-05-08",
-    meetings: [
-      {
-        dateRange: "January 20, 2026-May 8, 2026",
-        days: ["Monday", "Wednesday"],
-        time: "10:00am-11:15am",
-        location: "ECSS 2.415"
-      }
-    ],
-    activityType: "Lecture",
-    semesterCreditHours: "3",
-    grading: "Letter",
-    sessionType: "Regular Academic Session",
-    school: "Engineering and Computer Science",
-    schoolId: "ECS",
-    enrollmentReqs: ["CS 1337 minimum grade C"],
-    classAttributes: ["Core Communication"],
-    classNotes: null,
-    instructors: ["Prof. Jane Park"],
-    instructorIds: ["inst_001"],
-    crossListed: ["CS 3345"],
-    syllabus: "https://example.com/syllabus/ce3345",
-    gradeDistribution: { A: 46, "A-": 20, "B+": 14, B: 9, "C+": 4, C: 3, D: 1, F: 1 }
-  }
-];
-
 export const mockInstanceState: InstanceState = {
   instanceId: "i-0a1b2c3d4e5f67890",
-  instanceType: "t3.large",
+  instanceType: "t3.small",
   state: "running",
   uptimeSeconds: 12060,
   publicIp: "34.72.188.19"

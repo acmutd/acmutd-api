@@ -49,7 +49,7 @@ export function LandingPage() {
               variant="ghost"
               onClick={async () => {
                 await switchToAdmin();
-                navigate("/admin");
+                navigate("/dashboard");
               }}
             >
               Use Admin

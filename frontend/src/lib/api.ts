@@ -8,6 +8,7 @@ import {
   PromotionLog,
   RequestEvent,
   ScraperLog,
+  ServerStateLog,
   User
 } from "../types/models";
 import {
@@ -19,6 +20,7 @@ import {
   mockPromotionLogs,
   mockRecentRequests,
   mockScraperLogs,
+  mockServerStateLogs,
   mockUsers
 } from "./mockData";
 
@@ -29,10 +31,11 @@ let recentRequests = [...mockRecentRequests];
 let appConfig = { ...mockAppConfig };
 let scraperLogs = [...mockScraperLogs];
 let cronLogs = [...mockCronLogs];
+let serverStateLogs = [...mockServerStateLogs];
 let promotionLogs = [...mockPromotionLogs];
 let instanceState = { ...mockInstanceState };
-let sessionUserUid = users[0]?.uid ?? "";
-
+const currentUserNum = 1;
+let sessionUserUid = users[currentUserNum]?.uid ?? "";
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -58,7 +61,7 @@ export async function getCurrentUser(): Promise<User> {
 
 export async function loginWithGoogle(): Promise<User> {
    
-  const user = users[0];
+  const user = users[currentUserNum];
   user.lastLoginAt = nowIso();
   sessionUserUid = user.uid;
   return user;
@@ -303,6 +306,10 @@ export async function listCronLogs(): Promise<CronLog[]> {
   return [...cronLogs];
 }
 
+export async function listServerStateLogs(): Promise<ServerStateLog[]> {
+  return [...serverStateLogs];
+}
+
 export async function listPromotionLogs(): Promise<PromotionLog[]> {
    
   return [...promotionLogs];
@@ -313,38 +320,105 @@ export async function getInstanceState(): Promise<InstanceState> {
   return { ...instanceState };
 }
 
+type ChangeServerStateInput = {
+  action: ServerStateLog["action"];
+  triggerSource: ServerStateLog["triggerSource"];
+  actorType: ServerStateLog["actorType"];
+  actorId: string;
+  actorEmail?: string;
+  reason: string;
+  cronLogId?: string;
+  nextState?: InstanceState["state"];
+  nextType?: InstanceState["instanceType"];
+  forceError?: boolean;
+};
+
+async function changeServerState(input: ChangeServerStateInput): Promise<ServerStateLog> {
+  const startedAt = Date.now();
+  const previousState = instanceState.state;
+  const previousType = instanceState.instanceType;
+  const requestId = generateId("req");
+
+  const targetState = input.nextState ?? previousState;
+  const targetType = input.nextType ?? previousType;
+
+  if (!input.forceError) {
+    instanceState = {
+      ...instanceState,
+      state: targetState,
+      instanceType: targetType,
+      uptimeSeconds: targetState === "running" ? 0 : instanceState.uptimeSeconds
+    };
+  }
+
+  const log: ServerStateLog = {
+    logId: generateId("srv"),
+    timestamp: nowIso(),
+    action: input.action,
+    status: input.forceError ? "error" : "success",
+    triggerSource: input.triggerSource,
+    actorType: input.actorType,
+    actorId: input.actorId,
+    actorEmail: input.actorEmail ?? "",
+    reason: input.reason,
+    requestId,
+    cronLogId: input.cronLogId ?? "",
+    previousState,
+    newState: input.forceError ? previousState : targetState,
+    previousType,
+    newType: input.forceError ? previousType : targetType,
+    instanceId: instanceState.instanceId,
+    publicIp: instanceState.publicIp,
+    errorMessage: input.forceError ? "Simulated EC2 API failure" : "",
+    durationMs: Date.now() - startedAt
+  };
+
+  serverStateLogs = [log, ...serverStateLogs];
+  return log;
+}
+
 export async function startServer(): Promise<void> {
-   
-  instanceState = { ...instanceState, state: "running", uptimeSeconds: 0 };
-  cronLogs = [
-    {
-      date: new Date().toISOString().slice(0, 10),
-      runAt: nowIso(),
-      tokensChecked: apiKeys.length,
-      validTokenCount: apiKeys.filter((k) => k.status === "active").length,
-      action: "started",
-      instanceState: "running",
-      notes: "Manual start from admin dashboard"
-    },
-    ...cronLogs
-  ];
+  const actor = getCurrentUserLocal();
+  await changeServerState({
+    action: "start",
+    triggerSource: "admin_dashboard",
+    actorType: "user",
+    actorId: actor.uid,
+    actorEmail: actor.email,
+    reason: "Manual start requested from admin dashboard",
+    nextState: "running"
+  });
 }
 
 export async function stopServer(): Promise<void> {
-   
-  instanceState = { ...instanceState, state: "stopped" };
-  cronLogs = [
-    {
-      date: new Date().toISOString().slice(0, 10),
-      runAt: nowIso(),
-      tokensChecked: apiKeys.length,
-      validTokenCount: apiKeys.filter((k) => k.status === "active").length,
-      action: "stopped",
-      instanceState: "stopped",
-      notes: "Manual stop from admin dashboard"
-    },
-    ...cronLogs
-  ];
+  const actor = getCurrentUserLocal();
+
+  if (appConfig.hackutdModeEnabled) {
+    const fallbackType: InstanceState["instanceType"] = "t3.micro";
+    await changeServerState({
+      action: "hackutd_disable",
+      triggerSource: "admin_dashboard",
+      actorType: "user",
+      actorId: actor.uid,
+      actorEmail: actor.email,
+      reason: "HackUTD mode automatically disabled during manual stop",
+      nextType: fallbackType
+    });
+    await updateAppConfig({
+      hackutdModeEnabled: false,
+      instanceType: fallbackType
+    });
+  }
+
+  await changeServerState({
+    action: "stop",
+    triggerSource: "admin_dashboard",
+    actorType: "user",
+    actorId: actor.uid,
+    actorEmail: actor.email,
+    reason: "Manual stop requested from admin dashboard",
+    nextState: "stopped"
+  });
 }
 
 export async function updateAppConfig(cfg: Partial<AppConfig>): Promise<AppConfig> {
@@ -355,6 +429,7 @@ export async function updateAppConfig(cfg: Partial<AppConfig>): Promise<AppConfi
     updatedAt: nowIso(),
     updatedBy: getCurrentUserLocal().uid
   };
+
   instanceState = {
     ...instanceState,
     instanceType: appConfig.instanceType
@@ -363,13 +438,31 @@ export async function updateAppConfig(cfg: Partial<AppConfig>): Promise<AppConfi
 }
 
 export async function enableHackutdMode(): Promise<void> {
-  await stopServer();
-  await updateAppConfig({ hackutdModeEnabled: true, instanceType: "t3.large" });
-  await startServer();
+  const actor = getCurrentUserLocal();
+  const nextType: InstanceState["instanceType"] = "t3.large";
+  await changeServerState({
+    action: "hackutd_enable",
+    triggerSource: "admin_dashboard",
+    actorType: "user",
+    actorId: actor.uid,
+    actorEmail: actor.email,
+    reason: "HackUTD mode enabled from admin dashboard",
+    nextType
+  });
+  await updateAppConfig({ hackutdModeEnabled: true, instanceType: nextType });
 }
 
 export async function disableHackutdMode(): Promise<void> {
-  await stopServer();
-  await updateAppConfig({ hackutdModeEnabled: false, instanceType: "t3.micro" });
-  await startServer();
+  const actor = getCurrentUserLocal();
+  const nextType: InstanceState["instanceType"] = "t3.micro";
+  await changeServerState({
+    action: "hackutd_disable",
+    triggerSource: "admin_dashboard",
+    actorType: "user",
+    actorId: actor.uid,
+    actorEmail: actor.email,
+    reason: "HackUTD mode disabled from admin dashboard",
+    nextType
+  });
+  await updateAppConfig({ hackutdModeEnabled: false, instanceType: nextType });
 }

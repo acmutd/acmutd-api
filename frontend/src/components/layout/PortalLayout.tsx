@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { AppConfig, User } from "../../types/models";
 import { Button } from "../ui/Button";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface NavItem {
   key: string;
@@ -28,7 +28,29 @@ export function PortalLayout({
   children: React.ReactNode;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuContainerRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!menuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (!menuContainerRef.current) {
+        return;
+      }
+      const target = event.target as Node;
+      if (!menuContainerRef.current.contains(target)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [menuOpen]);
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900">
@@ -76,16 +98,11 @@ export function PortalLayout({
             )}
           </div>
 
-          <div className="relative">
+          <div className="relative" ref={menuContainerRef}>
             <button
               className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5"
               onClick={() => setMenuOpen((v) => !v)}
             >
-              <img
-                src={user.photoURL || "https://i.pravatar.cc/100"}
-                alt={user.displayName}
-                className="h-8 w-8 rounded-full object-cover object-center"
-              />
               <div className="hidden text-left md:block">
                 <p className="text-sm font-medium leading-4">
                   {user.displayName}
@@ -95,7 +112,7 @@ export function PortalLayout({
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 z-20 mt-2 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md">
+              <div className="absolute right-0 top-0 z-30 w-52 rounded-md border border-slate-200 bg-white p-2 shadow-md">
                 <div className="mb-1 rounded px-3 py-2 text-left">
                   <p className="flex items-center justify-between text-sm font-medium text-slate-900">
                     <span>{user.displayName}</span>

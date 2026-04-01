@@ -2,7 +2,6 @@ export interface User {
   uid: string;
   email: string;
   displayName: string;
-  photoURL?: string;
   isAdmin: boolean;
   approvalStatus: "approved" | "pending" | "banned";
   createdAt: string;
@@ -44,14 +43,15 @@ export interface DailyStat {
   endpointBreakdown: EndpointBreakdown[];
 }
 
-export type AutoApproveMode = "none" | "utdallas" | "acmutd" | "all";
+export type AutoApproveMode = "none" | "@utdallas.edu" | "@acmutd.co" | "both" | "all";
+export type InstanceType = "t3.nano" | "t3.micro" | "t3.small" | "t3.medium" | "t3.large" | "t3.xlarge" | "t3.2xlarge";
 
 export interface AppConfig {
   autoApproveMode: AutoApproveMode;
   hackutdModeEnabled: boolean;
   hackutdEndDate: string;
   currentSemester: string;
-  instanceType: "t3.micro" | "t3.small" | "t3.large";
+  instanceType: InstanceType;
   updatedAt: string;
   updatedBy: string;
 }
@@ -70,13 +70,39 @@ export interface ScraperLog {
 }
 
 export interface CronLog {
-  date: string;
+  logId: string;
   runAt: string;
+  jobName: string;
+  status: "success" | "error";
   tokensChecked: number;
   validTokenCount: number;
-  action: "started" | "stopped" | "no-op";
-  instanceState: string;
-  notes?: string;
+  decision: "start" | "stop" | "no-op";
+  triggeredAction: boolean;
+  serverLogId: string;
+  errorMessage: string;
+  durationMs: number;
+}
+
+export interface ServerStateLog {
+  logId: string;
+  timestamp: string;
+  action: "start" | "stop" | "resize" | "hackutd_enable" | "hackutd_disable";
+  status: "success" | "error";
+  triggerSource: "admin_dashboard" | "cron" | "system";
+  actorType: "user" | "system";
+  actorId: string;
+  actorEmail: string;
+  reason: string;
+  requestId: string;
+  cronLogId: string;
+  previousState: "running" | "stopped";
+  newState: "running" | "stopped";
+  previousType: InstanceType;
+  newType: InstanceType;
+  instanceId: string;
+  publicIp: string;
+  errorMessage: string;
+  durationMs: number;
 }
 
 export interface PromotionLog {
@@ -153,7 +179,7 @@ export interface RequestEvent {
 
 export interface InstanceState {
   instanceId: string;
-  instanceType: "t3.micro" | "t3.small" | "t3.large";
+  instanceType: InstanceType;
   state: "running" | "stopped";
   uptimeSeconds: number;
   publicIp: string;

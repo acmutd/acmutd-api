@@ -24,6 +24,7 @@ import {
   listPendingKeyRequests,
   listPromotionLogs,
   listScraperLogs,
+  listServerStateLogs,
   listUsers,
   rejectKey,
   startServer,
@@ -49,13 +50,14 @@ import {
   PromotionLog,
   RequestEvent,
   ScraperLog,
+  ServerStateLog,
   User,
 } from "../types/models";
 
 const adminNavItems = [
   { key: "overview", label: "Overview" },
   { key: "user-keys", label: "User Keys" },
-  { key: "token-management", label: "Usage" },
+  { key: "usage", label: "Usage" },
   { key: "server-controls", label: "Server Controls" },
   { key: "logs-metrics", label: "Logs & Metrics" },
   { key: "config", label: "Config" },
@@ -73,6 +75,7 @@ export function AdminDashboardPage() {
   const [pendingKeys, setPendingKeys] = useState<APIKey[]>([]);
   const [scraperLogs, setScraperLogs] = useState<ScraperLog[]>([]);
   const [cronLogs, setCronLogs] = useState<CronLog[]>([]);
+  const [serverStateLogs, setServerStateLogs] = useState<ServerStateLog[]>([]);
   const [promotionLogs, setPromotionLogs] = useState<PromotionLog[]>([]);
   const [allDailyStats, setAllDailyStats] = useState<DailyStat[]>([]);
   const [allRecentRequests, setAllRecentRequests] = useState<RequestEvent[]>(
@@ -147,6 +150,7 @@ export function AdminDashboardPage() {
       pending,
       scraper,
       cron,
+      serverLogs,
       promotions,
       dailyStats,
       recentRequests,
@@ -158,6 +162,7 @@ export function AdminDashboardPage() {
       listPendingKeyRequests(),
       listScraperLogs(),
       listCronLogs(),
+      listServerStateLogs(),
       listPromotionLogs(),
       listAllDailyStats(),
       listAllRecentRequests(),
@@ -171,6 +176,7 @@ export function AdminDashboardPage() {
     setPendingKeys(pending);
     setScraperLogs(scraper);
     setCronLogs(cron);
+    setServerStateLogs(serverLogs);
     setPromotionLogs(promotions);
     setAllDailyStats(dailyStats);
     setAllRecentRequests(recentRequests);
@@ -322,26 +328,25 @@ export function AdminDashboardPage() {
           <Card className="flex min-h-0 flex-1 flex-col">
             <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <CardTitle>User Keys</CardTitle>
-              <Button
-                onClick={() => {
-                  setTokenModalMode("add");
-                  setEditingTokenId(null);
-                  setTokenForm({
-                    ownerEmail: "",
-                    label: "",
-                    description: "",
-                    isAdmin: false,
-                    rateLimit: 120,
-                    windowSeconds: 60,
-                    expiresAt: "2026-12-31",
-                  });
-                  setTokenModalOpen(true);
-                }}
-                className="grid gap-2 md:grid-cols-2"
-              >
-                Add key
-              </Button>
-              <div className="grid gap-2 md:grid-cols-2">
+              <div className="grid gap-2 md:grid-cols-3">
+                <Button
+                  onClick={() => {
+                    setTokenModalMode("add");
+                    setEditingTokenId(null);
+                    setTokenForm({
+                      ownerEmail: "",
+                      label: "",
+                      description: "",
+                      isAdmin: false,
+                      rateLimit: 120,
+                      windowSeconds: 60,
+                      expiresAt: "2026-12-31",
+                    });
+                    setTokenModalOpen(true);
+                  }}
+                >
+                  Add key
+                </Button>
                 <Select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -548,7 +553,7 @@ export function AdminDashboardPage() {
         </div>
       )}
 
-      {activeTab === "token-management" && (
+      {activeTab === "usage" && (
         <div className="space-y-4">
           <Card>
             <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -681,43 +686,40 @@ export function AdminDashboardPage() {
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
+                variant={
+                  instanceState?.state === "running" ? "danger" : "primary"
+                }
                 onClick={async () => {
-                  await startServer();
-                  showToast("Server start requested");
+                  if (instanceState?.state === "running") {
+                    await stopServer();
+                    showToast("Server stop requested");
+                  } else {
+                    await startServer();
+                    showToast("Server start requested");
+                  }
                   await loadData();
                 }}
               >
-                Start Instance
-              </Button>
-              <Button
-                variant="danger"
-                onClick={async () => {
-                  await stopServer();
-                  showToast("Server stop requested");
-                  await loadData();
-                }}
-              >
-                Stop Instance
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={async () => {
-                  await enableHackutdMode();
-                  showToast("HackUTD mode enabled");
-                  await loadData();
-                }}
-              >
-                Enable HackUTD mode
+                {instanceState?.state === "running"
+                  ? "Stop Instance"
+                  : "Start Instance"}
               </Button>
               <Button
                 variant="secondary"
                 onClick={async () => {
-                  await disableHackutdMode();
-                  showToast("HackUTD mode disabled");
+                  if (appConfig?.hackutdModeEnabled) {
+                    await disableHackutdMode();
+                    showToast("HackUTD mode disabled");
+                  } else {
+                    await enableHackutdMode();
+                    showToast("HackUTD mode enabled");
+                  }
                   await loadData();
                 }}
               >
-                Disable HackUTD mode
+                {appConfig?.hackutdModeEnabled
+                  ? "Disable HackUTD mode"
+                  : "Enable HackUTD mode"}
               </Button>
             </div>
           </Card>
@@ -725,9 +727,9 @@ export function AdminDashboardPage() {
           <Card>
             <CardTitle>Server action timeline</CardTitle>
             <div className="mt-3 space-y-2">
-              {cronLogs.map((entry, index) => (
+              {serverStateLogs.map((entry) => (
                 <div
-                  key={`${entry.runAt}_${index}`}
+                  key={entry.logId}
                   className="rounded-md border border-slate-200 p-3 text-sm"
                 >
                   <div className="flex items-center justify-between">
@@ -735,15 +737,26 @@ export function AdminDashboardPage() {
                       {entry.action.toUpperCase()}
                     </span>
                     <span className="text-slate-500">
-                      {formatDateTime(entry.runAt)}
+                      {formatDateTime(entry.timestamp)}
                     </span>
                   </div>
                   <p className="mt-1 text-slate-600">
-                    Checked {entry.tokensChecked} tokens, valid{" "}
-                    {entry.validTokenCount}, instance {entry.instanceState}
+                    {entry.triggerSource} | {entry.actorType}:{" "}
+                    {entry.actorEmail || entry.actorId}
                   </p>
-                  {entry.notes && (
-                    <p className="mt-1 text-xs text-slate-500">{entry.notes}</p>
+                  <p className="mt-1 text-slate-600">
+                    State {entry.previousState} -&gt; {entry.newState}, type{" "}
+                    {entry.previousType} -&gt; {entry.newType}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">{entry.reason}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    status={entry.status}, requestId={entry.requestId}
+                    {entry.cronLogId ? `, cronLogId=${entry.cronLogId}` : ""}
+                  </p>
+                  {entry.errorMessage && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {entry.errorMessage}
+                    </p>
                   )}
                 </div>
               ))}
@@ -805,15 +818,25 @@ export function AdminDashboardPage() {
                   className="rounded-md border border-slate-200 p-3 text-sm"
                 >
                   <p className="font-medium">
-                    {entry.date} - {entry.action.toUpperCase()} (
-                    {entry.instanceState})
+                    {entry.logId} - {entry.decision.toUpperCase()} (
+                    {entry.status})
                   </p>
                   <p className="text-slate-600">
                     tokensChecked: {entry.tokensChecked}, validTokenCount:{" "}
                     {entry.validTokenCount}
                   </p>
-                  {entry.notes && (
-                    <p className="text-xs text-slate-500">{entry.notes}</p>
+                  <p className="text-xs text-slate-500">
+                    jobName: {entry.jobName}, triggeredAction:{" "}
+                    {entry.triggeredAction ? "true" : "false"}, durationMs:{" "}
+                    {entry.durationMs}
+                  </p>
+                  {entry.serverLogId && (
+                    <p className="text-xs text-slate-500">
+                      linked serverLogId: {entry.serverLogId}
+                    </p>
+                  )}
+                  {entry.errorMessage && (
+                    <p className="text-xs text-red-600">{entry.errorMessage}</p>
                   )}
                 </div>
               ))}
@@ -873,8 +896,9 @@ export function AdminDashboardPage() {
                 }
               >
                 <option value="none">None</option>
-                <option value="utdallas">UTD only (@utdallas.edu)</option>
-                <option value="acmutd">ACM UTD only (@acmutd.co)</option>
+                <option value="@utdallas.edu">@utdallas.edu only</option>
+                <option value="@acmutd.co">@acmutd.co only</option>
+                <option value="both">@utdallas.edu and @acmutd.co only</option>
                 <option value="all">All users</option>
               </Select>
             </div>
@@ -942,9 +966,13 @@ export function AdminDashboardPage() {
                   )
                 }
               >
+                <option value="t3.nano">t3.nano</option>
                 <option value="t3.micro">t3.micro</option>
                 <option value="t3.small">t3.small</option>
+                <option value="t3.medium">t3.medium</option>
                 <option value="t3.large">t3.large</option>
+                <option value="t3.xlarge">t3.xlarge</option>
+                <option value="t3.2xlarge">t3.2xlarge</option>
               </Select>
             </div>
           </div>

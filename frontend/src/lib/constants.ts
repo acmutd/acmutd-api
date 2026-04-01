@@ -2,7 +2,7 @@ export const USER_DASHBOARD_TABS = ["overview", "my-key", "usage"] as const;
 export const ADMIN_DASHBOARD_TABS = [
   "overview",
   "user-keys",
-  "token-management",
+  "usage",
   "server-controls",
   "logs-metrics",
   "config"

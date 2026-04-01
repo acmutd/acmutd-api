@@ -23,26 +23,14 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   return children;
 }
 
-function RequireAdmin({ children }: { children: JSX.Element }) {
-  const { currentUser, loading } = useAuth();
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-600">
-        Loading session...
-      </div>
-    );
-  }
+function DashboardPage() {
+  const { currentUser } = useAuth();
 
   if (!currentUser) {
     return <Navigate to="/" replace />;
   }
 
-  if (!currentUser.isAdmin) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return children;
+  return currentUser.isAdmin ? <AdminDashboardPage /> : <UserDashboardPage />;
 }
 
 export function App() {
@@ -53,16 +41,8 @@ export function App() {
         path="/dashboard"
         element={
           <RequireAuth>
-            <UserDashboardPage />
+            <DashboardPage />
           </RequireAuth>
-        }
-      />
-      <Route
-        path="/admin"
-        element={
-          <RequireAdmin>
-            <AdminDashboardPage />
-          </RequireAdmin>
         }
       />
       <Route path="*" element={<NotFoundPage />} />
