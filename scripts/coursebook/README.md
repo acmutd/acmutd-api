@@ -67,7 +67,7 @@ The scraper handles two different response scenarios:
    - Retries up to 3 times before giving up
 
 ### 3. Deduplication & Output
-1. After each filter is completed, saves output to `{term}/{filter}.json`. If further filtered by day or level, results are saved to `{term}/{filter}/{sub_filter}.json`.
+1. After each course request is completed, saves output html to `{term}/{filter}.html`. If further filtered by day or level, results are saved to `{term}/{filter}/{sub_filter}.html`.
 
 2. After all filters are completed, it combines all JSON in `{term}/`
     - Uses `section_address` (e.g., `acct2301.001.24f`) as a unique key
@@ -86,55 +86,60 @@ The output will be placed in `out/classes_[term].json`, ex: `classes_25f.json`.
 
 ```json
     {
-        "section_address": "acct2301.001.25s",
-        "course_prefix": "acct",
-        "course_number": "2301",
+        "section_address": "angm2315.001.23f",
+        "course_prefix": "angm",
+        "course_number": "2315",
         "section": "001",
-        "class_course_number": "26595 / 000061",
+        "class_course_number": "81419 / 015930",
         "class_level": "Undergraduate",
         "instruction_mode": "Face-to-Face",
-        "title": "Introductory Financial Accounting",
-        "description": "ACCT 2301- Introductory Financial Accounting(3 semester credit hours) An introduction to financial reporting designed to create an awareness of the accounting concepts and principles for preparing the three basic financial statements: the income statement, balance sheet, and statement of cash flows. A minimum grade of C is required to take upper-division ACCT courses. (3-0) S",
+        "title": "Animation Origins and Techniques",
+        "description": "ANGM 2315- Animation Origins and Techniques(3 semester credit hours) This course investigates the historical development of animation as a worldwide medium from its origins to contemporary times. In each class, pioneering commercial and experimental animations, their artists and studios are showcased, studied, and analyzed, considering their relevance and influence on current-day animation practices and techniques. (3-0) Y",
         "enrolled_status": "OPEN",
-        "enrolled_current": 64,
-        "enrolled_max": 67,
+        "enrolled_current": 99,
+        "enrolled_max": 100,
         "waitlist": 0,
-        "term": "25s",
-        "days": [
-            "Tuesday",
-            "Thursday"
+        "term": "23f",
+        "start_date": "August 21, 2023",
+        "end_date": "December 15, 2023",
+        "meetings": [
+            {
+                "date_range": "August 21, 2023-December 7, 2023",
+                "days": [
+                    "Friday"
+                ],
+                "time": "10:00am-12:45pm",
+                "location": "JSOM 2.106"
+            }
         ],
-        "times_12h": "8:30am-9:45am",
-        "location": "JSOM 2.717",
         "activity_type": "Lecture",
         "semester_credit_hours": "3",
         "core": null,
         "grading": "Graded - Undergraduate",
         "session_type": "Regular Academic Session",
         "add_consent": "No Consent",
-        "enrollment_reqs": [
-            "ACCT 2301 Repeat Restriction"
-        ],
+        "orion_datetime": "2025-09-15 06:30:01",
+        "schedule_frequency": null,
+        "enrollment_reqs": [],
         "class_attributes": [],
         "class_notes": null,
         "instructors": [
-            "Jieying Zhang",
-            "Naim Bugra Ozel"
+            "Christine Veras"
         ],
         "instructor_ids": [
-            "jxz146230",
-            "nbo150030"
+            "cxv180000"
         ],
         "tas": [
-            "Galymzhan Tazhibayev",
-            "Dipta Banik"
+            "Anish Kusupati",
+            "Alissa Clarke-Gaar"
         ],
         "ta_ids": [
-            "gxt230023",
-            "dxb220047"
+            "ack160130",
+            "acc230000"
         ],
-        "school": "Naveen Jindal School of Management",
-        "school_id": "jsom",
-        "syllabus": "syl152552"
+        "school": "School of Arts, Humanities, and Technology",
+        "school_id": "aht",
+        "cross_listed": [],
+        "syllabus": "syl134874"
     },
 ```
