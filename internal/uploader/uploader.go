@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/acmutd/acmutd-api/internal/firebase"
@@ -12,38 +13,36 @@ import (
 
 var folders = []string{"coursebook", "enhanced_grades", "professors"}
 
-type UploaderService struct {
-	Client *firebase.FBClient
+type UploaderHandler struct {
+	client *firebase.FBClient
 	config UploaderConfig
 }
 
 type UploaderConfig struct {
 	SaveEnvironment string
 	InputBase       string
-	classTerms      []string
-	shouldGather    bool
+	ClassTerms      []string
+	ShouldGather    bool
 }
 
-func NewUploaderService(saveEnv string, gather bool) (*UploaderService, error) {
+func NewUploaderHandler(client *firebase.FBClient, saveEnv string, gather bool) (*UploaderHandler, error) {
 	saveEnv = strings.ToLower(saveEnv)
-	if saveEnv != "dev" && saveEnv != "prod" {
-		return nil, fmt.Errorf("invalid SAVE_ENVIRONMENT: %s (must be 'dev' or 'prod')", saveEnv)
-	}
 
 	classTerms := parseClassTerms(os.Getenv("CLASS_TERMS"))
 	if len(classTerms) == 0 {
 		return nil, fmt.Errorf("CLASS_TERMS is required (comma-separated, e.g. 24f,25s)")
 	}
 
-	return &UploaderService{
-		Client: firebase.NewFBClient(),
+	handler := &UploaderHandler{
+		client: client,
 		config: UploaderConfig{
 			SaveEnvironment: saveEnv,
-			InputBase:       "uploader",
-			classTerms:      classTerms,
-			shouldGather:    gather,
+			ShouldGather:    gather,
+			InputBase:       filepath.Join("uploader"),
+			ClassTerms:      classTerms,
 		},
-	}, nil
+	}
+	return handler, nil
 }
 
 func parseClassTerms(raw string) []string {
@@ -57,14 +56,10 @@ func parseClassTerms(raw string) []string {
 	return terms
 }
 
-func (s *UploaderService) Run() error {
-	if err := s.Client.EnsureInitialized(s.config.SaveEnvironment); err != nil {
-		return fmt.Errorf("failed to initialize Firebase: %w", err)
-	}
-
-	if s.config.shouldGather {
-		log.Printf("Gathering data for terms: %v", s.config.classTerms)
-		if err := s.Client.CloudStorage().DownloadFolders(context.Background(), s.config.InputBase, folders); err != nil {
+func (h *UploaderHandler) Start() error {
+	if h.config.ShouldGather {
+		log.Printf("Gathering data for terms: %v", h.config.ClassTerms)
+		if err := h.client.CloudStorage().DownloadFolders(context.Background(), h.config.InputBase, folders); err != nil {
 			return fmt.Errorf("gather phase failed: %w", err)
 		}
 		log.Println("All data gathered successfully")

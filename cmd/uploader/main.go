@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/acmutd/acmutd-api/internal/firebase"
 	"github.com/acmutd/acmutd-api/internal/uploader"
 	"github.com/joho/godotenv"
 )
@@ -29,12 +30,17 @@ func main() {
 	log.Println("Class terms:", os.Getenv("CLASS_TERMS"))
 	log.Println("Gather from Cloud Storage:", *gather)
 
-	service, err := uploader.NewUploaderService(saveEnv, *gather)
-	if err != nil {
-		log.Fatalf("failed to initialize uploader service: %v", err)
+	client := firebase.NewFBClient()
+	if err := client.EnsureInitialized(saveEnv); err != nil {
+		log.Fatalf("failed to initialize Firebase: %v", err)
 	}
 
-	if err := service.Run(); err != nil {
+	handler, err := uploader.NewUploaderHandler(client, saveEnv, *gather)
+	if err != nil {
+		log.Fatalf("failed to configure upload handler: %v", err)
+	}
+
+	if err := handler.Start(); err != nil {
 		log.Fatalf("uploader failed: %v", err)
 	}
 
