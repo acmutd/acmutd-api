@@ -45,11 +45,3 @@ func NewFirestore(ctx context.Context, app *firebase.App) (*Firestore, error) {
 		Client: client,
 	}, nil
 }
-
-// sanitizeDocID sanitizes a value for use as a Firestore document ID
-func sanitizeDocID(value string) string {
-	sanitized := strings.TrimSpace(value)
-	sanitized = strings.ReplaceAll(sanitized, "/", "-")
-	sanitized = strings.ReplaceAll(sanitized, " ", "")
-	return sanitized
-}

@@ -15,8 +15,8 @@ import (
 
 // loadAndCombine reads coursebook JSON and enhanced grades CSV for the given terms,
 // then combines entries by section_address into SectionDoc objects ready for Firestore.
-func loadAndCombine(inputBase string, terms []string) (map[string]*types.SectionDoc, map[string]map[string]*types.CourseGeneralInfo, error) {
-	allSections := make(map[string]*types.SectionDoc)
+func loadAndCombine(inputBase string, terms []string) ([]*types.SectionDoc, map[string]map[string]*types.CourseGeneralInfo, error) {
+	allSections := make([]*types.SectionDoc, 0)
 	allCourses := make(map[string]map[string]*types.CourseGeneralInfo)
 
 	for _, term := range terms {
@@ -38,9 +38,7 @@ func loadAndCombine(inputBase string, terms []string) (map[string]*types.Section
 			continue
 		}
 
-		for addr, sec := range combined {
-			allSections[addr] = sec
-		}
+		allSections = append(allSections, combined...)
 
 		// Keep latest course info but accumulate grades across terms
 		for prefix, numbers := range courses {
@@ -68,26 +66,26 @@ func loadAndCombine(inputBase string, terms []string) (map[string]*types.Section
 	return allSections, allCourses, nil
 }
 
-func mergeGrades(sections map[string]*types.SectionDoc, grades map[string]types.GradeDistribution, term string) (map[string]*types.SectionDoc, error) {
-	combined := make(map[string]*types.SectionDoc, len(sections))
-	for addr, sec := range sections {
-		combined[addr] = sec
-	}
-
+func mergeGrades(sections map[string]*types.SectionDoc, grades map[string]types.GradeDistribution, term string) ([]*types.SectionDoc, error) {
 	for addr, gd := range grades {
 		gd := gd
-		if entry, ok := combined[addr]; ok {
+		if entry, ok := sections[addr]; ok {
 			entry.Grades = &gd
 		} else {
 			log.Printf("Warning: grade record for %s has no matching course section", addr)
-			combined[addr] = &types.SectionDoc{
+			sections[addr] = &types.SectionDoc{
 				SectionAddress: addr,
 				Term:           term,
 				Grades:         &gd,
 			}
 		}
 	}
-	return combined, nil
+
+	result := make([]*types.SectionDoc, 0, len(sections))
+	for _, sec := range sections {
+		result = append(result, sec)
+	}
+	return result, nil
 }
 
 // loadCoursebookTerm reads a classes_{term}.json file, parses RawCourse entries,
