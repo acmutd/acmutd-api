@@ -67,6 +67,13 @@ func (h *UploaderHandler) Start() error {
 		log.Println("Skipping gather (use --gather to download from Cloud Storage)")
 	}
 
-	// TODO: implement Firestore structuring logic
+	sections, courses, err := loadAndCombine(h.config.InputBase, h.config.ClassTerms)
+	if err != nil {
+		return fmt.Errorf("load and combine failed: %w", err)
+	}
+
+	log.Printf("Combined %d section documents and %d course groups across terms %v", len(sections), len(courses), h.config.ClassTerms)
+
+	// TODO: write sections to Firestore
 	return nil
 }
