@@ -137,13 +137,16 @@ func loadCoursebookTerm(inputBase, term string) (map[string]*types.SectionDoc, m
 			course := courses[sec.Prefix][sec.Number]
 			subtitleVal := *sec.Subtitle
 
+			found := false
 			for _, st := range course.SectionTypes {
 				if st == subtitleVal {
+					found = true
 					break
 				}
 			}
-
-			course.SectionTypes = append(course.SectionTypes, subtitleVal)
+			if !found {
+				course.SectionTypes = append(course.SectionTypes, subtitleVal)
+			}
 		}
 	}
 
