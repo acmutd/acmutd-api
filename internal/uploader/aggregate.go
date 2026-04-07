@@ -13,88 +13,72 @@ import (
 	"github.com/acmutd/acmutd-api/internal/types"
 )
 
-// loadAndCombine reads coursebook JSON and enhanced grades CSV for the given terms,
+// loadAndCombine reads coursebook JSON and enhanced grades CSV for the given term,
 // then combines entries by section_address into SectionDoc objects ready for Firestore.
-func loadAndCombine(inputBase string, terms []string) ([]*types.SectionDoc, []*types.CourseGeneralInfo, error) {
-	allSections := make([]*types.SectionDoc, 0)
+// Each returned CourseGeneralInfo has its Sections field populated.
+func loadAndCombine(inputBase string, term string) ([]*types.CourseGeneralInfo, error) {
+	log.Printf("Combining data for term %s", term)
+
+	sections, courses, err := loadCoursebookTerm(inputBase, term)
+	if err != nil {
+		log.Printf("Warning: could not load coursebook for term %s: %v", term, err)
+	}
+
+	grades, err := loadGradesTerm(inputBase, term)
+	if err != nil {
+		log.Printf("Warning: could not load grades for term %s: %v", term, err)
+	}
+
+	combined, err := mergeGrades(sections, grades, term)
+	if err != nil {
+		return nil, fmt.Errorf("could not merge grades for term %s: %w", term, err)
+	}
+
 	courseIndex := make(map[string]*types.CourseGeneralInfo)
-
-	for _, term := range terms {
-		log.Printf("Combining data for term %s", term)
-
-		sections, courses, err := loadCoursebookTerm(inputBase, term)
-		if err != nil {
-			log.Printf("Warning: could not load coursebook for term %s: %v", term, err)
+	for prefix, numbers := range courses {
+		for number, course := range numbers {
+			courseIndex[prefix+"/"+number] = course
 		}
+	}
 
-		grades, err := loadGradesTerm(inputBase, term)
-		if err != nil {
-			log.Printf("Warning: could not load grades for term %s: %v", term, err)
-		}
-
-		combined, err := mergeGrades(sections, grades, term)
-		if err != nil {
-			log.Printf("Warning: could not merge grades for term %s: %v", term, err)
+	// Attach each section to its course and aggregate grade totals
+	for _, sec := range combined {
+		key := sec.Prefix + "/" + sec.Number
+		course := courseIndex[key]
+		if course == nil {
+			log.Printf("Warning: section %s has no matching course entry", sec.SectionAddress)
 			continue
 		}
 
-		allSections = append(allSections, combined...)
+		course.Sections = append(course.Sections, sec)
 
-		// Keep latest course info but accumulate grades across terms
-		for prefix, numbers := range courses {
-			for number, course := range numbers {
-				key := prefix + "/" + number
-				if existing, exists := courseIndex[key]; exists {
-					prevGrades := existing.Grades
-					courseIndex[key] = course
-					if course.Grades == nil {
-						course.Grades = prevGrades
-					} else if prevGrades != nil {
-						for k, v := range prevGrades {
-							course.Grades[k] = v
-						}
-					}
-				} else {
-					courseIndex[key] = course
-				}
-			}
+		if sec.Grades == nil {
+			continue
 		}
-
-		// Aggregate section grades into course-level grades for this term
-		for _, sec := range combined {
-			if sec.Grades == nil {
-				continue
-			}
-			key := sec.Prefix + "/" + sec.Number
-			course := courseIndex[key]
-			if course == nil {
-				continue
-			}
-			if course.Grades == nil {
-				course.Grades = make(map[string]types.GradeDistribution)
-			}
-			existing := course.Grades[term]
-			existing.APlus += sec.Grades.APlus
-			existing.A += sec.Grades.A
-			existing.AMinus += sec.Grades.AMinus
-			existing.BPlus += sec.Grades.BPlus
-			existing.B += sec.Grades.B
-			existing.BMinus += sec.Grades.BMinus
-			existing.CPlus += sec.Grades.CPlus
-			existing.C += sec.Grades.C
-			existing.CMinus += sec.Grades.CMinus
-			existing.DPlus += sec.Grades.DPlus
-			existing.D += sec.Grades.D
-			existing.DMinus += sec.Grades.DMinus
-			existing.F += sec.Grades.F
-			existing.NF += sec.Grades.NF
-			existing.CR += sec.Grades.CR
-			existing.I += sec.Grades.I
-			existing.NC += sec.Grades.NC
-			existing.P += sec.Grades.P
-			existing.W += sec.Grades.W
-			course.Grades[term] = existing
+		if course.Grades == nil {
+			course.Grades = make(map[string]types.GradeDistribution)
 		}
+		existing := course.Grades[term]
+		existing.APlus += sec.Grades.APlus
+		existing.A += sec.Grades.A
+		existing.AMinus += sec.Grades.AMinus
+		existing.BPlus += sec.Grades.BPlus
+		existing.B += sec.Grades.B
+		existing.BMinus += sec.Grades.BMinus
+		existing.CPlus += sec.Grades.CPlus
+		existing.C += sec.Grades.C
+		existing.CMinus += sec.Grades.CMinus
+		existing.DPlus += sec.Grades.DPlus
+		existing.D += sec.Grades.D
+		existing.DMinus += sec.Grades.DMinus
+		existing.F += sec.Grades.F
+		existing.NF += sec.Grades.NF
+		existing.CR += sec.Grades.CR
+		existing.I += sec.Grades.I
+		existing.NC += sec.Grades.NC
+		existing.P += sec.Grades.P
+		existing.W += sec.Grades.W
+		course.Grades[term] = existing
 	}
 
 	allCourses := make([]*types.CourseGeneralInfo, 0, len(courseIndex))
@@ -102,7 +86,7 @@ func loadAndCombine(inputBase string, terms []string) ([]*types.SectionDoc, []*t
 		allCourses = append(allCourses, c)
 	}
 
-	return allSections, allCourses, nil
+	return allCourses, nil
 }
 
 func mergeGrades(sections map[string]*types.SectionDoc, grades map[string]types.GradeDistribution, term string) ([]*types.SectionDoc, error) {

@@ -233,6 +233,11 @@ type CourseGeneralInfo struct {
 	ScheduleFrequency *string                      `firestore:"schedule_frequency"`
 	SectionTypes      []string                     `firestore:"section_types"`
 	Grades            map[string]GradeDistribution `firestore:"grades"`
+	LastUpdatedTerm   string                       `firestore:"last_updated_term"`
+
+	// Sections holds the associated section documents for this course.
+	// Populated during the combine step; not written to Firestore.
+	Sections []*SectionDoc `firestore:"-"`
 }
 
 // CourseQuery contains parameters for querying courses

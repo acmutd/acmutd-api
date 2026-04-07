@@ -23,27 +23,31 @@ Structure:
     queries by term, course prefix, and course number while maintaining fast prefix
     lookups for each term.
 */
-func (h *UploaderHandler) InsertClassesWithIndexes(ctx context.Context, sections []*types.SectionDoc, courses []*types.CourseGeneralInfo, term string) {
-	fs := h.fbclient.Firestore()
-	writer := fs.BulkWriter(ctx)
-	defer writer.End()
-
+func (h *UploaderHandler) insertTermData(ctx context.Context, courses []*types.CourseGeneralInfo, term string, isLatestTerm bool) error {
 	normalizedTerm := strings.ToLower(strings.TrimSpace(term))
 	if normalizedTerm == "" {
-		return
+		return fmt.Errorf("invalid term: %s", term)
 	}
 
-	termDoc := fs.Collection("terms").Doc(normalizedTerm)
-	writer.Set(termDoc, map[string]any{
-		"term":         normalizedTerm,
-		"last_updated": time.Now(),
-	}, firestore.MergeAll)
+	writer := h.fbclient.Firestore().BulkWriter(ctx)
+	defer writer.End()
 
-	for _, course := range courses {
-		doc := fs.Collection("courses").Doc(course.Prefix).Collection("numbers").Doc(course.Number)
+	prefixes := h.insertCourses(writer, courses, normalizedTerm, isLatestTerm)
 
-		// We need to do this just to add the term grade distribution for this class into the document
-		writer.Set(doc, course, firestore.Merge(
+	h.insertTerm(writer, prefixes, normalizedTerm)
+
+	return nil
+}
+
+func (h *UploaderHandler) insertCourses(writer *firestore.BulkWriter, courses []*types.CourseGeneralInfo, term string, isLatestTerm bool) map[string]string {
+	fs := h.fbclient.Firestore()
+	prefixes := make(map[string]string)
+
+	// For the latest term, update all general info fields alongside the grade distribution.
+	// For older terms, only append the grade distribution to avoid overwriting newer metadata.
+	mergePaths := []firestore.FieldPath{{"grades", term}}
+	if isLatestTerm {
+		mergePaths = append(mergePaths,
 			firestore.FieldPath{"course_prefix"},
 			firestore.FieldPath{"course_number"},
 			firestore.FieldPath{"title"},
@@ -54,25 +58,41 @@ func (h *UploaderHandler) InsertClassesWithIndexes(ctx context.Context, sections
 			firestore.FieldPath{"core"},
 			firestore.FieldPath{"schedule_frequency"},
 			firestore.FieldPath{"section_types"},
-			firestore.FieldPath{"grades", term},
-		))
+			firestore.FieldPath{"last_updated_term"},
+		)
 	}
 
-	prefixes := make(map[string]string)
-
-	for _, sec := range sections {
-		prepared, ok := prepareCourseForTerm(*sec, normalizedTerm)
-		if !ok {
-			continue
+	for _, course := range courses {
+		if isLatestTerm {
+			course.LastUpdatedTerm = term
 		}
+		doc := fs.Collection("courses").Doc(course.Prefix).Collection("numbers").Doc(course.Number)
+		writer.Set(doc, course, firestore.Merge(mergePaths...))
 
-		doc := h.sectionsCollection(prepared.PrefixID, prepared.NumberID).Doc(prepared.SectionID)
-		writer.Set(doc, prepared.Course)
+		for _, sec := range course.Sections {
+			prepared, ok := prepareCourseForTerm(*sec, term)
+			if !ok {
+				continue
+			}
 
-		if _, exists := prefixes[prepared.PrefixID]; !exists {
-			prefixes[prepared.PrefixID] = prepared.Course.Prefix
+			doc := h.sectionsCollection(prepared.PrefixID, prepared.NumberID).Doc(prepared.SectionID)
+			writer.Set(doc, prepared.Course)
+
+			if _, exists := prefixes[prepared.PrefixID]; !exists {
+				prefixes[prepared.PrefixID] = prepared.Course.Prefix
+			}
 		}
 	}
+
+	return prefixes
+}
+
+func (h *UploaderHandler) insertTerm(writer *firestore.BulkWriter, prefixes map[string]string, term string) {
+	termDoc := h.fbclient.Firestore().Collection("terms").Doc(term)
+	writer.Set(termDoc, map[string]any{
+		"term":         term,
+		"last_updated": time.Now(),
+	}, firestore.MergeAll)
 
 	for prefixID, originalPrefix := range prefixes {
 		writer.Set(
@@ -80,7 +100,7 @@ func (h *UploaderHandler) InsertClassesWithIndexes(ctx context.Context, sections
 			map[string]any{
 				"course_prefix":     originalPrefix,
 				"normalized_prefix": prefixID,
-				"term":              normalizedTerm,
+				"term":              term,
 			},
 			firestore.MergeAll,
 		)

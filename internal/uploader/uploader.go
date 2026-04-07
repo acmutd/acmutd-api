@@ -56,6 +56,7 @@ func parseClassTerms(raw string) []string {
 	return terms
 }
 
+
 func (h *UploaderHandler) Start() error {
 	if h.config.ShouldGather {
 		log.Printf("Gathering data for terms: %v", h.config.ClassTerms)
@@ -67,15 +68,20 @@ func (h *UploaderHandler) Start() error {
 		log.Println("Skipping gather (use --gather to download from Cloud Storage)")
 	}
 
-	sections, courses, err := loadAndCombine(h.config.InputBase, h.config.ClassTerms)
-	if err != nil {
-		return fmt.Errorf("load and combine failed: %w", err)
-	}
+	lastIdx := len(h.config.ClassTerms) - 1
 
-	log.Printf("Combined %d section documents and %d course groups across terms %v", len(sections), len(courses), h.config.ClassTerms)
+	for i, term := range h.config.ClassTerms {
+		courses, err := loadAndCombine(h.config.InputBase, term)
+		if err != nil {
+			log.Printf("failed to load and combine data for term %s: %v", term, err)
+			continue
+		}
 
-	for _, term := range h.config.ClassTerms {
-		h.InsertClassesWithIndexes(context.Background(), sections, courses, term)
+		log.Printf("Combined %d course groups for term %s", len(courses), term)
+
+		if err := h.insertTermData(context.Background(), courses, term, i == lastIdx); err != nil {
+			log.Printf("failed to insert data for term %s: %v", term, err)
+		}
 	}
 	return nil
 }
