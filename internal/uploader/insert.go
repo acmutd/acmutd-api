@@ -15,6 +15,8 @@ Structure:
 
   - courses/{course_prefix}/numbers/{course_number}/sections/{section_address}
 
+  - courses/{course_prefix}/numbers/{course_number}
+
   - terms/{term}/prefixes/{course_prefix}
 
     This mirrors the recommended Firestore layout for efficient collection group
@@ -44,6 +46,8 @@ func (h *UploaderHandler) InsertClassesWithIndexes(ctx context.Context, sections
 		writer.Set(doc, course, firestore.Merge(
 			firestore.FieldPath{"course_prefix"},
 			firestore.FieldPath{"course_number"},
+			firestore.FieldPath{"title"},
+			firestore.FieldPath{"description"},
 			firestore.FieldPath{"credit_hours"},
 			firestore.FieldPath{"school"},
 			firestore.FieldPath{"school_id"},

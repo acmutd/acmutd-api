@@ -224,6 +224,8 @@ type Course struct {
 type CourseGeneralInfo struct {
 	Prefix            string                       `firestore:"course_prefix"`
 	Number            string                       `firestore:"course_number"`
+	Title             string                       `firestore:"title"`
+	Description       string                       `firestore:"description"`
 	CreditHours       int                          `firestore:"credit_hours"`
 	School            string                       `firestore:"school"`
 	SchoolID          string                       `firestore:"school_id"`

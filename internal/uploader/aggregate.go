@@ -158,9 +158,13 @@ func loadCoursebookTerm(inputBase, term string) (map[string]*types.SectionDoc, m
 			courses[sec.Prefix] = make(map[string]*types.CourseGeneralInfo)
 		}
 		if _, exists := courses[sec.Prefix][sec.Number]; !exists {
+			baseTitle, _ := splitTitle(sec.Title)
+
 			courses[sec.Prefix][sec.Number] = &types.CourseGeneralInfo{
 				Prefix:            sec.Prefix,
 				Number:            sec.Number,
+				Title:             baseTitle,
+				Description:       sec.Description,
 				CreditHours:       sec.CreditHours,
 				School:            sec.School,
 				SchoolID:          sec.SchoolID,

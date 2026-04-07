@@ -74,6 +74,8 @@ func (h *UploaderHandler) Start() error {
 
 	log.Printf("Combined %d section documents and %d course groups across terms %v", len(sections), len(courses), h.config.ClassTerms)
 
-	h.InsertClassesWithIndexes(context.Background(), sections, courses, h.config.ClassTerms[0])
+	for _, term := range h.config.ClassTerms {
+		h.InsertClassesWithIndexes(context.Background(), sections, courses, term)
+	}
 	return nil
 }
