@@ -2,7 +2,6 @@ package uploader
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -75,13 +74,6 @@ func (h *UploaderHandler) Start() error {
 
 	log.Printf("Combined %d section documents and %d course groups across terms %v", len(sections), len(courses), h.config.ClassTerms)
 
-	if math, ok := courses["math"]; ok {
-		if c, ok := math["2415"]; ok {
-			data, _ := json.MarshalIndent(c, "", "  ")
-			log.Printf("courses[\"math\"][\"2415\"]:\n%s", string(data))
-		}
-	}
-
-	h.InsertClassesWithIndexes(context.Background(), sections, h.config.ClassTerms[0])
+	h.InsertClassesWithIndexes(context.Background(), sections, courses, h.config.ClassTerms[0])
 	return nil
 }

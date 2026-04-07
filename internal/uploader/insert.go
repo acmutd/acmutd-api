@@ -21,7 +21,7 @@ Structure:
     queries by term, course prefix, and course number while maintaining fast prefix
     lookups for each term.
 */
-func (h *UploaderHandler) InsertClassesWithIndexes(ctx context.Context, sections []*types.SectionDoc, term string) {
+func (h *UploaderHandler) InsertClassesWithIndexes(ctx context.Context, sections []*types.SectionDoc, courses []*types.CourseGeneralInfo, term string) {
 	fs := h.fbclient.Firestore()
 	writer := fs.BulkWriter(ctx)
 	defer writer.End()
@@ -36,6 +36,23 @@ func (h *UploaderHandler) InsertClassesWithIndexes(ctx context.Context, sections
 		"term":         normalizedTerm,
 		"last_updated": time.Now(),
 	}, firestore.MergeAll)
+
+	for _, course := range courses {
+		doc := fs.Collection("courses").Doc(course.Prefix).Collection("numbers").Doc(course.Number)
+
+		// We need to do this just to add the term grade distribution for this class into the document
+		writer.Set(doc, course, firestore.Merge(
+			firestore.FieldPath{"course_prefix"},
+			firestore.FieldPath{"course_number"},
+			firestore.FieldPath{"credit_hours"},
+			firestore.FieldPath{"school"},
+			firestore.FieldPath{"school_id"},
+			firestore.FieldPath{"core"},
+			firestore.FieldPath{"schedule_frequency"},
+			firestore.FieldPath{"section_types"},
+			firestore.FieldPath{"grades", term},
+		))
+	}
 
 	prefixes := make(map[string]string)
 
