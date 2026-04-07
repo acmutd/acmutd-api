@@ -23,14 +23,23 @@ type UploaderConfig struct {
 	InputBase       string
 	ClassTerms      []string
 	ShouldGather    bool
+	UploaderType    string // "course" or "profs"
 }
 
 func NewUploaderHandler(client *firebase.FBClient, saveEnv string, gather bool) (*UploaderHandler, error) {
 	saveEnv = strings.ToLower(saveEnv)
 
-	classTerms := parseClassTerms(os.Getenv("CLASS_TERMS"))
-	if len(classTerms) == 0 {
-		return nil, fmt.Errorf("CLASS_TERMS is required (comma-separated, e.g. 24f,25s)")
+	uploaderType := strings.ToLower(strings.TrimSpace(os.Getenv("UPLOADER")))
+	if uploaderType != "course" && uploaderType != "profs" {
+		return nil, fmt.Errorf("UPLOADER is required (options: course, profs)")
+	}
+
+	var classTerms []string
+	if uploaderType == "course" {
+		classTerms = parseClassTerms(os.Getenv("CLASS_TERMS"))
+		if len(classTerms) == 0 {
+			return nil, fmt.Errorf("CLASS_TERMS is required for course uploader (comma-separated, e.g. 24f,25s)")
+		}
 	}
 
 	handler := &UploaderHandler{
@@ -40,6 +49,7 @@ func NewUploaderHandler(client *firebase.FBClient, saveEnv string, gather bool) 
 			ShouldGather:    gather,
 			InputBase:       filepath.Join("uploader"),
 			ClassTerms:      classTerms,
+			UploaderType:    uploaderType,
 		},
 	}
 	return handler, nil
@@ -56,10 +66,9 @@ func parseClassTerms(raw string) []string {
 	return terms
 }
 
-
 func (h *UploaderHandler) Start() error {
 	if h.config.ShouldGather {
-		log.Printf("Gathering data for terms: %v", h.config.ClassTerms)
+		log.Printf("Gathering data...")
 		if err := h.fbclient.CloudStorage().DownloadFolders(context.Background(), h.config.InputBase, folders); err != nil {
 			return fmt.Errorf("gather phase failed: %w", err)
 		}
@@ -68,6 +77,17 @@ func (h *UploaderHandler) Start() error {
 		log.Println("Skipping gather (use --gather to download from Cloud Storage)")
 	}
 
+	switch h.config.UploaderType {
+	case "course":
+		return h.startCourse()
+	case "profs":
+		return h.startProfs()
+	default:
+		return fmt.Errorf("unknown uploader type: %s", h.config.UploaderType)
+	}
+}
+
+func (h *UploaderHandler) startCourse() error {
 	lastIdx := len(h.config.ClassTerms) - 1
 
 	for i, term := range h.config.ClassTerms {
@@ -83,5 +103,17 @@ func (h *UploaderHandler) Start() error {
 			log.Printf("failed to insert data for term %s: %v", term, err)
 		}
 	}
+	return nil
+}
+
+func (h *UploaderHandler) startProfs() error {
+	profs, err := loadProfessors(h.config.InputBase)
+	if err != nil {
+		return fmt.Errorf("failed to load professor data: %w", err)
+	}
+
+	log.Printf("Loaded %d professors", len(profs))
+
+	h.insertProfs(context.Background(), profs)
 	return nil
 }

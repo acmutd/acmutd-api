@@ -40,7 +40,6 @@ func (h *UploaderHandler) insertTermData(ctx context.Context, courses []*types.C
 }
 
 func (h *UploaderHandler) insertCourses(writer *firestore.BulkWriter, courses []*types.CourseGeneralInfo, term string, isLatestTerm bool) map[string]string {
-	fs := h.fbclient.Firestore()
 	prefixes := make(map[string]string)
 
 	// For the latest term, update all general info fields alongside the grade distribution.
@@ -66,8 +65,8 @@ func (h *UploaderHandler) insertCourses(writer *firestore.BulkWriter, courses []
 		if isLatestTerm {
 			course.LastUpdatedTerm = term
 		}
-		doc := fs.Collection("courses").Doc(course.Prefix).Collection("numbers").Doc(course.Number)
-		writer.Set(doc, course, firestore.Merge(mergePaths...))
+		cdoc := h.coursesCollection(course.Prefix, course.Number)
+		writer.Set(cdoc, course, firestore.Merge(mergePaths...))
 
 		for _, sec := range course.Sections {
 			prepared, ok := prepareCourseForTerm(*sec, term)
@@ -75,8 +74,8 @@ func (h *UploaderHandler) insertCourses(writer *firestore.BulkWriter, courses []
 				continue
 			}
 
-			doc := h.sectionsCollection(prepared.PrefixID, prepared.NumberID).Doc(prepared.SectionID)
-			writer.Set(doc, prepared.Course)
+			sdoc := cdoc.Collection("sections").Doc(prepared.SectionID)
+			writer.Set(sdoc, prepared.Course)
 
 			if _, exists := prefixes[prepared.PrefixID]; !exists {
 				prefixes[prepared.PrefixID] = prepared.Course.Prefix
@@ -100,9 +99,23 @@ func (h *UploaderHandler) insertTerm(writer *firestore.BulkWriter, prefixes map[
 			map[string]any{
 				"course_prefix":     originalPrefix,
 				"normalized_prefix": prefixID,
-				"term":              term,
 			},
 			firestore.MergeAll,
+		)
+	}
+}
+
+func (h *UploaderHandler) insertProfs(ctx context.Context, profs []*types.Professor) {
+	writer := h.fbclient.Firestore().BulkWriter(ctx)
+	defer writer.End()
+
+	fs := h.fbclient.Firestore()
+	profCollection := fs.Collection("professors")
+
+	for _, prof := range profs {
+		writer.Set(
+			profCollection.Doc(prof.InstructorID),
+			prof,
 		)
 	}
 }
@@ -172,10 +185,9 @@ func prepareCourseForTerm(course types.SectionDoc, term string) (preparedCourse,
 	}, true
 }
 
-func (h *UploaderHandler) sectionsCollection(prefixID, numberID string) *firestore.CollectionRef {
+func (h *UploaderHandler) coursesCollection(prefixID, numberID string) *firestore.DocumentRef {
 	return h.fbclient.Firestore().Collection("courses").
 		Doc(prefixID).
 		Collection("numbers").
-		Doc(numberID).
-		Collection("sections")
+		Doc(numberID)
 }

@@ -13,6 +13,30 @@ import (
 	"github.com/acmutd/acmutd-api/internal/types"
 )
 
+// loadProfessors reads matched_professor_data_ids.json from the professors folder.
+func loadProfessors(inputBase string) ([]*types.Professor, error) {
+	filePath := filepath.Join(inputBase, "professors", "matched_professor_data_ids.json")
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", filePath, err)
+	}
+
+	var raw map[string]types.Professor
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse professor JSON: %w", err)
+	}
+
+	profs := make([]*types.Professor, 0, len(raw))
+	for id, prof := range raw {
+		prof.InstructorID = id
+		p := prof
+		profs = append(profs, &p)
+	}
+
+	return profs, nil
+}
+
 // loadAndCombine reads coursebook JSON and enhanced grades CSV for the given term,
 // then combines entries by section_address into SectionDoc objects ready for Firestore.
 // Each returned CourseGeneralInfo has its Sections field populated.

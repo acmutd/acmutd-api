@@ -22,12 +22,11 @@ func main() {
 	flag.Parse()
 
 	saveEnv := os.Getenv("SAVE_ENVIRONMENT")
-	if saveEnv == "" {
+	if saveEnv != "dev" && saveEnv != "prod" {
 		log.Fatal("SAVE_ENVIRONMENT is required (options: dev, prod)")
 	}
 
 	log.Println("Save environment:", saveEnv)
-	log.Println("Class terms:", os.Getenv("CLASS_TERMS"))
 	log.Println("Gather from Cloud Storage:", *gather)
 
 	client := firebase.NewFBClient()
