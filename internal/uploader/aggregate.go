@@ -330,6 +330,11 @@ func loadGradesTerm(inputBase, term string) (map[string]types.GradeDistribution,
 
 	f, err := os.Open(filePath)
 	if err != nil {
+		// grades may not be available for all terms (recent ones)
+		if os.IsNotExist(err) {
+			log.Printf("Warning: no grades file for term %s, uploading courses only", term)
+			return make(map[string]types.GradeDistribution), nil
+		}
 		return nil, fmt.Errorf("failed to open %s: %w", filePath, err)
 	}
 	defer f.Close()
