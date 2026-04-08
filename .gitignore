@@ -8,3 +8,4 @@ __pycache__/
 *.xlsb
 *.csv
 venv
+scripts/coursebook/**/*.html

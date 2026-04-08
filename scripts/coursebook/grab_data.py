@@ -1,3 +1,5 @@
+import html
+
 import requests
 import re
 import json
@@ -151,7 +153,7 @@ def make_monkey_request(session_id, report_id):
 
 
 # Get extra class overview detail
-def get_class_detail(session_id, section_address, data_req, div_id):
+def make_overview_request(session_id, section_address, data_req, div_id):
     url = "https://coursebook.utdallas.edu/clips/clip-cb11-hat.zog"
 
     headers = {
@@ -184,27 +186,34 @@ def get_class_detail(session_id, section_address, data_req, div_id):
     return response.text
 
 
+def save_html(html, section_address, filters, term):
+    filter_path = os.path.join(term, *filters.values())
+    os.makedirs(filter_path, exist_ok=True)
+    with open(os.path.join(filter_path, f"{section_address}.html"), "w", encoding="utf-8") as f:
+        f.write(html)                                                                                               
+                                                                                                                                                                                                                            
+
 # we have to click the overview button on each class to get waitlist cause report monkey doesn't give that info
-def get_class_overview(data, session_id):
+def get_class_overviews(data, session_id, filters, term):
     data_json = json.loads(data)
     html_content = data_json["sethtml"]["#sr"]
     soup = BeautifulSoup(html_content, 'html.parser')
 
     rows = soup.find_all('tr', class_='cb-row')
 
-    all_courses = []
+    failed_sections = []
     print(f"Getting overview for {len(rows)} classes")
     for i, row in enumerate(rows):
         section_address = row.get("data-id")
         data_req = row.get("data-req") # needed in request for overview
         row_id = row.get("id")
         div_id = f"{row_id}childcontent"
-        
+
         overview_html, new_session_id = make_request_with_retry(
-            get_class_detail, 
-            session_id, 
-            section_address, 
-            data_req, 
+            make_overview_request,
+            session_id,
+            section_address,
+            data_req,
             div_id
         )
 
@@ -212,14 +221,15 @@ def get_class_overview(data, session_id):
 
         width = len(str(len(rows)))
         print(f"({i+1:0{width}}/{len(rows)}): {section_address}")
-        # with open(f"{section_address}.html", "w", encoding="utf-8") as f:
-        #     f.write(overview_html)
 
-        class_overview = parse_class_overview(overview_html, section_address)
-        # print(f"{class_overview}")
-        all_courses.append(class_overview)
+        if not overview_html:
+            print(f"Failed to get overview for {section_address}")
+            failed_sections.append(section_address)
+            continue
 
-    return all_courses
+        save_html(overview_html, section_address, filters, term)
+
+    return failed_sections
 
 
 def get_text_or_none(out):
@@ -267,13 +277,6 @@ def make_request_with_retry(request_func, session_id, *args, **kwargs):
             print(f'Attempt {attempt}/{max_retries} with new session ID.')
 
     raise Exception(f'Failed to complete request after {max_retries} retries.')
-
-
-def save_json(data, filters, option_value, term):
-    filter_path = os.path.join(term, *filters.values()) if filters else term
-    os.makedirs(filter_path, exist_ok=True)
-    with open(os.path.join(filter_path, f"{option_value}.json"), "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4)
 
 
 def process_filters(session_id, term, all_data, dropdown_options, filters, filter_order, resume=None):
@@ -328,7 +331,10 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                     # if no items are found, continue to the next option
                     if '(no items found)' in response.text:
                         print('\tNo items found.')
-                        save_json([], filters, option_value, term)
+
+                        # add dummy directory to show its scraped but empty
+                        filter_path = os.path.join(term, *new_filters.values())
+                        os.makedirs(filter_path, exist_ok=True)
                         break
 
                     # if the query is too large, we break it down with more filters recursively by moving down the filter order
@@ -339,10 +345,7 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
                             session_id, term, all_data, dropdown_options, new_filters, remaining_filter_order)
                         break
 
-                    class_overview = get_class_overview(response.text, session_id)
-
-                    if class_overview:
-                        save_json(class_overview, filters, option_value, term)
+                    failed_courses = get_class_overviews(response.text, session_id, new_filters, term)
 
                     timeout = INITIAL_TIMEOUT
                     break
@@ -356,34 +359,40 @@ def process_filters(session_id, term, all_data, dropdown_options, filters, filte
         return session_id
 
 
-def combine_data(all_data, schools, prefixes, term):
-    # Get first level directory names and .json files
+def combine_html(term, prefixes, schools):
+    """Walk the term directory, parse every .html file, and return deduplicated course data."""
+    if not os.path.exists(term):
+        print(f"Directory '{term}' does not exist.")
+        return None
+
+    # Check if all prefix and school filters were scraped before combining
     present = set()
-    if os.path.exists(term):
-        for entry in os.listdir(term):
-            full_path = os.path.join(term, entry)
-            if os.path.isdir(full_path):
-                present.add(entry)
-            elif entry.endswith(".json"):
-                present.add(os.path.splitext(entry)[0])
+    for entry in os.listdir(term):
+        if os.path.isdir(os.path.join(term, entry)):
+            present.add(entry)
 
-    missing_schools = [s for s in schools if s not in present]
     missing_prefixes = [p for p in prefixes if p not in present]
+    missing_schools = [s for s in schools if s not in present]
 
-    if missing_schools or missing_prefixes:
-        print(f"Missing data for prefixes: {missing_prefixes})")
+    if missing_prefixes or missing_schools:
+        print(f"Missing data for prefixes: {missing_prefixes}")
         print(f"Missing data for schools: {missing_schools}")
-        return missing_prefixes, missing_schools
+        return None
 
+    all_data = {}
     for root, dirs, files in os.walk(term):
         for file in files:
-            if file.endswith(".json"):
-                with open(os.path.join(root, file), "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                for d in data:
-                    all_data[d['section_address']] = d
+            if file.endswith(".html"):
+                filepath = os.path.join(root, file)
+                section_addr = os.path.splitext(file)[0]
 
-    return missing_prefixes, missing_schools
+                with open(filepath, "r", encoding="utf-8") as f:
+                    html_content = f.read()
+
+                section = parse_class_overview(html_content, section_addr)
+                all_data[section['section_address']] = section
+
+    return all_data
     
 
 def scrape(session_id, term, resume):
@@ -440,9 +449,9 @@ def scrape(session_id, term, resume):
         session_id = process_filters(session_id, term, all_data, dropdown_options, {},
                                     ['school', 'day', 'level'])
 
-    print(f"Combining data for {term}...")
-    missing_prefixes, missing_schools = combine_data(all_data, schools, prefixes, term)
-    if missing_prefixes or missing_schools:
+    print(f"Combining HTML data for {term}...")
+    all_data = combine_html(term, prefixes, schools)
+    if all_data is None:
         print("Missing filters. Exiting.")
         return
 
@@ -450,8 +459,7 @@ def scrape(session_id, term, resume):
     print(f'\tGot {len(final_data)} unique classes for term {term}')
 
     out_dir = 'out'
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
 
     with open(f'{out_dir}/classes_{term}.json', 'w') as f:
         json.dump(final_data, f, indent=4)
