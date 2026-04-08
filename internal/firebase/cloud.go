@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	goStorage "cloud.google.com/go/storage"
 	firebase "firebase.google.com/go/v4"
@@ -260,5 +261,70 @@ func (s *CloudStorage) downloadSingleFile(ctx context.Context, bucket *goStorage
 		return fmt.Errorf("failed to write file %s: %w", filePath, err)
 	}
 
+	return nil
+}
+
+// DownloadFolder downloads all files from a Cloud Storage folder into a local directory.
+// The local directory must already exist.
+func (s *CloudStorage) DownloadFolder(ctx context.Context, cloudFolder, localDir string) error {
+	if _, err := os.Stat(localDir); os.IsNotExist(err) {
+		return fmt.Errorf("output directory not found: %s", localDir)
+	}
+
+	fileCount, err := s.DownloadFromFolder(ctx, cloudFolder, localDir)
+	if err != nil {
+		return fmt.Errorf("failed to download from folder %s: %w", cloudFolder, err)
+	}
+
+	log.Printf("Successfully downloaded %d files from %s to %s", fileCount, cloudFolder, localDir)
+	return nil
+}
+
+func (s *CloudStorage) ensureDirectories(baseDir string, folders []string) error {
+	for _, folder := range folders {
+		dir := filepath.Join(baseDir, folder)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+	}
+	return nil
+}
+
+// DownloadFolders concurrently downloads multiple Cloud Storage folders
+func (s *CloudStorage) DownloadFolders(ctx context.Context, baseDir string, folders []string) error {
+	if err := s.ensureDirectories(baseDir, folders); err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	errorCh := make(chan error, len(folders))
+
+	for _, folder := range folders {
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+
+			destDir := filepath.Join(baseDir, name)
+			log.Printf("Downloading %s...", name)
+
+			if err := s.DownloadFolder(ctx, name, destDir); err != nil {
+				errorCh <- fmt.Errorf("failed to download %s: %w", name, err)
+				return
+			}
+
+			log.Printf("Successfully downloaded %s", name)
+		}(folder)
+	}
+
+	wg.Wait()
+	close(errorCh)
+
+	for err := range errorCh {
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Println("All Firebase data downloaded successfully")
 	return nil
 }

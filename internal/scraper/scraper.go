@@ -1,7 +1,6 @@
 package scraper
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -9,16 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	fb "firebase.google.com/go/v4"
 	"github.com/acmutd/acmutd-api/internal/firebase"
-	"google.golang.org/api/option"
 )
 
 type ScraperService struct {
-	firestoreClient *firebase.Firestore
-	cloudStorage    *firebase.CloudStorage
-	firebaseConfig  string
-	scraper         string // coursebook, professor, grades, integration
+	fbClient *firebase.FBClient
+	scraper  string // coursebook, professor, grades, integration
 }
 
 type ServiceOption func(*ScraperService)
@@ -28,72 +23,16 @@ func NewScraperService(scraper string, opts ...ServiceOption) (*ScraperService, 
 		return nil, errors.New("scraper type is required")
 	}
 
-	service := &ScraperService{scraper: scraper}
+	service := &ScraperService{
+		fbClient: firebase.NewFBClient(),
+		scraper:  scraper,
+	}
 
 	for _, opt := range opts {
 		opt(service)
 	}
 
 	return service, nil
-}
-
-func (s *ScraperService) ensureFirebaseInitialized(envHint string) error {
-	env := strings.ToLower(envHint)
-	if env == "" {
-		env = strings.ToLower(os.Getenv("SAVE_ENVIRONMENT"))
-	}
-
-	if env != "dev" && env != "prod" {
-		// treat anything else as local but still allow explicit FB_CONFIG
-		env = "local"
-	}
-
-	configPath, err := s.resolveConfigFilename(env)
-	if err != nil {
-		return err
-	}
-
-	if s.firebaseConfig == configPath && s.firestoreClient != nil && s.cloudStorage != nil {
-		return nil
-	}
-
-	ctx := context.Background()
-	app, err := fb.NewApp(ctx, nil, option.WithCredentialsFile(configPath))
-	if err != nil {
-		return fmt.Errorf("error initializing firebase app: %w", err)
-	}
-
-	firestoreClient, err := firebase.NewFirestore(ctx, app)
-	if err != nil {
-		return fmt.Errorf("error initializing firestore: %w", err)
-	}
-
-	cloudStorage, err := firebase.NewCloudStorage(ctx, app)
-	if err != nil {
-		return fmt.Errorf("error initializing cloud storage: %w", err)
-	}
-
-	s.firestoreClient = firestoreClient
-	s.cloudStorage = cloudStorage
-	s.firebaseConfig = configPath
-
-	return nil
-}
-
-func (s *ScraperService) resolveConfigFilename(env string) (string, error) {
-	baseName := strings.TrimSpace(os.Getenv("FB_CONFIG"))
-	if baseName == "" {
-		return "", errors.New("FB_CONFIG is required")
-	}
-
-	switch env {
-	case "prod":
-		return "prod." + baseName, nil
-	case "dev", "local":
-		return "dev." + baseName, nil
-	default:
-		return "", errors.New("invalid environment")
-	}
 }
 
 func (s *ScraperService) CheckAndRunScraper() error {
@@ -120,7 +59,7 @@ func (s *ScraperService) CheckAndRunScraper() error {
 		return nil
 	}
 
-	if err := s.ensureFirebaseInitialized(saveEnv); err != nil {
+	if err := s.fbClient.EnsureInitialized(saveEnv); err != nil {
 		return fmt.Errorf("failed to initialize cloud storage: %w\nOutput not deleted to prevent data loss", err)
 	}
 

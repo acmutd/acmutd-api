@@ -67,7 +67,7 @@ func (h *GradesHandler) uploadCSVFile(ctx context.Context, outputDir, fileName s
 
 	// Upload to cloud storage with path: grades/{filename}
 	cloudPath := fmt.Sprintf("grades/%s", fileName)
-	err = h.service.cloudStorage.UploadFile(ctx, cloudPath, fileData)
+	err = h.service.fbClient.CloudStorage().UploadFile(ctx, cloudPath, fileData)
 	if err != nil {
 		return fmt.Errorf("failed to upload CSV file to cloud storage: %w", err)
 	}

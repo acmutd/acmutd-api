@@ -8,6 +8,7 @@ This project consists of several key components:
 
 - **Go API Server** (`cmd/api/`) - Main REST API with authentication, rate limiting, and CORS support. This is the main entry point for running the API.
 - **Go Scraper Service** (`cmd/scraper/`) - Orchestrates data collection from various sources. This is used to scrape the data from the various sources and store it in different potential locations.
+- **Go Uploader Service** (`cmd/scraper/`) - Combines data collected by scraper and uploads the data into Firestore
 - **Python Scrapers** (`scripts/`) - Individual scrapers for different data sources
 - **Firebase Integration** - Cloud Firestore for data storage and Cloud Storage for file management
 
@@ -124,12 +125,14 @@ All API endpoints (except `/health`) require an API key. Admin users can create 
 acm-api/
 ├── cmd/                    # Main applications
 │   ├── api/               # REST API server
-│   └── scraper/           # Scraper orchestrator
+│   ├── scraper/           # Scraper orchestrator
+│   └── uploader/          # Data uploader
 ├── internal/              # Private application code
 │   ├── firebase/          # Firebase integration
 │   ├── scraper/           # Scraper implementations
 │   ├── server/            # HTTP server and middleware
-│   └── types/             # Data models
+│   ├── types/             # Data models
+│   └── uploader/          # Uploader implementation
 ├── scripts/               # Python scrapers
 │   ├── coursebook/        # UTD Coursebook scraper
 │   ├── grades/            # Grade distribution processor
@@ -145,7 +148,8 @@ acm-api/
 2. **Grade Processor** → Processes Excel files containing grade distributions
 3. **RMP Scraper** → Collects professor ratings from Rate My Professor
 4. **Integration Service** → Combines all data sources and uploads to Firebase
-5. **API Server** → Serves integrated data via REST endpoints
+5. **Uploader Service** → Collects scraped data and uploads to Firestore
+6. **API Server** → Serves integrated data via REST endpoints
 
 ## 🔧 Configuration
 
@@ -155,13 +159,14 @@ acm-api/
 |----------|-------------|----------|---------|
 | `PORT` | API server port | No | `8080` |
 | `FB_CONFIG` | Firebase service account JSON filename | Yes | `acmutd-api.json` |
-| `SCRAPER` | Which scraper to run (coursebook/grades/rmp-profiles/integration) | Yes (for scraper) | - |
 | `SAVE_ENVIRONMENT` | Where to save data (local/dev/prod) | No | `local` |
+| `CLASS_TERMS` | Comma-separated terms to scrape (e.g., 24f,25s,25f) | Yes (for scrapers) | - |
+| `SCRAPER` | Which scraper to run (coursebook/grades/rmp-profiles/integration) | Yes (for scraper) | - |
 | `NETID` | UTD NetID for coursebook access | Yes (for coursebook) | - |
 | `PASSWORD` | UTD password for coursebook access | Yes (for coursebook) | - |
-| `CLASS_TERMS` | Comma-separated terms to scrape (e.g., 24f,25s,25f) | Yes (for scrapers) | - |
 | `INTEGRATION_SOURCE` | Data source for integration scraper (local/dev/prod) | No | `local` |
 | `INTEGRATION_RESCRAPE` | Whether to run scrapers before integration (true/false) | No | `false` |
+| `UPLOADER` | Which data to upload to Firestore | Yes | - |
 
 ### Term Format
 

@@ -11,23 +11,6 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func (c *Firestore) InsertTerms(ctx context.Context, terms []string) {
-	writer := c.BulkWriter(ctx)
-	defer writer.End()
-
-	for _, term := range terms {
-		normalized := strings.ToLower(strings.TrimSpace(term))
-		if normalized == "" {
-			continue
-		}
-
-		doc := c.Collection("terms").Doc(normalized)
-		writer.Set(doc, map[string]any{
-			"term": normalized,
-		}, firestore.MergeAll)
-	}
-}
-
 func (c *Firestore) QueryAllTerms(ctx context.Context, limit, offset int) ([]string, bool, error) {
 	query := c.Collection("terms").OrderBy("term", firestore.Asc)
 	if offset > 0 {
