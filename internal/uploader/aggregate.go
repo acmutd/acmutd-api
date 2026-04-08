@@ -182,19 +182,18 @@ func loadCoursebookTerm(inputBase, term string) (map[string]*types.SectionDoc, m
 			}
 		}
 
-		if sec.Subtitle != nil {
+		if sec.Subtitle != "" {
 			course := courses[sec.Prefix][sec.Number]
-			subtitleVal := *sec.Subtitle
 
 			found := false
 			for _, st := range course.SectionTypes {
-				if st == subtitleVal {
+				if st == sec.Subtitle {
 					found = true
 					break
 				}
 			}
 			if !found {
-				course.SectionTypes = append(course.SectionTypes, subtitleVal)
+				course.SectionTypes = append(course.SectionTypes, sec.Subtitle)
 			}
 		}
 	}
@@ -220,11 +219,6 @@ func rawToSectionDoc(rc *types.RawCourse) *types.SectionDoc {
 		building, room = splitLocation(m.Location)
 	}
 
-	var classIDPtr *string
-	if classID != "" {
-		classIDPtr = &classID
-	}
-
 	return &types.SectionDoc{
 		SectionAddress: strings.ToLower(strings.TrimSpace(rc.SectionAddress)),
 		Prefix:         strings.ToLower(strings.TrimSpace(rc.CoursePrefix)),
@@ -233,11 +227,11 @@ func rawToSectionDoc(rc *types.RawCourse) *types.SectionDoc {
 		Term:           strings.ToLower(strings.TrimSpace(rc.Term)),
 
 		Title:       rc.Title,
-		Subtitle:    subtitle,
+		Subtitle:    derefStr(subtitle),
 		Description: rc.Description,
 		School:      rc.School,
 		SchoolID:    strings.ToLower(strings.TrimSpace(rc.SchoolID)),
-		Core:        rc.Core,
+		Core:        derefStr(rc.Core),
 
 		CreditHours:     creditHours,
 		ActivityType:    rc.ActivityType,
@@ -245,14 +239,14 @@ func rawToSectionDoc(rc *types.RawCourse) *types.SectionDoc {
 		EnrollmentReqs:  rc.EnrollmentReqs,
 		ClassAttributes: rc.ClassAttributes,
 
-		ClassID:         classIDPtr,
+		ClassID:         classID,
 		ClassLevel:      rc.ClassLevel,
 		InstructionMode: rc.InstructionMode,
 		Grading:         rc.Grading,
-		SessionType:     rc.SessionType,
+		SessionType:     derefStr(rc.SessionType),
 		AddConsent:      rc.AddConsent,
-		ClassNotes:      rc.ClassNotes,
-		SyllabusID:      rc.Syllabus,
+		ClassNotes:      derefStr(rc.ClassNotes),
+		SyllabusID:      derefStr(rc.Syllabus),
 
 		EnrolledStatus:  rc.EnrolledStatus,
 		EnrolledCurrent: rc.EnrolledCurrent,
@@ -273,8 +267,15 @@ func rawToSectionDoc(rc *types.RawCourse) *types.SectionDoc {
 		TAIDs:         rc.TAIDs,
 
 		OrionDatetime:     rc.OrionDatetime,
-		ScheduleFrequency: rc.ScheduleFrequency,
+		ScheduleFrequency: derefStr(rc.ScheduleFrequency),
 	}
+}
+
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // splitClassCourseNumber splits "21466 / 016508" into classID and courseID.
