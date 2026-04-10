@@ -97,12 +97,12 @@ func (c *Firestore) GetSchoolsByTerm(ctx context.Context, term string) ([]string
 				return nil, fmt.Errorf("failed to iterate fallback prefixes: %w", err)
 			}
 
-			var course types.Course
+			var course types.SectionDoc
 			if err := doc.DataTo(&course); err != nil {
 				return nil, fmt.Errorf("failed to parse fallback course: %w", err)
 			}
 
-			prefix := strings.TrimSpace(course.CoursePrefix)
+			prefix := strings.TrimSpace(course.Prefix)
 			if prefix == "" {
 				continue
 			}

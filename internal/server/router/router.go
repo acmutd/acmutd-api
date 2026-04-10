@@ -26,7 +26,10 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 	{
 		courses := v1.Group("/courses")
 		{
-			courses.GET("/", handler.GetCourses)
+			courses.GET("/general", handler.GetGeneralCourses)
+			courses.GET("/general/:prefix/:number", handler.GetGeneralCourse)
+			courses.GET("/sections", handler.GetSections)
+			courses.GET("/sections/:prefix/:number/:section/:term", handler.GetSectionByParams)
 		}
 
 		terms := v1.Group("/terms")

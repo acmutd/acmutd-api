@@ -1,0 +1,47 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "sections",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "term", "order": "ASCENDING" },
+        { "fieldPath": "prefix", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "sections",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "term", "order": "ASCENDING" },
+        { "fieldPath": "instructors", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "sections",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "term", "order": "ASCENDING" },
+        { "fieldPath": "days", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "sections",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "term", "order": "ASCENDING" },
+        { "fieldPath": "prefix", "order": "ASCENDING" },
+        { "fieldPath": "instructors", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "sections",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "term", "order": "ASCENDING" },
+        { "fieldPath": "prefix", "order": "ASCENDING" },
+        { "fieldPath": "days", "arrayConfig": "CONTAINS" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
