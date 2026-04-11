@@ -13,10 +13,10 @@ import (
 )
 
 // QuerySections queries SectionDoc documents.
-// term is required. When both prefix and number are provided, the query is scoped directly to
-// courses/{prefix}/numbers/{number}/sections. When only prefix is provided, a collection group
-// query filtered by prefix is used.
-// instructor and days both use array-contains and cannot be combined in the same query.
+// term is required.
+// When both prefix and number are provided, the query is scoped directly to courses/{prefix}/numbers/{number}/sections
+// When only prefix is provided, a collection group query filtered by prefix is used.
+// TODO: Firestore does not allow 2 or more array-contains in a single query so we can just cache one result and filter in-memory
 func (c *Firestore) QuerySections(ctx context.Context, q types.SectionQuery) ([]types.SectionDoc, bool, error) {
 	term := strings.ToLower(strings.TrimSpace(q.Term))
 	if term == "" {
@@ -27,6 +27,13 @@ func (c *Firestore) QuerySections(ctx context.Context, q types.SectionQuery) ([]
 	number := strings.ToLower(strings.TrimSpace(q.Number))
 	instructor := strings.TrimSpace(q.Instructor)
 	days := strings.TrimSpace(q.Days)
+
+	key := cacheKey("sections", "term", term, "prefix", prefix, "number", number, "instructor", instructor, "days", days)
+
+	if cached, found := c.Cache.Get(key); found {
+		r := cached.(cachedResult[types.SectionDoc])
+		return r.Items, r.HasNext, nil
+	}
 
 	var query firestore.Query
 	if prefix != "" && number != "" {
@@ -45,36 +52,14 @@ func (c *Firestore) QuerySections(ctx context.Context, q types.SectionQuery) ([]
 		query = query.Where("days", "array-contains", days)
 	}
 
-	return c.collectSections(ctx, query, q.Limit, q.Offset, false)
-}
-
-// GetSection retrieves a single SectionDoc by its section_address (e.g., "cs2305.001.23f").
-// Returns nil, nil if not found.
-func (c *Firestore) GetSection(ctx context.Context, sectionAddress string) (*types.SectionDoc, error) {
-	sectionAddress = strings.ToLower(strings.TrimSpace(sectionAddress))
-	if sectionAddress == "" {
-		return nil, nil
-	}
-
-	iter := c.CollectionGroup("sections").
-		Where("section_address", "==", sectionAddress).
-		Limit(1).
-		Documents(ctx)
-	defer iter.Stop()
-
-	doc, err := iter.Next()
-	if err == iterator.Done {
-		return nil, nil
-	}
+	sections, hasNext, err := c.collectSections(ctx, query, q.Limit, q.Offset, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get section: %w", err)
+		return nil, false, err
 	}
 
-	var s types.SectionDoc
-	if err := doc.DataTo(&s); err != nil {
-		return nil, fmt.Errorf("failed to parse section: %w", err)
-	}
-	return &s, nil
+	c.Cache.Set(key, cachedResult[types.SectionDoc]{Items: sections, HasNext: hasNext}, c.TTL.Sections)
+
+	return sections, hasNext, nil
 }
 
 func (c *Firestore) collectSections(ctx context.Context, query firestore.Query, limit, offset int, skipPagination bool) ([]types.SectionDoc, bool, error) {
@@ -114,7 +99,6 @@ func (c *Firestore) collectSections(ctx context.Context, query firestore.Query, 
 
 // GetSectionByParams retrieves a single SectionDoc via a direct document path.
 // The section_address document ID is constructed as "{prefix}{number}.{section}.{term}".
-// Returns nil, nil if not found.
 func (c *Firestore) GetSectionByParams(ctx context.Context, prefix, number, term, section string) (*types.SectionDoc, error) {
 	prefix = strings.ToLower(strings.TrimSpace(prefix))
 	number = strings.ToLower(strings.TrimSpace(number))
@@ -122,6 +106,13 @@ func (c *Firestore) GetSectionByParams(ctx context.Context, prefix, number, term
 	section = strings.ToLower(strings.TrimSpace(section))
 
 	sectionAddress := prefix + number + "." + section + "." + term
+
+	key := cacheKey("sections", "section_address", sectionAddress)
+	if cached, found := c.Cache.Get(key); found {
+		if s, ok := cached.(types.SectionDoc); ok {
+			return &s, nil
+		}
+	}
 
 	doc, err := c.Collection("courses").Doc(prefix).Collection("numbers").Doc(number).Collection("sections").Doc(sectionAddress).Get(ctx)
 	if err != nil {
@@ -135,6 +126,9 @@ func (c *Firestore) GetSectionByParams(ctx context.Context, prefix, number, term
 	if err := doc.DataTo(&s); err != nil {
 		return nil, fmt.Errorf("failed to parse section: %w", err)
 	}
+
+	c.Cache.Set(key, s, c.TTL.Sections)
+
 	return &s, nil
 }
 
@@ -189,7 +183,6 @@ func (c *Firestore) QueryGeneralCourses(ctx context.Context, q types.GeneralCour
 }
 
 // GetGeneralCourse retrieves a single CourseGeneralInfo at courses/{prefix}/numbers/{number}.
-// Returns nil, nil if not found.
 func (c *Firestore) GetGeneralCourse(ctx context.Context, prefix, number string) (*types.CourseGeneralInfo, error) {
 	prefix = strings.ToLower(strings.TrimSpace(prefix))
 	number = strings.ToLower(strings.TrimSpace(number))

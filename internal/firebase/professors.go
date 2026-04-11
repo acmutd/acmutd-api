@@ -10,6 +10,13 @@ import (
 )
 
 func (c *Firestore) GetProfessorById(ctx context.Context, id string) (*types.Professor, error) {
+	key := cacheKey("professors", "id", id)
+	if cached, found := c.Cache.Get(key); found {
+		if p, ok := cached.(types.Professor); ok {
+			return &p, nil
+		}
+	}
+
 	doc, err := c.Collection("professors").Doc(id).Get(ctx)
 	if err != nil {
 		return nil, err
@@ -20,6 +27,8 @@ func (c *Firestore) GetProfessorById(ctx context.Context, id string) (*types.Pro
 		return nil, err
 	}
 
+	c.Cache.Set(key, professor, c.TTL.Professors)
+
 	return &professor, nil
 }
 
@@ -27,6 +36,13 @@ func (c *Firestore) GetProfessorsByName(ctx context.Context, name string, limit,
 	normalizedName := strings.ToLower(strings.TrimSpace(name))
 	if normalizedName == "" {
 		return []types.Professor{}, false, nil
+	}
+
+	key := cacheKey("professors", "name", normalizedName)
+	if cached, found := c.Cache.Get(key); found {
+		if p, ok := cached.(cachedResult[types.Professor]); ok {
+			return p.Items, p.HasNext, nil
+		}
 	}
 
 	query := c.Collection("professors").
@@ -63,6 +79,8 @@ func (c *Firestore) GetProfessorsByName(ctx context.Context, name string, limit,
 		hasNext = true
 		professors = professors[:limit]
 	}
+
+	c.Cache.Set(key, cachedResult[types.Professor]{Items: professors, HasNext: hasNext}, c.TTL.Professors)
 
 	return professors, hasNext, nil
 }
