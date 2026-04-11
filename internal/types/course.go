@@ -121,10 +121,11 @@ type SectionDoc struct {
 	Building  string   `json:"building" firestore:"building"`
 	Room      string   `json:"room" firestore:"room"`
 
-	Instructors   []string `json:"instructors" firestore:"instructors"`
-	InstructorIDs []string `json:"instructor_ids" firestore:"instructor_ids"`
-	TAs           []string `json:"tas" firestore:"tas"`
-	TAIDs         []string `json:"ta_ids" firestore:"ta_ids"`
+	Instructors              []string `json:"instructors" firestore:"instructors"`
+	InstructorIDs            []string `json:"instructor_ids" firestore:"instructor_ids"`
+	TAs                      []string `json:"tas" firestore:"tas"`
+	TAIDs                    []string `json:"ta_ids" firestore:"ta_ids"`
+	InstructorNameNormalized string   `json:"instructor_name_normalized" firestore:"instructor_name_normalized"`
 
 	OrionDatetime     string `json:"orion_datetime" firestore:"orion_datetime"`
 	ScheduleFrequency string `json:"schedule_frequency" firestore:"schedule_frequency"`
@@ -210,6 +211,7 @@ type SectionQuery struct {
 	Number     string // e.g., "2305"
 	Instructor string // exact match on an element of the instructors array
 	Days       string // exact match on an element of the days array (e.g., "Monday")
+	Building   string // exact match on building (e.g., "ECSS")
 	Limit      int
 	Offset     int
 }

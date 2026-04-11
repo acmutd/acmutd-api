@@ -13,7 +13,7 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         { "fieldPath": "term", "order": "ASCENDING" },
-        { "fieldPath": "instructors", "arrayConfig": "CONTAINS" }
+        { "fieldPath": "instructor_name_normalized", "order": "ASCENDING" }
       ]
     },
     {
@@ -30,7 +30,7 @@
       "fields": [
         { "fieldPath": "term", "order": "ASCENDING" },
         { "fieldPath": "prefix", "order": "ASCENDING" },
-        { "fieldPath": "instructors", "arrayConfig": "CONTAINS" }
+        { "fieldPath": "instructor_name_normalized", "order": "ASCENDING" }
       ]
     },
     {
@@ -39,6 +39,25 @@
       "fields": [
         { "fieldPath": "term", "order": "ASCENDING" },
         { "fieldPath": "prefix", "order": "ASCENDING" },
+        { "fieldPath": "days", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "sections",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "term", "order": "ASCENDING" },
+        { "fieldPath": "instructor_name_normalized", "order": "ASCENDING" },
+        { "fieldPath": "days", "arrayConfig": "CONTAINS" }
+      ]
+    },
+    {
+      "collectionGroup": "sections",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "term", "order": "ASCENDING" },
+        { "fieldPath": "prefix", "order": "ASCENDING" },
+        { "fieldPath": "instructor_name_normalized", "order": "ASCENDING" },
         { "fieldPath": "days", "arrayConfig": "CONTAINS" }
       ]
     }

@@ -113,17 +113,19 @@ func loadAndCombine(inputBase string, term string) ([]*types.CourseGeneralInfo, 
 	return allCourses, nil
 }
 
-func mergeGrades(sections map[string]*types.SectionDoc, grades map[string]types.GradeDistribution, term string) ([]*types.SectionDoc, error) {
-	for addr, gd := range grades {
-		gd := gd
+func mergeGrades(sections map[string]*types.SectionDoc, grades map[string]gradeRecord, term string) ([]*types.SectionDoc, error) {
+	for addr, rec := range grades {
+		gd := rec.Grades
 		if entry, ok := sections[addr]; ok {
 			entry.Grades = &gd
+			entry.InstructorNameNormalized = rec.InstructorNameNormalized
 		} else {
 			log.Printf("Warning: grade record for %s has no matching course section", addr)
 			sections[addr] = &types.SectionDoc{
-				SectionAddress: addr,
-				Term:           term,
-				Grades:         &gd,
+				SectionAddress:           addr,
+				Term:                     term,
+				Grades:                   &gd,
+				InstructorNameNormalized: rec.InstructorNameNormalized,
 			}
 		}
 	}
@@ -324,8 +326,15 @@ func parseCreditHours(raw string, activityType string) int {
 	return v
 }
 
-// loadGradesTerm reads an enhanced_grades_{term}.csv file and returns GradeDistribution entries keyed by section_address.
-func loadGradesTerm(inputBase, term string) (map[string]types.GradeDistribution, error) {
+// gradeRecord holds the grade distribution and optional instructor name
+// parsed from a single row of the enhanced grades CSV.
+type gradeRecord struct {
+	Grades                  types.GradeDistribution
+	InstructorNameNormalized string
+}
+
+// loadGradesTerm reads an enhanced_grades_{term}.csv file and returns gradeRecord entries keyed by section_address.
+func loadGradesTerm(inputBase, term string) (map[string]gradeRecord, error) {
 	filePath := filepath.Join(inputBase, "enhanced_grades", fmt.Sprintf("enhanced_grades_%s.csv", term))
 
 	f, err := os.Open(filePath)
@@ -333,7 +342,7 @@ func loadGradesTerm(inputBase, term string) (map[string]types.GradeDistribution,
 		// grades may not be available for all terms (recent ones)
 		if os.IsNotExist(err) {
 			log.Printf("Warning: no grades file for term %s, uploading courses only", term)
-			return make(map[string]types.GradeDistribution), nil
+			return make(map[string]gradeRecord), nil
 		}
 		return nil, fmt.Errorf("failed to open %s: %w", filePath, err)
 	}
@@ -355,7 +364,7 @@ func loadGradesTerm(inputBase, term string) (map[string]types.GradeDistribution,
 		return nil, fmt.Errorf("failed to read CSV records: %w", err)
 	}
 
-	grades := make(map[string]types.GradeDistribution, len(records))
+	grades := make(map[string]gradeRecord, len(records))
 	for _, row := range records {
 		subject := strings.ToLower(strings.TrimSpace(getField(row, headerIdx, "Subject")))
 		catalogNbr := strings.ToLower(strings.TrimSpace(getField(row, headerIdx, "Catalog Nbr")))
@@ -389,7 +398,10 @@ func loadGradesTerm(inputBase, term string) (map[string]types.GradeDistribution,
 			W:      atoi(getField(row, headerIdx, "W")),
 		}
 
-		grades[addr] = gd
+		grades[addr] = gradeRecord{
+			Grades:                   gd,
+			InstructorNameNormalized: strings.TrimSpace(getField(row, headerIdx, "instructor_name_normalized")),
+		}
 	}
 
 	log.Printf("Loaded %d grade records for term %s", len(grades), term)
