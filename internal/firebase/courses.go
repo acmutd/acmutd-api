@@ -3,6 +3,8 @@ package firebase
 import (
 	"context"
 	"fmt"
+	"log"
+	"strconv"
 	"strings"
 
 	"cloud.google.com/go/firestore"
@@ -13,43 +15,49 @@ import (
 )
 
 // QuerySections queries SectionDoc documents.
-// term is required.
-// When both prefix and number are provided, the query is scoped directly to courses/{prefix}/numbers/{number}/sections
-// When only prefix is provided, a collection group query filtered by prefix is used.
-// TODO: Firestore does not allow 2 or more array-contains in a single query so we can just cache one result and filter in-memory
+// All query parameters are expected to be normalized by the handler
+// Some parameters are filtered in-memory due to some weird Firestore limitations
 func (c *Firestore) QuerySections(ctx context.Context, q types.SectionQuery) ([]types.SectionDoc, bool, error) {
-	term := strings.ToLower(strings.TrimSpace(q.Term))
-	if term == "" {
+	if q.Term == "" {
 		return []types.SectionDoc{}, false, nil
 	}
 
-	prefix := strings.ToLower(strings.TrimSpace(q.Prefix))
-	number := strings.ToLower(strings.TrimSpace(q.Number))
-	instructor := strings.TrimSpace(q.Instructor)
-	days := strings.TrimSpace(q.Days)
-
-	key := cacheKey("sections", "term", term, "prefix", prefix, "number", number, "instructor", instructor, "days", days)
+	key := cacheKey("sections", "term", q.Term, "prefix", q.Prefix, "number", q.Number, "instructor", q.Instructor, "days", q.Days, "building", q.Building, "title", q.Title, "limit", strconv.Itoa(q.Limit), "offset", strconv.Itoa(q.Offset))
 
 	if cached, found := c.Cache.Get(key); found {
+		log.Printf("Cache hit: %s", key)
 		r := cached.(cachedResult[types.SectionDoc])
 		return r.Items, r.HasNext, nil
 	}
 
-	var query firestore.Query
-	if prefix != "" && number != "" {
-		colRef := c.Collection("courses").Doc(prefix).Collection("numbers").Doc(number).Collection("sections")
-		query = colRef.Where("term", "==", term)
-	} else {
-		query = c.CollectionGroup("sections").Where("term", "==", term)
-		if prefix != "" {
-			query = query.Where("prefix", "==", prefix)
+	// building and title are in-memory filters: everything else goes to Firestore
+	if q.Building != "" || q.Title != "" {
+		allSections, err := c.fetchAllSections(ctx, q)
+		if err != nil {
+			return nil, false, err
 		}
+
+		filtered := allSections
+		if q.Building != "" {
+			filtered = filterByBuilding(filtered, q.Building)
+		}
+		if q.Title != "" {
+			filtered = filterByTitle(filtered, q.Title)
+		}
+		sections, hasNext := paginate(filtered, q.Limit, q.Offset)
+
+		c.Cache.Set(key, cachedResult[types.SectionDoc]{Items: sections, HasNext: hasNext}, c.TTL.Sections)
+
+		return sections, hasNext, nil
 	}
 
-	if instructor != "" {
-		query = query.Where("instructors", "array-contains", instructor)
-	} else if days != "" {
-		query = query.Where("days", "array-contains", days)
+	// No in-memory filters needed: let Firestore handle pagination
+	query := c.buildSectionQuery(q.Term, q.Prefix, q.Number)
+	if q.Instructor != "" {
+		query = query.Where("instructor_name_normalized", "==", q.Instructor)
+	}
+	if q.Days != "" {
+		query = query.Where("days", "array-contains", q.Days)
 	}
 
 	sections, hasNext, err := c.collectSections(ctx, query, q.Limit, q.Offset, false)
@@ -60,6 +68,18 @@ func (c *Firestore) QuerySections(ctx context.Context, q types.SectionQuery) ([]
 	c.Cache.Set(key, cachedResult[types.SectionDoc]{Items: sections, HasNext: hasNext}, c.TTL.Sections)
 
 	return sections, hasNext, nil
+}
+
+// buildSectionQuery returns a base Firestore query filtered by term and optionally prefix/number.
+func (c *Firestore) buildSectionQuery(term, prefix, number string) firestore.Query {
+	if prefix != "" && number != "" {
+		return c.Collection("courses").Doc(prefix).Collection("numbers").Doc(number).Collection("sections").Where("term", "==", term)
+	}
+	query := c.CollectionGroup("sections").Where("term", "==", term)
+	if prefix != "" {
+		query = query.Where("prefix", "==", prefix)
+	}
+	return query
 }
 
 func (c *Firestore) collectSections(ctx context.Context, query firestore.Query, limit, offset int, skipPagination bool) ([]types.SectionDoc, bool, error) {
@@ -95,6 +115,69 @@ func (c *Firestore) collectSections(ctx context.Context, query firestore.Query, 
 		sections = sections[:limit]
 	}
 	return sections, hasNext, nil
+}
+
+// fetchAllSections returns all sections for the Firestore-level filters, caching the unpaginated result so in-memory filters can work properly
+// The cache key excludes building since that is filtered after fetching.
+func (c *Firestore) fetchAllSections(ctx context.Context, q types.SectionQuery) ([]types.SectionDoc, error) {
+	allKey := cacheKey("sections_all", "term", q.Term, "prefix", q.Prefix, "number", q.Number, "instructor", q.Instructor, "days", q.Days)
+
+	if cached, found := c.Cache.Get(allKey); found {
+		log.Printf("Cache hit: %s", allKey)
+		return cached.([]types.SectionDoc), nil
+	}
+
+	query := c.buildSectionQuery(q.Term, q.Prefix, q.Number)
+	if q.Instructor != "" {
+		query = query.Where("instructor_name_normalized", "==", q.Instructor)
+	}
+	if q.Days != "" {
+		query = query.Where("days", "array-contains", q.Days)
+	}
+
+	sections, _, err := c.collectSections(ctx, query, 0, 0, true)
+	if err != nil {
+		return nil, err
+	}
+
+	c.Cache.Set(allKey, sections, c.TTL.Sections)
+	return sections, nil
+}
+
+func filterByTitle(sections []types.SectionDoc, title string) []types.SectionDoc {
+	var out []types.SectionDoc
+	for _, s := range sections {
+		if strings.Contains(strings.ToLower(s.Title), title) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func filterByBuilding(sections []types.SectionDoc, building string) []types.SectionDoc {
+	var out []types.SectionDoc
+	for _, s := range sections {
+		if strings.EqualFold(s.Building, building) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// pagination is different for in-memory filters
+func paginate[T any](items []T, limit, offset int) ([]T, bool) {
+	if limit <= 0 {
+		return items, false
+	}
+	if offset >= len(items) {
+		return nil, false
+	}
+	end := offset + limit
+	hasNext := end < len(items)
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[offset:end], hasNext
 }
 
 // GetSectionByParams retrieves a single SectionDoc via a direct document path.
@@ -167,19 +250,11 @@ func (c *Firestore) QueryGeneralCourses(ctx context.Context, q types.GeneralCour
 		filtered = append(filtered, course)
 	}
 
-	if q.Limit <= 0 {
-		return filtered, false, nil
-	}
-
-	start := q.Offset
-	if start >= len(filtered) {
+	result, hasNext := paginate(filtered, q.Limit, q.Offset)
+	if result == nil {
 		return []types.CourseGeneralInfo{}, false, nil
 	}
-	end := q.Offset + q.Limit
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-	return filtered[start:end], end < len(filtered), nil
+	return result, hasNext, nil
 }
 
 // GetGeneralCourse retrieves a single CourseGeneralInfo at courses/{prefix}/numbers/{number}.

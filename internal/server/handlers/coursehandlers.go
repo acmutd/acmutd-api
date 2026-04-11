@@ -18,7 +18,8 @@ import (
 //   - number: filter by course number (e.g., "2305")
 //   - instructor: exact match on an element of the instructors array (e.g., "John Smith")
 //   - days: exact match on an element of the days array (e.g., "Monday")
-//   - instructor and days cannot be combined in the same request
+//   - building: exact match on building (e.g., "ECSS")
+//   - title: substring match on title (e.g., "data structures")
 //   - limit, page: pagination
 func (h *Handler) GetSections(c *gin.Context) {
 	term := strings.ToLower(strings.TrimSpace(c.Query("term")))
@@ -27,25 +28,19 @@ func (h *Handler) GetSections(c *gin.Context) {
 		return
 	}
 
-	instructor := strings.TrimSpace(c.Query("instructor"))
-	days := strings.TrimSpace(c.Query("days"))
-	if instructor != "" && days != "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "instructor and days cannot be combined in the same query"})
-		return
-	}
-
 	params, ok := parsePaginationOrRespond(c)
 	if !ok {
 		return
 	}
 
-	// build query parameters to pass
 	query := types.SectionQuery{
 		Term:       term,
 		Prefix:     strings.ToLower(strings.TrimSpace(c.Query("prefix"))),
 		Number:     strings.ToLower(strings.TrimSpace(c.Query("number"))),
-		Instructor: instructor,
-		Days:       days,
+		Instructor: strings.ToLower(strings.TrimSpace(c.Query("instructor"))),
+		Days:       strings.TrimSpace(c.Query("days")),
+		Building:   strings.ToUpper(strings.TrimSpace(c.Query("building"))),
+		Title:      strings.ToLower(strings.TrimSpace(c.Query("title"))),
 		Limit:      params.Limit,
 		Offset:     params.Offset,
 	}

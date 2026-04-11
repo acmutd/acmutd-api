@@ -209,9 +209,10 @@ type SectionQuery struct {
 	Term       string // required; e.g., "23f"
 	Prefix     string // e.g., "cs"
 	Number     string // e.g., "2305"
-	Instructor string // exact match on an element of the instructors array
+	Instructor string // exact match on an element of the instructor_name_normalized field
 	Days       string // exact match on an element of the days array (e.g., "Monday")
-	Building   string // exact match on building (e.g., "ECSS")
+	Building   string // exact match on building (e.g., "ecss")
+	Title      string // substring match on title (e.g., "data structures")
 	Limit      int
 	Offset     int
 }
