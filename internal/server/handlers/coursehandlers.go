@@ -22,7 +22,7 @@ import (
 //   - title: substring match on title (e.g., "data structures")
 //   - limit, page: pagination
 func (h *Handler) GetSections(c *gin.Context) {
-	term := strings.ToLower(strings.TrimSpace(c.Query("term")))
+	term := getQueryParam(c, "term")
 	if term == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "term query parameter is required (e.g., ?term=25s)"})
 		return
@@ -35,12 +35,12 @@ func (h *Handler) GetSections(c *gin.Context) {
 
 	query := types.SectionQuery{
 		Term:       term,
-		Prefix:     strings.ToLower(strings.TrimSpace(c.Query("prefix"))),
-		Number:     strings.ToLower(strings.TrimSpace(c.Query("number"))),
-		Instructor: strings.ToLower(strings.TrimSpace(c.Query("instructor"))),
-		Days:       strings.TrimSpace(c.Query("days")),
-		Building:   strings.ToUpper(strings.TrimSpace(c.Query("building"))),
-		Title:      strings.ToLower(strings.TrimSpace(c.Query("title"))),
+		Prefix:     getQueryParam(c, "prefix"),
+		Number:     getQueryParam(c, "number"),
+		Instructor: getQueryParam(c, "instructor"),
+		Days:       getQueryParam(c, "days"),
+		Building:   getQueryParam(c, "building"),
+		Title:      getQueryParam(c, "title"),
 		Limit:      params.Limit,
 		Offset:     params.Offset,
 	}
@@ -62,10 +62,10 @@ func (h *Handler) GetSections(c *gin.Context) {
 
 // GetSectionByParams retrieves a single section
 func (h *Handler) GetSectionByParams(c *gin.Context) {
-	prefix := strings.ToLower(strings.TrimSpace(c.Param("prefix")))
-	number := strings.ToLower(strings.TrimSpace(c.Param("number")))
-	section := strings.ToLower(strings.TrimSpace(c.Param("section")))
-	term := strings.ToLower(strings.TrimSpace(c.Param("term")))
+	prefix := getQueryParam(c, "prefix")
+	number := getQueryParam(c, "number")
+	section := getQueryParam(c, "section")
+	term := getQueryParam(c, "term")
 
 	result, err := h.db.GetSectionByParams(c.Request.Context(), prefix, number, term, section)
 	if err != nil {
@@ -91,13 +91,13 @@ func (h *Handler) GetSectionByParams(c *gin.Context) {
 //   - q: substring search on title or description
 //   - limit, page: pagination
 func (h *Handler) GetGeneralCourses(c *gin.Context) {
-	prefix := strings.ToLower(strings.TrimSpace(c.Query("prefix")))
+	prefix := getQueryParam(c, "prefix")
 	if prefix == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix query parameter is required"})
 		return
 	}
 
-	number := strings.ToLower(strings.TrimSpace(c.Query("number")))
+	number := getQueryParam(c, "number")
 	if number != "" {
 		course, err := h.db.GetGeneralCourse(c.Request.Context(), prefix, number)
 		if err != nil {
@@ -141,8 +141,8 @@ func (h *Handler) GetGeneralCourses(c *gin.Context) {
 
 // GetGeneralCourse retrieves a single CourseGeneralInfo by prefix and number.
 func (h *Handler) GetGeneralCourse(c *gin.Context) {
-	prefix := strings.ToLower(strings.TrimSpace(c.Param("prefix")))
-	number := strings.ToLower(strings.TrimSpace(c.Param("number")))
+	prefix := getQueryParam(c, "prefix")
+	number := getQueryParam(c, "number")
 
 	course, err := h.db.GetGeneralCourse(c.Request.Context(), prefix, number)
 	if err != nil {

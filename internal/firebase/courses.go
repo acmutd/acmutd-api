@@ -219,17 +219,23 @@ func (c *Firestore) GetSectionByParams(ctx context.Context, prefix, number, term
 // If prefix is provided, the query is scoped to courses/{prefix}/numbers.
 // Otherwise a collection group query across all "numbers" subcollections is used.
 func (c *Firestore) QueryGeneralCourses(ctx context.Context, q types.GeneralCourseQuery) ([]types.CourseGeneralInfo, bool, error) {
-	prefix := strings.ToLower(strings.TrimSpace(q.Prefix))
-	search := strings.ToLower(strings.TrimSpace(q.Search))
+
+	key := cacheKey("courses", "prefix", q.Prefix, "limit", strconv.Itoa(q.Limit), "offset", strconv.Itoa(q.Offset))
+
+	if cached, found := c.Cache.Get(key); found {
+		log.Printf("Cache hit: %s", key)
+		r := cached.(cachedResult[types.CourseGeneralInfo])
+		return r.Items, r.HasNext, nil
+	}
 
 	var query firestore.Query
-	if prefix != "" {
-		query = c.Collection("courses").Doc(prefix).Collection("numbers").Query
+	if q.Prefix != "" {
+		query = c.Collection("courses").Doc(q.Prefix).Collection("numbers").Query
 	} else {
 		query = c.CollectionGroup("numbers").Query
 	}
 
-	needsManualFilter := search != ""
+	needsManualFilter := q.Search != ""
 
 	courses, hasNext, err := c.collectGeneralCourses(ctx, query, q.Limit, q.Offset, needsManualFilter)
 	if err != nil {
@@ -244,7 +250,7 @@ func (c *Firestore) QueryGeneralCourses(ctx context.Context, q types.GeneralCour
 	for _, course := range courses {
 		title := strings.ToLower(course.Title)
 		desc := strings.ToLower(course.Description)
-		if !strings.Contains(title, search) && !strings.Contains(desc, search) {
+		if !strings.Contains(title, q.Search) && !strings.Contains(desc, q.Search) {
 			continue
 		}
 		filtered = append(filtered, course)
@@ -259,10 +265,15 @@ func (c *Firestore) QueryGeneralCourses(ctx context.Context, q types.GeneralCour
 
 // GetGeneralCourse retrieves a single CourseGeneralInfo at courses/{prefix}/numbers/{number}.
 func (c *Firestore) GetGeneralCourse(ctx context.Context, prefix, number string) (*types.CourseGeneralInfo, error) {
-	prefix = strings.ToLower(strings.TrimSpace(prefix))
-	number = strings.ToLower(strings.TrimSpace(number))
 	if prefix == "" || number == "" {
 		return nil, nil
+	}
+
+	key := cacheKey("courses", "prefix", prefix, "number", number)
+	if cached, found := c.Cache.Get(key); found {
+		if course, ok := cached.(types.CourseGeneralInfo); ok {
+			return &course, nil
+		}
 	}
 
 	doc, err := c.Collection("courses").Doc(prefix).Collection("numbers").Doc(number).Get(ctx)
@@ -277,6 +288,9 @@ func (c *Firestore) GetGeneralCourse(ctx context.Context, prefix, number string)
 	if err := doc.DataTo(&course); err != nil {
 		return nil, fmt.Errorf("failed to parse course: %w", err)
 	}
+
+	c.Cache.Set(key, course, c.TTL.Courses)
+
 	return &course, nil
 }
 
