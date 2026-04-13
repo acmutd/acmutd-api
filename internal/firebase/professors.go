@@ -3,7 +3,6 @@ package firebase
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/acmutd/acmutd-api/internal/types"
 	"google.golang.org/api/iterator"
@@ -33,12 +32,7 @@ func (c *Firestore) GetProfessorById(ctx context.Context, id string) (*types.Pro
 }
 
 func (c *Firestore) GetProfessorsByName(ctx context.Context, name string, limit, offset int) ([]types.Professor, bool, error) {
-	normalizedName := strings.ToLower(strings.TrimSpace(name))
-	if normalizedName == "" {
-		return []types.Professor{}, false, nil
-	}
-
-	key := cacheKey("professors", "name", normalizedName)
+	key := cacheKey("professors", "name", name)
 	if cached, found := c.Cache.Get(key); found {
 		if p, ok := cached.(cachedResult[types.Professor]); ok {
 			return p.Items, p.HasNext, nil
@@ -46,8 +40,8 @@ func (c *Firestore) GetProfessorsByName(ctx context.Context, name string, limit,
 	}
 
 	query := c.Collection("professors").
-		Where("normalized_coursebook_name", ">=", normalizedName).
-		Where("normalized_coursebook_name", "<=", normalizedName+"\uf8ff")
+		Where("normalized_coursebook_name", ">=", name).
+		Where("normalized_coursebook_name", "<=", name+"\uf8ff")
 
 	if offset > 0 {
 		query = query.Offset(offset)

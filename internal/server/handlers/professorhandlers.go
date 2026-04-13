@@ -8,7 +8,7 @@ import (
 
 // GetProfessorByID loads a professor by ID.
 func (h *Handler) GetProfessorByID(c *gin.Context) {
-	id := c.Param("id")
+	id := getQueryParam(c, "id")
 
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Professor ID is required"})
@@ -28,7 +28,7 @@ func (h *Handler) GetProfessorByID(c *gin.Context) {
 
 // GetProfessorsByName loads professors by name.
 func (h *Handler) GetProfessorsByName(c *gin.Context) {
-	name := c.Param("name")
+	name := getQueryParam(c, "name")
 
 	if name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Professor name is required"})
