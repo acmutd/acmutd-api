@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/acmutd/acmutd-api/internal/types"
 	"github.com/gin-gonic/gin"
@@ -71,10 +72,10 @@ func (h *Handler) GetSections(c *gin.Context) {
 
 // GetSectionByParams retrieves a single section
 func (h *Handler) GetSectionByParams(c *gin.Context) {
-	prefix := getQueryParam(c, "prefix")
-	number := getQueryParam(c, "number")
-	section := getQueryParam(c, "section")
-	term := getQueryParam(c, "term")
+	prefix := strings.ToLower(strings.TrimSpace(c.Param("prefix")))
+	number := strings.ToLower(strings.TrimSpace(c.Param("number")))
+	section := strings.ToLower(strings.TrimSpace(c.Param("section")))
+	term := strings.ToLower(strings.TrimSpace(c.Param("term")))
 
 	result, err := h.db.GetSectionByParams(c.Request.Context(), prefix, number, term, section)
 	if err != nil {
@@ -151,8 +152,8 @@ func (h *Handler) GetGeneralCourses(c *gin.Context) {
 
 // GetGeneralCourse retrieves a single CourseGeneralInfo by prefix and number.
 func (h *Handler) GetGeneralCourse(c *gin.Context) {
-	prefix := getQueryParam(c, "prefix")
-	number := getQueryParam(c, "number")
+	prefix := strings.ToLower(strings.TrimSpace(c.Param("prefix")))
+	number := strings.ToLower(strings.TrimSpace(c.Param("number")))
 
 	course, err := h.db.GetGeneralCourse(c.Request.Context(), prefix, number)
 	if err != nil {

@@ -56,7 +56,7 @@ type CourseGeneralInfo struct {
 
 	// Sections holds the associated section documents for this course.
 	// Populated during the combine step; not written to Firestore.
-	Sections []*SectionDoc `firestore:"-"`
+	Sections []*SectionDoc `json:"sections,omitempty" firestore:"-"`
 }
 
 // Course represents a course section stored in Firestore, combining coursebook
