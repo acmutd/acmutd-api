@@ -3,6 +3,7 @@ package firebase
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/acmutd/acmutd-api/internal/types"
 	"google.golang.org/api/iterator"
@@ -32,7 +33,7 @@ func (c *Firestore) GetProfessorById(ctx context.Context, id string) (*types.Pro
 }
 
 func (c *Firestore) GetProfessorsByName(ctx context.Context, name string, limit, offset int) ([]types.Professor, bool, error) {
-	key := cacheKey("professors", "name", name)
+	key := cacheKey("professors", "name", name, "limit", strconv.Itoa(limit), "offset", strconv.Itoa(offset))
 	if cached, found := c.Cache.Get(key); found {
 		if p, ok := cached.(cachedResult[types.Professor]); ok {
 			return p.Items, p.HasNext, nil

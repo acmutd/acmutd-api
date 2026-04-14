@@ -219,13 +219,34 @@ func (c *Firestore) GetSectionByParams(ctx context.Context, prefix, number, term
 // If prefix is provided, the query is scoped to courses/{prefix}/numbers.
 // Otherwise a collection group query across all "numbers" subcollections is used.
 func (c *Firestore) QueryGeneralCourses(ctx context.Context, q types.GeneralCourseQuery) ([]types.CourseGeneralInfo, bool, error) {
-
-	key := cacheKey("courses", "prefix", q.Prefix, "limit", strconv.Itoa(q.Limit), "offset", strconv.Itoa(q.Offset))
+	key := cacheKey("courses", "prefix", q.Prefix, "search", q.Search, "limit", strconv.Itoa(q.Limit), "offset", strconv.Itoa(q.Offset))
 
 	if cached, found := c.Cache.Get(key); found {
 		log.Printf("Cache hit: %s", key)
 		r := cached.(cachedResult[types.CourseGeneralInfo])
 		return r.Items, r.HasNext, nil
+	}
+
+	if q.Search != "" {
+		allCourses, err := c.fetchAllCourses(ctx, q.Prefix)
+		if err != nil {
+			return nil, false, err
+		}
+
+		search := strings.ToLower(q.Search)
+		var filtered []types.CourseGeneralInfo
+		for _, course := range allCourses {
+			if strings.Contains(strings.ToLower(course.Title), search) || strings.Contains(strings.ToLower(course.Description), search) {
+				filtered = append(filtered, course)
+			}
+		}
+
+		result, hasNext := paginate(filtered, q.Limit, q.Offset)
+		if result == nil {
+			result = []types.CourseGeneralInfo{}
+		}
+		c.Cache.Set(key, cachedResult[types.CourseGeneralInfo]{Items: result, HasNext: hasNext}, c.TTL.Courses)
+		return result, hasNext, nil
 	}
 
 	var query firestore.Query
@@ -235,32 +256,38 @@ func (c *Firestore) QueryGeneralCourses(ctx context.Context, q types.GeneralCour
 		query = c.CollectionGroup("numbers").Query
 	}
 
-	needsManualFilter := q.Search != ""
-
-	courses, hasNext, err := c.collectGeneralCourses(ctx, query, q.Limit, q.Offset, needsManualFilter)
+	courses, hasNext, err := c.collectGeneralCourses(ctx, query, q.Limit, q.Offset, false)
 	if err != nil {
 		return nil, false, err
 	}
 
-	if !needsManualFilter {
-		return courses, hasNext, nil
+	c.Cache.Set(key, cachedResult[types.CourseGeneralInfo]{Items: courses, HasNext: hasNext}, c.TTL.Courses)
+	return courses, hasNext, nil
+}
+
+// fetchAllCourses returns all CourseGeneralInfo documents for a prefix, caching the
+// unpaginated result so search queries can filter in memory without re-fetching Firestore.
+func (c *Firestore) fetchAllCourses(ctx context.Context, prefix string) ([]types.CourseGeneralInfo, error) {
+	allKey := cacheKey("courses_all", "prefix", prefix)
+	if cached, found := c.Cache.Get(allKey); found {
+		log.Printf("Cache hit: %s", allKey)
+		return cached.([]types.CourseGeneralInfo), nil
 	}
 
-	filtered := courses[:0]
-	for _, course := range courses {
-		title := strings.ToLower(course.Title)
-		desc := strings.ToLower(course.Description)
-		if !strings.Contains(title, q.Search) && !strings.Contains(desc, q.Search) {
-			continue
-		}
-		filtered = append(filtered, course)
+	var query firestore.Query
+	if prefix != "" {
+		query = c.Collection("courses").Doc(prefix).Collection("numbers").Query
+	} else {
+		query = c.CollectionGroup("numbers").Query
 	}
 
-	result, hasNext := paginate(filtered, q.Limit, q.Offset)
-	if result == nil {
-		return []types.CourseGeneralInfo{}, false, nil
+	courses, _, err := c.collectGeneralCourses(ctx, query, 0, 0, true)
+	if err != nil {
+		return nil, err
 	}
-	return result, hasNext, nil
+
+	c.Cache.Set(allKey, courses, c.TTL.Courses)
+	return courses, nil
 }
 
 // GetGeneralCourse retrieves a single CourseGeneralInfo at courses/{prefix}/numbers/{number}.

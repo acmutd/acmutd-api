@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/acmutd/acmutd-api/internal/types"
 	"github.com/gin-gonic/gin"
@@ -33,14 +32,24 @@ func (h *Handler) GetSections(c *gin.Context) {
 		return
 	}
 
+	prefix := getQueryParam(c, "prefix")
+	building := getQueryParam(c, "building")
+	title := getQueryParam(c, "title")
+
+	// we do this to prevent too many reads if theres no prefix (find a better way)
+	if (building != "" || title != "") && prefix == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix is required when filtering by building or title"})
+		return
+	}
+
 	query := types.SectionQuery{
 		Term:       term,
-		Prefix:     getQueryParam(c, "prefix"),
+		Prefix:     prefix,
 		Number:     getQueryParam(c, "number"),
 		Instructor: getQueryParam(c, "instructor"),
 		Days:       getQueryParam(c, "days"),
-		Building:   getQueryParam(c, "building"),
-		Title:      getQueryParam(c, "title"),
+		Building:   building,
+		Title:      title,
 		Limit:      params.Limit,
 		Offset:     params.Offset,
 	}
@@ -92,6 +101,7 @@ func (h *Handler) GetSectionByParams(c *gin.Context) {
 //   - limit, page: pagination
 func (h *Handler) GetGeneralCourses(c *gin.Context) {
 	prefix := getQueryParam(c, "prefix")
+	search := getQueryParam(c, "q")
 	if prefix == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix query parameter is required"})
 		return
@@ -119,7 +129,7 @@ func (h *Handler) GetGeneralCourses(c *gin.Context) {
 
 	query := types.GeneralCourseQuery{
 		Prefix: prefix,
-		Search: strings.TrimSpace(c.Query("q")),
+		Search: search,
 		Limit:  params.Limit,
 		Offset: params.Offset,
 	}
