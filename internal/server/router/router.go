@@ -26,7 +26,10 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 	{
 		courses := v1.Group("/courses")
 		{
-			courses.GET("/", handler.GetCourses)
+			courses.GET("/general", handler.GetGeneralCourses)
+			courses.GET("/general/:prefix/:number", handler.GetGeneralCourse)
+			courses.GET("/sections", handler.GetSections)
+			courses.GET("/sections/:prefix/:number/:section/:term", handler.GetSectionByParams)
 		}
 
 		terms := v1.Group("/terms")
@@ -38,16 +41,6 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 		{
 			professors.GET("/id/:id", handler.GetProfessorByID)
 			professors.GET("/name/:name", handler.GetProfessorsByName)
-		}
-
-		grades := v1.Group("/grades")
-		{
-			grades.GET("/prof/id/:id", handler.GetGradesByProfID)
-			grades.GET("/prof/name/:name", handler.GetGradesByProfName)
-			grades.GET("/term/:term", handler.GetGradesByTerm)
-			grades.GET("/prefix/:prefix", handler.GetGradesByPrefix)
-			grades.GET("/prefix/:prefix/number/:number", handler.GetGradesByPrefixAndNumber)
-			grades.GET("/prefix/:prefix/number/:number/term/:term/section/:section", handler.GetGradesBySection)
 		}
 	}
 

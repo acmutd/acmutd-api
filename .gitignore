@@ -3,6 +3,7 @@ output/
 .env
 __pycache__/
 *.json
+!firestore.indexes.json
 !manual_matches.json
 *.xlsx
 *.xlsb

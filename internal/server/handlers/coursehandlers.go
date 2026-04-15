@@ -8,85 +8,134 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetCourses fetches courses with optional filtering by query parameters.
-// Query parameters:
-//   - term: the term to query (required, e.g., "25s", "24f")
+// GetSections queries section documents for a given term with optional filters.
 //
-// Optional query parameters (can be combined):
-//   - prefix: filters by course prefix (e.g., "cs")
-//   - number: filters by course number (e.g., "1337") - works with or without prefix
-//   - section: filters by section (e.g., "001") - works with or without prefix/number
-//   - school: filters by school code (e.g., "ecs", "nsm")
-//   - instructor: filters by instructor name (substring match)
-//   - instructor_id: filters by instructor ID (substring match)
-//   - days: filters by days of the week (e.g., "monday", "monday, wednesday")
-//   - times: filters by time in 24h format (e.g., "14:00 - 14:50")
-//   - times_12h: filters by time in 12h format (e.g., "2:00 PM - 2:50 PM")
-//   - location: filters by location (e.g., "SCI_1.210", supports spaces or underscores)
-//   - q: search query for title, topic, or instructor name
-func (h *Handler) GetCourses(c *gin.Context) {
-	term := strings.ToLower(strings.TrimSpace(c.Query("term")))
+// Required query parameters:
+//   - term: the term to query (e.g., "25s", "24f")
+//
+// Optional query parameters:
+//   - prefix: filter by course prefix (e.g., "cs")
+//   - number: filter by course number (e.g., "2305")
+//   - instructor: exact match on an element of the instructors array (e.g., "John Smith")
+//   - days: exact match on an element of the days array (e.g., "Monday")
+//   - building: exact match on building (e.g., "ECSS")
+//   - title: substring match on title (e.g., "data structures")
+//   - limit, page: pagination
+func (h *Handler) GetSections(c *gin.Context) {
+	term := getQueryParam(c, "term")
 	if term == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Term query parameter is required (e.g., ?term=25s)"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "term query parameter is required (e.g., ?term=25s)"})
 		return
 	}
 
-	// Parse optional query parameters
-	prefix := strings.ToLower(strings.TrimSpace(c.Query("prefix")))
-	number := strings.ToLower(strings.TrimSpace(c.Query("number")))
-	section := strings.ToLower(strings.TrimSpace(c.Query("section")))
-	school := strings.ToLower(strings.TrimSpace(c.Query("school")))
-	instructor := strings.TrimSpace(c.Query("instructor"))
-	instructorID := strings.TrimSpace(c.Query("instructor_id"))
-	days := strings.TrimSpace(c.Query("days"))
-	times := strings.TrimSpace(c.Query("times"))
-	times12h := strings.ToUpper(strings.TrimSpace(c.Query("times_12h")))
-	location := strings.TrimSpace(c.Query("location"))
-	// should change firestore to have building name and room number as separate values
-	// plus the location parameter it already has
-	search := strings.TrimSpace(c.Query("q"))
-
-	// For all other queries, parse pagination
 	params, ok := parsePaginationOrRespond(c)
 	if !ok {
 		return
 	}
 
-	// Build query with all parameters
-	query := types.CourseQuery{
-		Term:         term,
-		CoursePrefix: prefix,
-		CourseNumber: number,
-		Section:      section,
-		School:       school,
-		Instructor:   instructor,
-		InstructorID: instructorID,
-		Days:         days,
-		Times:        times,
-		Times12h:     times12h,
-		Location:     location,
-		Search:       search,
-		Limit:        params.Limit,
-		Offset:       params.Offset,
+	prefix := getQueryParam(c, "prefix")
+	building := getQueryParam(c, "building")
+	title := getQueryParam(c, "title")
+
+	// we do this to prevent too many reads if theres no prefix (find a better way)
+	if (building != "" || title != "") && prefix == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix is required when filtering by building or title"})
+		return
 	}
 
-	// Build query object for response
-	queryMeta := gin.H{
-		"term":          term,
-		"prefix":        prefix,
-		"number":        number,
-		"section":       section,
-		"school":        school,
-		"instructor":    instructor,
-		"instructor_id": instructorID,
-		"days":          days,
-		"times":         times,
-		"times_12h":     times12h,
-		"location":      location,
-		"search":        search,
+	query := types.SectionQuery{
+		Term:       term,
+		Prefix:     prefix,
+		Number:     getQueryParam(c, "number"),
+		Instructor: getQueryParam(c, "instructor"),
+		Days:       getQueryParam(c, "days"),
+		Building:   building,
+		Title:      title,
+		Limit:      params.Limit,
+		Offset:     params.Offset,
 	}
 
-	courses, hasNext, err := h.db.QueryCourses(c.Request.Context(), query)
+	sections, hasNext, err := h.db.QuerySections(c.Request.Context(), query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	pagination := buildPaginationMeta(params, len(sections), hasNext)
+
+	c.JSON(http.StatusOK, gin.H{
+		"count":      len(sections),
+		"sections":   sections,
+		"pagination": pagination,
+	})
+}
+
+// GetSectionByParams retrieves a single section
+func (h *Handler) GetSectionByParams(c *gin.Context) {
+	prefix := strings.ToLower(strings.TrimSpace(c.Param("prefix")))
+	number := strings.ToLower(strings.TrimSpace(c.Param("number")))
+	section := strings.ToLower(strings.TrimSpace(c.Param("section")))
+	term := strings.ToLower(strings.TrimSpace(c.Param("term")))
+
+	result, err := h.db.GetSectionByParams(c.Request.Context(), prefix, number, term, section)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if result == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "section not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// GetGeneralCourses queries CourseGeneralInfo documents.
+// If both prefix and number are provided, returns a single course directly.
+//
+// Required query parameters:
+//   - prefix: course prefix (e.g., "cs")
+//
+// Optional query parameters:
+//   - number: course number (e.g., "2305"); if provided alongside prefix, returns a single course
+//   - q: substring search on title or description
+//   - limit, page: pagination
+func (h *Handler) GetGeneralCourses(c *gin.Context) {
+	prefix := getQueryParam(c, "prefix")
+	search := getQueryParam(c, "q")
+	if prefix == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "prefix query parameter is required"})
+		return
+	}
+
+	number := getQueryParam(c, "number")
+	if number != "" {
+		course, err := h.db.GetGeneralCourse(c.Request.Context(), prefix, number)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if course == nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "course not found"})
+			return
+		}
+		c.JSON(http.StatusOK, course)
+		return
+	}
+
+	params, ok := parsePaginationOrRespond(c)
+	if !ok {
+		return
+	}
+
+	query := types.GeneralCourseQuery{
+		Prefix: prefix,
+		Search: search,
+		Limit:  params.Limit,
+		Offset: params.Offset,
+	}
+
+	courses, hasNext, err := h.db.QueryGeneralCourses(c.Request.Context(), query)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -98,6 +147,23 @@ func (h *Handler) GetCourses(c *gin.Context) {
 		"count":      len(courses),
 		"courses":    courses,
 		"pagination": pagination,
-		"query":      queryMeta,
 	})
+}
+
+// GetGeneralCourse retrieves a single CourseGeneralInfo by prefix and number.
+func (h *Handler) GetGeneralCourse(c *gin.Context) {
+	prefix := strings.ToLower(strings.TrimSpace(c.Param("prefix")))
+	number := strings.ToLower(strings.TrimSpace(c.Param("number")))
+
+	course, err := h.db.GetGeneralCourse(c.Request.Context(), prefix, number)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if course == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "course not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, course)
 }
