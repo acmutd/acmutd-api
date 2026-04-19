@@ -34,7 +34,7 @@ let cronLogs = [...mockCronLogs];
 let serverStateLogs = [...mockServerStateLogs];
 let promotionLogs = [...mockPromotionLogs];
 let instanceState = { ...mockInstanceState };
-const currentUserNum = 1;
+const currentUserNum = 4;
 let sessionUserUid = users[currentUserNum]?.uid ?? "";
 
 function nowIso(): string {

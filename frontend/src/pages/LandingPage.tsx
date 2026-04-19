@@ -15,9 +15,7 @@ export function LandingPage() {
           API Portal
         </p>
         <h1 className="mt-2 text-3xl font-bold text-slate-900">ACM UTD API</h1>
-        <p className="mt-2 text-slate-600">
-          Course and grade data for UTD projects and HackUTD.
-        </p>
+        <p className="mt-2 text-slate-600">Courses and grades data for UTD.</p>
 
         <div className="mt-8 grid gap-3">
           <Button

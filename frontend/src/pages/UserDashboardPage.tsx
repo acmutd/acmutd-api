@@ -43,8 +43,7 @@ export function UserDashboardPage() {
     "regenerate" | "revoke" | null
   >(null);
 
-  const [initialFullVisible, setInitialFullVisible] = useState(true);
-  const [temporaryReveal, setTemporaryReveal] = useState(false);
+  const [keyRevealed, setKeyRevealed] = useState(false);
 
   const total30Days = stats.reduce((sum, item) => sum + item.totalRequests, 0);
 
@@ -84,8 +83,7 @@ export function UserDashboardPage() {
       setMyKey(key);
       setStats(daily);
       setRequests(recent);
-      setInitialFullVisible(true);
-      setTemporaryReveal(false);
+      setKeyRevealed(false);
       setLoading(false);
     }
 
@@ -110,8 +108,6 @@ export function UserDashboardPage() {
     );
   }
 
-  const keyShownInFull = myKey && (initialFullVisible || temporaryReveal);
-
   return (
     <PortalLayout
       user={currentUser}
@@ -123,23 +119,17 @@ export function UserDashboardPage() {
       onSignOut={logout}
     >
       {activeTab === "overview" && (
-        <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardSubtitle>Total Requests (last 30 days)</CardSubtitle>
-              <CardTitle>{total30Days.toLocaleString()}</CardTitle>
-            </Card>
-            <Card>
-              <CardSubtitle>Most Used Endpoint</CardSubtitle>
-              <CardTitle>{mostUsedEndpoint}</CardTitle>
-            </Card>
-            <Card>
-              <CardSubtitle>Last Used</CardSubtitle>
-              <CardTitle>{formatDateTime(myKey?.lastUsedAt ?? null)}</CardTitle>
-            </Card>
-          </div>
+        <div className="flex h-full flex-col">
+          <Card>
+            <CardTitle>Overview</CardTitle>
+            <div>This will have general info</div>
+          </Card>
+        </div>
+      )}
 
-          {!myKey && (
+      {activeTab === "my-key" && (
+        <div className="space-y-4">
+          {!myKey ? (
             <Card>
               <CardTitle>You don't have an API key yet</CardTitle>
               <CardSubtitle>
@@ -150,86 +140,6 @@ export function UserDashboardPage() {
                   Request API Key
                 </Button>
               </div>
-            </Card>
-          )}
-
-          {myKey && (
-            <Card className="space-y-3">
-              <div className="flex items-center justify-between">
-                <CardTitle>Current Key</CardTitle>
-                <StatusBadge status={myKey.status} />
-              </div>
-              <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-3">
-                <p>
-                  <span className="font-semibold text-slate-800">Created:</span>{" "}
-                  {formatDate(myKey.createdAt)}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-800">Expires:</span>{" "}
-                  {formatDate(myKey.expiresAt)}
-                </p>
-                <p>
-                  <span className="font-semibold text-slate-800">
-                    Rate Limit:
-                  </span>{" "}
-                  {myKey.rateLimit} / {myKey.windowSeconds}s
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <p className="mb-1 text-xs font-semibold uppercase text-slate-500">
-                  API Key
-                </p>
-                <p className="break-all font-mono text-sm text-slate-800">
-                  {keyShownInFull ? myKey.key : maskKey(myKey.key)}
-                </p>
-                <div className="mt-2 flex gap-2">
-                  {keyShownInFull && (
-                    <>
-                      <Button
-                        variant="secondary"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(myKey.key);
-                          showToast("Copied key to clipboard");
-                        }}
-                      >
-                        Copy
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setInitialFullVisible(false);
-                          setTemporaryReveal(false);
-                        }}
-                      >
-                        Hide
-                      </Button>
-                    </>
-                  )}
-                  {!keyShownInFull && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => {
-                        setTemporaryReveal(true);
-                        setTimeout(() => setTemporaryReveal(false), 5000);
-                      }}
-                    >
-                      Reveal
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {activeTab === "my-key" && (
-        <div className="space-y-4">
-          {!myKey ? (
-            <Card>
-              <CardTitle>No API key found</CardTitle>
-              <CardSubtitle>Request a key from the Overview tab.</CardSubtitle>
             </Card>
           ) : (
             <Card>
@@ -262,7 +172,56 @@ export function UserDashboardPage() {
                   <span className="font-medium">Expires At:</span>{" "}
                   {formatDateTime(myKey.expiresAt)}
                 </p>
+                <p>
+                  <div
+                    className="inline-flex items-center gap-1"
+                    onMouseLeave={() => setKeyRevealed(false)}
+                  >
+                    <button
+                      type="button"
+                      className="break-all font-mono text-sm text-slate-800 underline decoration-dotted underline-offset-2"
+                      onClick={() => setKeyRevealed((v) => !v)}
+                    >
+                      {keyRevealed ? myKey.key : maskKey(myKey.key)}
+                    </button>
+                    <button
+                      type="button"
+                      title="Copy to clipboard"
+                      className={`text-slate-400 hover:text-slate-700 ${keyRevealed ? "" : "invisible pointer-events-none"}`}
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(myKey.key);
+                          showToast("Copied key to clipboard");
+                        } catch {
+                          showToast("Unable to copy key");
+                        }
+                      }}
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-3.5 w-3.5"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <rect
+                          x="9"
+                          y="9"
+                          width="13"
+                          height="13"
+                          rx="2"
+                          ry="2"
+                        />
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      </svg>
+                    </button>
+                  </div>
+                </p>
               </div>
+
               <div className="mt-5 flex flex-wrap gap-2">
                 <Button onClick={() => setConfirmAction("regenerate")}>
                   Regenerate key
@@ -281,6 +240,21 @@ export function UserDashboardPage() {
 
       {activeTab === "usage" && (
         <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardSubtitle>Total Requests (last 30 days)</CardSubtitle>
+              <CardTitle>{total30Days.toLocaleString()}</CardTitle>
+            </Card>
+            <Card>
+              <CardSubtitle>Most Used Endpoint</CardSubtitle>
+              <CardTitle>{mostUsedEndpoint}</CardTitle>
+            </Card>
+            <Card>
+              <CardSubtitle>Last Used</CardSubtitle>
+              <CardTitle>{formatDateTime(myKey?.lastUsedAt ?? null)}</CardTitle>
+            </Card>
+          </div>
+
           <Card>
             <CardTitle>Daily Usage Stats</CardTitle>
             <div className="mt-3 overflow-x-auto">
@@ -412,8 +386,7 @@ export function UserDashboardPage() {
               if (confirmAction === "regenerate") {
                 const updated = await regenerateApiKey(myKey.keyId);
                 setMyKey(updated);
-                setInitialFullVisible(true);
-                setTemporaryReveal(false);
+                setKeyRevealed(false);
                 showToast("API key regenerated");
               }
               if (confirmAction === "revoke") {

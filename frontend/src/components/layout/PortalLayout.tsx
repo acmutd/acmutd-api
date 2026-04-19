@@ -98,6 +98,14 @@ export function PortalLayout({
             )}
           </div>
 
+          <Button
+            onClick={() => {
+              window.location.assign("/swagger");
+            }}
+          >
+            Go to Documentation
+          </Button>
+
           <div className="relative" ref={menuContainerRef}>
             <button
               className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5"

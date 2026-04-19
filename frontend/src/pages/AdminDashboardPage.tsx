@@ -60,7 +60,6 @@ const adminNavItems = [
   { key: "usage", label: "Usage" },
   { key: "server-controls", label: "Server Controls" },
   { key: "logs-metrics", label: "Logs & Metrics" },
-  { key: "config", label: "Config" },
 ];
 
 type AdminTab = (typeof adminNavItems)[number]["key"];
@@ -103,6 +102,7 @@ export function AdminDashboardPage() {
     expiresAt: "2026-12-31",
   });
   const [usersById, setUsersById] = useState<Record<string, User>>({});
+  const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set());
   const [userModerationModalOpen, setUserModerationModalOpen] = useState(false);
   const [moderationTarget, setModerationTarget] = useState<{
     uid: string;
@@ -111,6 +111,11 @@ export function AdminDashboardPage() {
   } | null>(null);
 
   const [configDraft, setConfigDraft] = useState<AppConfig | null>(null);
+
+  const [keyActionConfirm, setKeyActionConfirm] = useState<{
+    keyId: string;
+    action: "regenerate" | "revoke";
+  } | null>(null);
 
   const filteredKeys = useMemo(() => {
     return allKeys.filter((key) => {
@@ -226,50 +231,10 @@ export function AdminDashboardPage() {
       onSignOut={logout}
     >
       {activeTab === "overview" && (
-        <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-4">
-            <Card>
-              <CardSubtitle>Total Active Keys</CardSubtitle>
-              <CardTitle>{activeKeyCount}</CardTitle>
-            </Card>
-            <Card>
-              <CardSubtitle>Requests Today</CardSubtitle>
-              <CardTitle>{todayRequests.toLocaleString()}</CardTitle>
-            </Card>
-            <Card>
-              <CardSubtitle>Error Rate (today)</CardSubtitle>
-              <CardTitle>
-                {((todayErrors / todayRequests) * 100).toFixed(2)}%
-              </CardTitle>
-            </Card>
-            <Card>
-              <CardSubtitle>Instance Type</CardSubtitle>
-              <CardTitle>{appConfig.instanceType}</CardTitle>
-            </Card>
-          </div>
-
+        <div className="flex h-full flex-col">
           <Card>
-            <CardTitle>HackUTD Mode</CardTitle>
-            <CardSubtitle>
-              Operational switch tied to infrastructure profile.
-            </CardSubtitle>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${appConfig.hackutdModeEnabled ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-700"}`}
-              >
-                {appConfig.hackutdModeEnabled ? "Enabled" : "Disabled"}
-              </span>
-              <Button
-                variant="secondary"
-                disabled
-                title="Disabled in skeleton; wired to mock updateAppConfig."
-              >
-                Toggle (disabled)
-              </Button>
-              <p className="text-sm text-slate-600">
-                End date: {formatDateTime(appConfig.hackutdEndDate)}
-              </p>
-            </div>
+            <CardTitle>Overview</CardTitle>
+            <div>This will have general info</div>
           </Card>
         </div>
       )}
@@ -391,27 +356,71 @@ export function AdminDashboardPage() {
                       <td className="py-2 pr-4">
                         <div>
                           <p>{key.label}</p>
-                          <div className="group relative mt-1 inline-block">
+                          <div
+                            className="mt-1 inline-flex items-center gap-1"
+                            onMouseLeave={() =>
+                              setRevealedKeys((prev) => {
+                                const next = new Set(prev);
+                                next.delete(key.keyId);
+                                return next;
+                              })
+                            }
+                          >
                             <button
                               type="button"
                               className="font-mono text-xs text-slate-500 underline decoration-dotted underline-offset-2"
-                              onClick={async () => {
-                                try {
-                                  await navigator.clipboard.writeText(key.key);
-                                  showToast("API key copied to clipboard");
-                                } catch {
-                                  showToast("Unable to copy key");
-                                }
-                              }}
+                              onClick={() =>
+                                setRevealedKeys((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(key.keyId)) {
+                                    next.delete(key.keyId);
+                                  } else {
+                                    next.add(key.keyId);
+                                  }
+                                  return next;
+                                })
+                              }
                             >
-                              {maskKey(key.key)}
+                              {revealedKeys.has(key.keyId)
+                                ? key.key
+                                : maskKey(key.key)}
                             </button>
-                            <div className="pointer-events-none invisible absolute left-0 top-full z-20 mt-1 w-80 rounded-md border border-slate-200 bg-white p-2 font-mono text-xs text-slate-700 opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100">
-                              <p>{key.key}</p>
-                              <p className="mt-1 font-sans text-[11px] text-slate-500">
-                                Click masked key to copy
-                              </p>
-                            </div>
+                            <button
+                                type="button"
+                                title="Copy to clipboard"
+                                className={`text-slate-400 hover:text-slate-700 ${revealedKeys.has(key.keyId) ? "" : "invisible pointer-events-none"}`}
+                                onClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(
+                                      key.key,
+                                    );
+                                    showToast("API key copied to clipboard");
+                                  } catch {
+                                    showToast("Unable to copy key");
+                                  }
+                                }}
+                              >
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  className="h-3.5 w-3.5"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <rect
+                                    x="9"
+                                    y="9"
+                                    width="13"
+                                    height="13"
+                                    rx="2"
+                                    ry="2"
+                                  />
+                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                                </svg>
+                              </button>
                           </div>
                         </div>
                       </td>
@@ -524,21 +533,23 @@ export function AdminDashboardPage() {
                           </Button>
                           <Button
                             variant="secondary"
-                            onClick={async () => {
-                              await adminRegenerateKey(key.keyId);
-                              showToast("Key regenerated");
-                              await loadData();
-                            }}
+                            onClick={() =>
+                              setKeyActionConfirm({
+                                keyId: key.keyId,
+                                action: "regenerate",
+                              })
+                            }
                           >
                             Regenerate
                           </Button>
                           <Button
                             variant="danger"
-                            onClick={async () => {
-                              await adminRevokeKey(key.keyId);
-                              showToast("Key revoked");
-                              await loadData();
-                            }}
+                            onClick={() =>
+                              setKeyActionConfirm({
+                                keyId: key.keyId,
+                                action: "revoke",
+                              })
+                            }
                           >
                             Revoke
                           </Button>
@@ -573,6 +584,22 @@ export function AdminDashboardPage() {
                     ))}
                 </Select>
               </div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card>
+                <CardSubtitle>Total Active Keys</CardSubtitle>
+                <CardTitle>{activeKeyCount}</CardTitle>
+              </Card>
+              <Card>
+                <CardSubtitle>Requests Today</CardSubtitle>
+                <CardTitle>{todayRequests.toLocaleString()}</CardTitle>
+              </Card>
+              <Card>
+                <CardSubtitle>Error Rate (today)</CardSubtitle>
+                <CardTitle>
+                  {((todayErrors / todayRequests) * 100).toFixed(2)}%
+                </CardTitle>
+              </Card>
             </div>
           </Card>
 
@@ -725,41 +752,125 @@ export function AdminDashboardPage() {
           </Card>
 
           <Card>
-            <CardTitle>Server action timeline</CardTitle>
-            <div className="mt-3 space-y-2">
-              {serverStateLogs.map((entry) => (
-                <div
-                  key={entry.logId}
-                  className="rounded-md border border-slate-200 p-3 text-sm"
+            <CardTitle>App Config</CardTitle>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div>
+                <Label>Auto-approve mode</Label>
+                <Select
+                  value={configDraft.autoApproveMode}
+                  onChange={(e) =>
+                    setConfigDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            autoApproveMode: e.target
+                              .value as AppConfig["autoApproveMode"],
+                          }
+                        : prev,
+                    )
+                  }
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">
-                      {entry.action.toUpperCase()}
-                    </span>
-                    <span className="text-slate-500">
-                      {formatDateTime(entry.timestamp)}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-slate-600">
-                    {entry.triggerSource} | {entry.actorType}:{" "}
-                    {entry.actorEmail || entry.actorId}
-                  </p>
-                  <p className="mt-1 text-slate-600">
-                    State {entry.previousState} -&gt; {entry.newState}, type{" "}
-                    {entry.previousType} -&gt; {entry.newType}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">{entry.reason}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    status={entry.status}, requestId={entry.requestId}
-                    {entry.cronLogId ? `, cronLogId=${entry.cronLogId}` : ""}
-                  </p>
-                  {entry.errorMessage && (
-                    <p className="mt-1 text-xs text-red-600">
-                      {entry.errorMessage}
-                    </p>
-                  )}
-                </div>
-              ))}
+                  <option value="none">None</option>
+                  <option value="@utdallas.edu">@utdallas.edu only</option>
+                  <option value="@acmutd.co">@acmutd.co only</option>
+                  <option value="both">
+                    @utdallas.edu and @acmutd.co only
+                  </option>
+                  <option value="all">All users</option>
+                </Select>
+              </div>
+
+              <div>
+                <Label>HackUTD mode</Label>
+                <Select
+                  value={configDraft.hackutdModeEnabled ? "on" : "off"}
+                  onChange={(e) =>
+                    setConfigDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            hackutdModeEnabled: e.target.value === "on",
+                          }
+                        : prev,
+                    )
+                  }
+                >
+                  <option value="off">Off</option>
+                  <option value="on">On</option>
+                </Select>
+              </div>
+
+              <div>
+                <Label>HackUTD end date</Label>
+                <Input
+                  type="date"
+                  value={configDraft.hackutdEndDate.slice(0, 10)}
+                  onChange={(e) =>
+                    setConfigDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            hackutdEndDate: `${e.target.value}T23:59:59.000Z`,
+                          }
+                        : prev,
+                    )
+                  }
+                />
+              </div>
+
+              <div>
+                <Label>Current semester</Label>
+                <Input
+                  value={configDraft.currentSemester}
+                  onChange={(e) =>
+                    setConfigDraft((prev) =>
+                      prev
+                        ? { ...prev, currentSemester: e.target.value }
+                        : prev,
+                    )
+                  }
+                />
+              </div>
+
+              <div>
+                <Label>Instance type</Label>
+                <Select
+                  value={configDraft.instanceType}
+                  onChange={(e) =>
+                    setConfigDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            instanceType: e.target
+                              .value as AppConfig["instanceType"],
+                          }
+                        : prev,
+                    )
+                  }
+                >
+                  <option value="t3.nano">t3.nano</option>
+                  <option value="t3.micro">t3.micro</option>
+                  <option value="t3.small">t3.small</option>
+                  <option value="t3.medium">t3.medium</option>
+                  <option value="t3.large">t3.large</option>
+                  <option value="t3.xlarge">t3.xlarge</option>
+                  <option value="t3.2xlarge">t3.2xlarge</option>
+                </Select>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <Button
+                onClick={async () => {
+                  const next = await updateAppConfig(configDraft);
+                  setAppConfig(next);
+                  setConfigDraft(next);
+                  showToast("Configuration saved");
+                  await loadData();
+                }}
+              >
+                Save
+              </Button>
             </div>
           </Card>
         </div>
@@ -806,6 +917,45 @@ export function AdminDashboardPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </Card>
+
+          <Card>
+            <CardTitle>Server action timeline</CardTitle>
+            <div className="mt-3 space-y-2">
+              {serverStateLogs.map((entry) => (
+                <div
+                  key={entry.logId}
+                  className="rounded-md border border-slate-200 p-3 text-sm"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">
+                      {entry.action.toUpperCase()}
+                    </span>
+                    <span className="text-slate-500">
+                      {formatDateTime(entry.timestamp)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-slate-600">
+                    {entry.triggerSource} | {entry.actorType}:{" "}
+                    {entry.actorEmail || entry.actorId}
+                  </p>
+                  <p className="mt-1 text-slate-600">
+                    State {entry.previousState} -&gt; {entry.newState}, type{" "}
+                    {entry.previousType} -&gt; {entry.newType}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">{entry.reason}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    status={entry.status}, requestId={entry.requestId}
+                    {entry.cronLogId ? `, cronLogId=${entry.cronLogId}` : ""}
+                  </p>
+                  {entry.errorMessage && (
+                    <p className="mt-1 text-xs text-red-600">
+                      {entry.errorMessage}
+                    </p>
+                  )}
+                </div>
+              ))}
             </div>
           </Card>
 
@@ -875,124 +1025,6 @@ export function AdminDashboardPage() {
         </div>
       )}
 
-      {activeTab === "config" && (
-        <Card>
-          <CardTitle>App Config</CardTitle>
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <div>
-              <Label>Auto-approve mode</Label>
-              <Select
-                value={configDraft.autoApproveMode}
-                onChange={(e) =>
-                  setConfigDraft((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          autoApproveMode: e.target
-                            .value as AppConfig["autoApproveMode"],
-                        }
-                      : prev,
-                  )
-                }
-              >
-                <option value="none">None</option>
-                <option value="@utdallas.edu">@utdallas.edu only</option>
-                <option value="@acmutd.co">@acmutd.co only</option>
-                <option value="both">@utdallas.edu and @acmutd.co only</option>
-                <option value="all">All users</option>
-              </Select>
-            </div>
-
-            <div>
-              <Label>HackUTD mode</Label>
-              <Select
-                value={configDraft.hackutdModeEnabled ? "on" : "off"}
-                onChange={(e) =>
-                  setConfigDraft((prev) =>
-                    prev
-                      ? { ...prev, hackutdModeEnabled: e.target.value === "on" }
-                      : prev,
-                  )
-                }
-              >
-                <option value="off">Off</option>
-                <option value="on">On</option>
-              </Select>
-            </div>
-
-            <div>
-              <Label>HackUTD end date</Label>
-              <Input
-                type="date"
-                value={configDraft.hackutdEndDate.slice(0, 10)}
-                onChange={(e) =>
-                  setConfigDraft((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          hackutdEndDate: `${e.target.value}T23:59:59.000Z`,
-                        }
-                      : prev,
-                  )
-                }
-              />
-            </div>
-
-            <div>
-              <Label>Current semester</Label>
-              <Input
-                value={configDraft.currentSemester}
-                onChange={(e) =>
-                  setConfigDraft((prev) =>
-                    prev ? { ...prev, currentSemester: e.target.value } : prev,
-                  )
-                }
-              />
-            </div>
-
-            <div>
-              <Label>Instance type</Label>
-              <Select
-                value={configDraft.instanceType}
-                onChange={(e) =>
-                  setConfigDraft((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          instanceType: e.target
-                            .value as AppConfig["instanceType"],
-                        }
-                      : prev,
-                  )
-                }
-              >
-                <option value="t3.nano">t3.nano</option>
-                <option value="t3.micro">t3.micro</option>
-                <option value="t3.small">t3.small</option>
-                <option value="t3.medium">t3.medium</option>
-                <option value="t3.large">t3.large</option>
-                <option value="t3.xlarge">t3.xlarge</option>
-                <option value="t3.2xlarge">t3.2xlarge</option>
-              </Select>
-            </div>
-          </div>
-
-          <div className="mt-5">
-            <Button
-              onClick={async () => {
-                const next = await updateAppConfig(configDraft);
-                setAppConfig(next);
-                setConfigDraft(next);
-                showToast("Configuration saved");
-                await loadData();
-              }}
-            >
-              Save
-            </Button>
-          </div>
-        </Card>
-      )}
-
       <Modal
         open={userModerationModalOpen && !!moderationTarget}
         title={
@@ -1036,6 +1068,47 @@ export function AdminDashboardPage() {
                   }
                   setUserModerationModalOpen(false);
                   setModerationTarget(null);
+                  await loadData();
+                }}
+              >
+                Confirm
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!keyActionConfirm}
+        title={
+          keyActionConfirm?.action === "regenerate"
+            ? "Confirm regenerate key"
+            : "Confirm revoke key"
+        }
+        onClose={() => setKeyActionConfirm(null)}
+      >
+        {keyActionConfirm && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-700">
+              {keyActionConfirm.action === "regenerate"
+                ? "Are you sure you want to regenerate this key? The old key will stop working immediately."
+                : "Are you sure you want to revoke this key? This action cannot be undone."}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setKeyActionConfirm(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant={keyActionConfirm.action === "revoke" ? "danger" : "secondary"}
+                onClick={async () => {
+                  if (keyActionConfirm.action === "regenerate") {
+                    await adminRegenerateKey(keyActionConfirm.keyId);
+                    showToast("Key regenerated");
+                  } else {
+                    await adminRevokeKey(keyActionConfirm.keyId);
+                    showToast("Key revoked");
+                  }
+                  setKeyActionConfirm(null);
                   await loadData();
                 }}
               >

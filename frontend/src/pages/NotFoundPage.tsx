@@ -6,7 +6,7 @@ export function NotFoundPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
         <h1 className="text-2xl font-bold text-slate-900">Page not found</h1>
         <p className="mt-2 text-sm text-slate-600">
-          This route is not part of the ACM API.
+          This route is not part of the ACM API frontend skeleton.
         </p>
         <Link
           to="/dashboard"

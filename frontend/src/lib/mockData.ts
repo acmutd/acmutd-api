@@ -52,6 +52,15 @@ export const mockUsers: User[] = [
     approvalStatus: "approved",
     createdAt: "2025-09-08T11:10:00.000Z",
     lastLoginAt: "2026-03-31T13:06:00.000Z"
+  },
+  {
+    uid: "u_005",
+    email: "test@gmail.com",
+    displayName: "test",
+    isAdmin: false,
+    approvalStatus: "approved",
+    createdAt: "2025-09-08T11:10:00.000Z",
+    lastLoginAt: "2026-03-31T13:06:00.000Z"
   }
 ];
 
