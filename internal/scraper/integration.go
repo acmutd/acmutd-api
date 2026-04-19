@@ -182,7 +182,7 @@ func (s *IntegrationHandler) handleIntegrationOutput() error {
 		return nil
 	}
 
-	if err := s.service.ensureFirebaseInitialized(s.config.SaveEnvironment); err != nil {
+	if err := s.service.fbClient.EnsureInitialized(s.config.SaveEnvironment); err != nil {
 		return fmt.Errorf("failed to initialize Firebase clients: %w", err)
 	}
 
@@ -323,57 +323,7 @@ func (s *IntegrationHandler) copyFile(src, dst string) error {
 
 // gatherFromFirebase downloads data from Firebase Cloud Storage to integration input
 func (s *IntegrationHandler) gatherFromFirebase() error {
-	if err := s.ensureIntegrationDirectories(); err != nil {
-		return err
-	}
-
-	ctx := context.Background()
-	var wg sync.WaitGroup
-	errorCh := make(chan error, len(scrapers))
-
-	for _, scraperName := range scrapers {
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-
-			destDir := filepath.Join(s.directories.InputBase, name)
-			log.Printf("Downloading %s from Firebase...", name)
-
-			if err := s.downloadFromFolder(ctx, name, destDir); err != nil {
-				errorCh <- fmt.Errorf("failed to download %s: %w", name, err)
-				return
-			}
-
-			log.Printf("✓ Successfully downloaded %s", name)
-		}(scraperName)
-	}
-
-	wg.Wait()
-	close(errorCh)
-
-	if err := s.collectErrors(errorCh); err != nil {
-		return err
-	}
-
-	log.Println("✓ All Firebase data downloaded successfully")
-	return nil
-}
-
-func (s *IntegrationHandler) downloadFromFolder(ctx context.Context, folderPath, outputDir string) error {
-	if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-		return fmt.Errorf("output directory not found: %s", outputDir)
-	}
-
-	if err := s.service.ensureFirebaseInitialized(s.config.SaveEnvironment); err != nil {
-		return fmt.Errorf("failed to initialize Firebase: %w", err)
-	}
-	fileCount, err := s.service.cloudStorage.DownloadFromFolder(ctx, folderPath, outputDir)
-	if err != nil {
-		return fmt.Errorf("failed to download from folder %s: %w", folderPath, err)
-	}
-
-	log.Printf("Successfully downloaded %d files from %s to %s", fileCount, folderPath, outputDir)
-	return nil
+	return s.service.fbClient.CloudStorage().DownloadFolders(context.Background(), s.directories.InputBase, scrapers)
 }
 
 // rescrapeAll runs all scrapers and optionally uploads to Firebase
@@ -445,6 +395,13 @@ func (s *IntegrationHandler) runAllScrapers() error {
 
 	log.Printf("\n✓ Scraper execution: %d/%d successful", len(successes), len(scraperOrder))
 	return nil
+}
+
+func (s *IntegrationHandler) downloadFromFolder(ctx context.Context, cloudFolder, localDir string) error {
+	if err := os.MkdirAll(localDir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", localDir, err)
+	}
+	return s.service.fbClient.CloudStorage().DownloadFolder(ctx, cloudFolder, localDir)
 }
 
 // downloadExistingTermData downloads existing coursebook and grades data to preserve old terms
@@ -649,7 +606,7 @@ func (s *IntegrationHandler) uploadFile(outputDir, fileName, cloudFolder string)
 	}
 
 	cloudPath := fmt.Sprintf("%s/%s", cloudFolder, fileName)
-	err = s.service.cloudStorage.UploadFile(context.Background(), cloudPath, fileData)
+	err = s.service.fbClient.CloudStorage().UploadFile(context.Background(), cloudPath, fileData)
 	if err != nil {
 		return fmt.Errorf("failed to upload file to cloud storage: %w", err)
 	}

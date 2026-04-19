@@ -11,23 +11,6 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func (c *Firestore) InsertTerms(ctx context.Context, terms []string) {
-	writer := c.BulkWriter(ctx)
-	defer writer.End()
-
-	for _, term := range terms {
-		normalized := strings.ToLower(strings.TrimSpace(term))
-		if normalized == "" {
-			continue
-		}
-
-		doc := c.Collection("terms").Doc(normalized)
-		writer.Set(doc, map[string]any{
-			"term": normalized,
-		}, firestore.MergeAll)
-	}
-}
-
 func (c *Firestore) QueryAllTerms(ctx context.Context, limit, offset int) ([]string, bool, error) {
 	query := c.Collection("terms").OrderBy("term", firestore.Asc)
 	if offset > 0 {
@@ -114,12 +97,12 @@ func (c *Firestore) GetSchoolsByTerm(ctx context.Context, term string) ([]string
 				return nil, fmt.Errorf("failed to iterate fallback prefixes: %w", err)
 			}
 
-			var course types.Course
+			var course types.SectionDoc
 			if err := doc.DataTo(&course); err != nil {
 				return nil, fmt.Errorf("failed to parse fallback course: %w", err)
 			}
 
-			prefix := strings.TrimSpace(course.CoursePrefix)
+			prefix := strings.TrimSpace(course.Prefix)
 			if prefix == "" {
 				continue
 			}

@@ -162,3 +162,8 @@ func buildPaginationMeta(params paginationParams, itemsReturned int, hasNext boo
 
 	return meta
 }
+
+func getQueryParam(c *gin.Context, name string) string {
+	value := strings.ToLower(strings.TrimSpace(c.Query(name)))
+	return value
+}

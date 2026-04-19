@@ -2,13 +2,14 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 // GetProfessorByID loads a professor by ID.
 func (h *Handler) GetProfessorByID(c *gin.Context) {
-	id := c.Param("id")
+	id := strings.ToLower(strings.TrimSpace(c.Param("id")))
 
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Professor ID is required"})
@@ -28,7 +29,7 @@ func (h *Handler) GetProfessorByID(c *gin.Context) {
 
 // GetProfessorsByName loads professors by name.
 func (h *Handler) GetProfessorsByName(c *gin.Context) {
-	name := c.Param("name")
+	name := strings.ToLower(strings.TrimSpace(c.Param("name")))
 
 	if name == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Professor name is required"})

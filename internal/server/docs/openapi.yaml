@@ -2,120 +2,624 @@ openapi: 3.0.3
 info:
   title: ACM UTD API
   version: 1.0.0
-  description: API documentation for public endpoints, dashboard routes, and admin operations.
+  description: API for course, professor, and term data at the University of Texas at Dallas.
 servers:
   - url: /
+
 components:
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
       in: header
       name: X-API-Key
+
+  schemas:
+    GradeDistribution:
+      type: object
+      properties:
+        A+: { type: integer }
+        A: { type: integer }
+        A-: { type: integer }
+        B+: { type: integer }
+        B: { type: integer }
+        B-: { type: integer }
+        C+: { type: integer }
+        C: { type: integer }
+        C-: { type: integer }
+        D+: { type: integer }
+        D: { type: integer }
+        D-: { type: integer }
+        F: { type: integer }
+        W: { type: integer }
+        I: { type: integer }
+        CR: { type: integer }
+        NC: { type: integer }
+        NF: { type: integer }
+        P: { type: integer }
+
+    Pagination:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        has_next: { type: boolean }
+        next_page: { type: integer, description: Present when has_next is true }
+        total: { type: integer, description: Present when has_next is false }
+
+    GeneralCourse:
+      type: object
+      properties:
+        Prefix: { type: string, example: cs }
+        Number: { type: string, example: "1337" }
+        Title: { type: string }
+        Description: { type: string }
+        CreditHours: { type: integer }
+        School: { type: string }
+        SchoolID: { type: string, example: ECS }
+        Core: { type: string }
+        ScheduleFrequency: { type: string }
+        SectionTypes:
+          type: array
+          items: { type: string }
+        Grades:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/GradeDistribution"
+          description: Grade distributions keyed by term code
+        LastUpdatedTerm: { type: string, example: 25s }
+
+    Section:
+      type: object
+      properties:
+        section_address: { type: string, example: cs1337.001.25s }
+        prefix: { type: string, example: cs }
+        number: { type: string, example: "1337" }
+        section: { type: string, example: "001" }
+        term: { type: string, example: 25s }
+        title: { type: string }
+        description: { type: string }
+        credit_hours: { type: integer }
+        activity_type: { type: string, example: Lecture }
+        instruction_mode: { type: string, example: Face-to-Face }
+        grading: { type: string }
+        class_level: { type: string, example: Undergraduate }
+        enrolled_status: { type: string, example: Open }
+        enrolled_current: { type: integer }
+        enrolled_max: { type: integer }
+        waitlist: { type: integer }
+        days:
+          type: array
+          items: { type: string }
+        time: { type: string, example: "10:00am - 11:15am" }
+        building: { type: string, example: ecss }
+        room: { type: string }
+        location: { type: string }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        instructors:
+          type: array
+          items: { type: string }
+        instructor_ids:
+          type: array
+          items: { type: string }
+        instructor_name_normalized: { type: string }
+        tas:
+          type: array
+          items: { type: string }
+        ta_ids:
+          type: array
+          items: { type: string }
+        cross_listed:
+          type: array
+          items: { type: string }
+        grades:
+          $ref: "#/components/schemas/GradeDistribution"
+
+    Professor:
+      type: object
+      properties:
+        instructor_id: { type: string, example: jxd123456 }
+        normalized_coursebook_name: { type: string, example: john doe }
+        original_rmp_format: { type: string, example: John Doe }
+        department: { type: string }
+        url: { type: string }
+        quality_rating: { type: number, format: double }
+        difficulty_rating: { type: number, format: double }
+        would_take_again: { type: integer, description: Percentage 0-100 }
+        ratings_count: { type: integer }
+        tags:
+          type: array
+          items: { type: string }
+        rmp_id: { type: string }
+        overall_grade_rating: { type: number, format: double }
+        total_grade_count: { type: integer }
+        course_ratings:
+          type: object
+          additionalProperties: { type: number, format: double }
+          description: Per-course average ratings keyed by course code
+
+    ApiKey:
+      type: object
+      properties:
+        rate_limit:
+          type: integer
+          description: Max requests allowed per window
+        window_seconds:
+          type: integer
+          description: Rolling window size in seconds
+        is_admin:
+          type: boolean
+          description: Whether the key has admin privileges
+        expires_at:
+          type: string
+          format: date-time
+          description: RFC3339 expiry timestamp; omit for no expiration
+
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string }
+
 paths:
   /health:
     get:
-      summary: Service health check
+      summary: Health check
+      description: Check if the API is running. Does not require authentication.
       tags: [Public]
       responses:
         "200":
-          description: Healthy
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: healthy }
+                  message: { type: string, example: ACM API is running }
 
-  /api/v1/terms:
-    get:
-      summary: List available terms
-      tags: [API v1]
+  /admin/apikeys:
+    post:
+      summary: Create API key
+      description: Create a new API key with specified rate limiting and permissions. Requires admin key.
+      tags: [Admin]
       security:
         - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKey"
+            example:
+              rate_limit: 100
+              window_seconds: 60
+              is_admin: false
+              expires_at: "2026-12-31T23:59:59Z"
       responses:
         "200":
-          description: Terms list
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { type: string }
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Forbidden — admin access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
-  /api/v1/courses:
+  /admin/apikeys/{key}:
     get:
-      summary: Query courses by term and filters
-      tags: [API v1]
+      summary: Get API key information
+      description: Retrieve information about a specific API key. Requires admin key.
+      tags: [Admin]
       security:
         - ApiKeyAuth: []
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: The API key to look up
+          schema: { type: string }
       responses:
         "200":
-          description: Courses list
+          description: API key details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKey"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "403":
+          description: Forbidden — admin access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/courses/general:
+    get:
+      summary: Get general courses
+      description: Returns course catalog entries with title, description, and grade distributions aggregated across all terms.
+      tags: [Courses]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: prefix
+          in: query
+          required: true
+          description: "Course prefix, e.g. cs"
+          schema: { type: string, example: cs }
+        - name: number
+          in: query
+          required: false
+          description: Course number; if provided with prefix, returns a single course directly
+          schema: { type: string, example: "1337" }
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive substring search on title or description
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: Page size (default 100, max 100)
+          schema: { type: integer, default: 100, maximum: 100 }
+        - name: page
+          in: query
+          required: false
+          description: Page number (default 1)
+          schema: { type: integer, default: 1 }
+      responses:
+        "200":
+          description: List of courses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  courses:
+                    type: array
+                    items: { $ref: "#/components/schemas/GeneralCourse" }
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          description: Bad request — missing or invalid parameters
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/courses/general/{prefix}/{number}:
+    get:
+      summary: Get general course by prefix and number
+      description: Returns a single course by prefix and number.
+      tags: [Courses]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: prefix
+          in: path
+          required: true
+          description: "Course prefix, e.g. cs"
+          schema: { type: string, example: cs }
+        - name: number
+          in: path
+          required: true
+          description: "Course number, e.g. 1337"
+          schema: { type: string, example: "1337" }
+      responses:
+        "200":
+          description: Course details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneralCourse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Course not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/courses/sections:
+    get:
+      summary: Get course sections
+      description: Returns individual course sections for a given term.
+      tags: [Courses]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: term
+          in: query
+          required: true
+          description: "Term code, e.g. 25s (Spring 2025), 24f (Fall 2024), 24u (Summer 2024)"
+          schema: { type: string, example: 25s }
+        - name: prefix
+          in: query
+          required: false
+          description: "Course prefix, e.g. cs"
+          schema: { type: string }
+        - name: number
+          in: query
+          required: false
+          description: "Course number, e.g. 1337"
+          schema: { type: string }
+        - name: instructor
+          in: query
+          required: false
+          description: "Exact match on normalized instructor name, e.g. john doe"
+          schema: { type: string }
+        - name: days
+          in: query
+          required: false
+          description: "Exact match on a meeting day, e.g. monday"
+          schema: { type: string }
+        - name: building
+          in: query
+          required: false
+          description: "Exact match on building code, e.g. ecss — requires prefix"
+          schema: { type: string }
+        - name: title
+          in: query
+          required: false
+          description: "Case-insensitive substring match on section title — requires prefix"
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: Page size (default 100, max 100)
+          schema: { type: integer, default: 100, maximum: 100 }
+        - name: page
+          in: query
+          required: false
+          description: Page number (default 1)
+          schema: { type: integer, default: 1 }
+      responses:
+        "200":
+          description: List of sections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  sections:
+                    type: array
+                    items: { $ref: "#/components/schemas/Section" }
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          description: Bad request — missing or invalid parameters
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/courses/sections/{prefix}/{number}/{section}/{term}:
+    get:
+      summary: Get section by address
+      description: Returns a single section by its full address.
+      tags: [Courses]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: prefix
+          in: path
+          required: true
+          description: "Course prefix, e.g. cs"
+          schema: { type: string, example: cs }
+        - name: number
+          in: path
+          required: true
+          description: "Course number, e.g. 1337"
+          schema: { type: string, example: "1337" }
+        - name: section
+          in: path
+          required: true
+          description: "Section number, e.g. 001"
+          schema: { type: string, example: "001" }
+        - name: term
+          in: path
+          required: true
+          description: "Term code, e.g. 25s"
+          schema: { type: string, example: 25s }
+      responses:
+        "200":
+          description: Section details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Section"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Section not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  /api/v1/terms/:
+    get:
+      summary: Get all terms
+      description: Retrieve all available academic terms in the database.
+      tags: [Terms]
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Page size (default 100, max 100)
+          schema: { type: integer, default: 100, maximum: 100 }
+        - name: page
+          in: query
+          required: false
+          description: Page number (default 1)
+          schema: { type: integer, default: 1 }
+      responses:
+        "200":
+          description: List of terms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  terms:
+                    type: array
+                    items: { type: string }
+                    example: ["25s", "24f", "24u"]
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   /api/v1/professors/id/{id}:
     get:
       summary: Get professor by ID
-      tags: [API v1]
+      description: Retrieve a specific professor by their instructor ID.
+      tags: [Professors]
       security:
         - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "The professor's instructor ID, e.g. jws130830"
+          schema: { type: string, example: jws130830 }
       responses:
         "200":
           description: Professor details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  professor:
+                    $ref: "#/components/schemas/Professor"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "404":
+          description: Professor not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   /api/v1/professors/name/{name}:
     get:
       summary: Search professors by name
-      tags: [API v1]
+      description: Search for professors whose normalized name starts with the given value. Useful for autocomplete.
+      tags: [Professors]
       security:
         - ApiKeyAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: "Name prefix to search, e.g. john doe"
+          schema: { type: string, example: john }
+        - name: limit
+          in: query
+          required: false
+          description: Page size (default 100, max 100)
+          schema: { type: integer, default: 100, maximum: 100 }
+        - name: page
+          in: query
+          required: false
+          description: Page number (default 1)
+          schema: { type: integer, default: 1 }
       responses:
         "200":
           description: Professor search results
-
-  /api/v1/grades/prof/id/{id}:
-    get:
-      summary: Get grades by professor ID
-      tags: [API v1]
-      security:
-        - ApiKeyAuth: []
-      responses:
-        "200":
-          description: Grade distributions
-
-  /api/v1/grades/prof/name/{name}:
-    get:
-      summary: Get grades by professor name
-      tags: [API v1]
-      security:
-        - ApiKeyAuth: []
-      responses:
-        "200":
-          description: Grade distributions
-
-  /api/v1/grades/term/{term}:
-    get:
-      summary: Get grades by term
-      tags: [API v1]
-      security:
-        - ApiKeyAuth: []
-      responses:
-        "200":
-          description: Grade distributions
-
-  /api/v1/grades/prefix/{prefix}:
-    get:
-      summary: Get grades by course prefix
-      tags: [API v1]
-      security:
-        - ApiKeyAuth: []
-      responses:
-        "200":
-          description: Grade distributions
-
-  /api/v1/grades/prefix/{prefix}/number/{number}:
-    get:
-      summary: Get grades by course prefix and number
-      tags: [API v1]
-      security:
-        - ApiKeyAuth: []
-      responses:
-        "200":
-          description: Grade distributions
-
-  /api/v1/grades/prefix/{prefix}/number/{number}/term/{term}/section/{section}:
-    get:
-      summary: Get grades by exact section
-      tags: [API v1]
-      security:
-        - ApiKeyAuth: []
-      responses:
-        "200":
-          description: Grade distributions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  professors:
+                    type: array
+                    items: { $ref: "#/components/schemas/Professor" }
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorResponse" }

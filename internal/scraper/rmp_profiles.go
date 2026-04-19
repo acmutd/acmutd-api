@@ -57,7 +57,7 @@ func (h *RMPProfilesHandler) uploadJSONFile(outputDir, fileName string) error {
 	}
 
 	cloudPath := fmt.Sprintf("rmp_data/%s", fileName)
-	err = h.service.cloudStorage.UploadFile(context.Background(), cloudPath, fileData)
+	err = h.service.fbClient.CloudStorage().UploadFile(context.Background(), cloudPath, fileData)
 	if err != nil {
 		return fmt.Errorf("failed to upload file to cloud storage: %w", err)
 	}

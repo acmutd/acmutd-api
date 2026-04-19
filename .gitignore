@@ -3,6 +3,7 @@ output/
 .env
 __pycache__/
 *.json
+!firestore.indexes.json
 !manual_matches.json
 *.xlsx
 *.xlsb
@@ -12,3 +13,4 @@ acmutd-api
 acmapi-key.pem
 frontend/node_modules/
 frontend/dist/
+scripts/coursebook/**/*.html

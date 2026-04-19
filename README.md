@@ -8,6 +8,7 @@ This project consists of several key components:
 
 - **Go API Server** (`cmd/api/`) - Main REST API with authentication, rate limiting, and CORS support. This is the main entry point for running the API.
 - **Go Scraper Service** (`cmd/scraper/`) - Orchestrates data collection from various sources. This is used to scrape the data from the various sources and store it in different potential locations.
+- **Go Uploader Service** (`cmd/scraper/`) - Combines data collected by scraper and uploads the data into Firestore
 - **Python Scrapers** (`scripts/`) - Individual scrapers for different data sources
 - **Firebase Integration** - Cloud Firestore for data storage and Cloud Storage for file management
 
@@ -49,7 +50,7 @@ This project consists of several key components:
    - Copy the `.env.example` file to `.env` for configuration
 
 3. **Configure environment variables**
-  Your `.env` file should look like this:
+   Your `.env` file should look like this:
 
    ```env
    # Server Configuration
@@ -75,7 +76,7 @@ This project consists of several key components:
    ```
 
 4. **Start the API server**
-The API will be available at `http://localhost:8080`
+   The API will be available at `http://localhost:8080`
 
    ```bash
    go run cmd/api/main.go
@@ -83,11 +84,11 @@ The API will be available at `http://localhost:8080`
 
 5. **Run the scraper**
 
-    The scraper will run depending on the `SCRAPER` environment variable.
-    Depending on the `SAVE_ENVIRONMENT` environment variable, the data will be saved locally or uploaded to Firebase.
-    When running the integration scraper, the `INTEGRATION_SOURCE` environment variable determines the data source (local files, dev Firebase, or prod Firebase), and `INTEGRATION_RESCRAPE` determines whether to run scrapers first before processing the data.
+   The scraper will run depending on the `SCRAPER` environment variable.
+   Depending on the `SAVE_ENVIRONMENT` environment variable, the data will be saved locally or uploaded to Firebase.
+   When running the integration scraper, the `INTEGRATION_SOURCE` environment variable determines the data source (local files, dev Firebase, or prod Firebase), and `INTEGRATION_RESCRAPE` determines whether to run scrapers first before processing the data.
 
-    For detailed scraper documentation, see [`SCRAPER.md`](./SCRAPER.md).
+   For detailed scraper documentation, see [`SCRAPER.md`](./SCRAPER.md).
 
    ```bash
    go run cmd/scraper/main.go
@@ -95,7 +96,7 @@ The API will be available at `http://localhost:8080`
 
 ## 📖 API Documentation
 
-Comprehensive API documentation is available in [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md).
+Comprehensive API documentation is available in [`/cmd/api/README.md`](./cmd/api/README.md.md).
 
 ### Quick Examples
 
@@ -124,12 +125,14 @@ All API endpoints (except `/health`) require an API key. Admin users can create 
 acm-api/
 ├── cmd/                    # Main applications
 │   ├── api/               # REST API server
-│   └── scraper/           # Scraper orchestrator
+│   ├── scraper/           # Scraper orchestrator
+│   └── uploader/          # Data uploader
 ├── internal/              # Private application code
 │   ├── firebase/          # Firebase integration
 │   ├── scraper/           # Scraper implementations
 │   ├── server/            # HTTP server and middleware
-│   └── types/             # Data models
+│   ├── types/             # Data models
+│   └── uploader/          # Uploader implementation
 ├── scripts/               # Python scrapers
 │   ├── coursebook/        # UTD Coursebook scraper
 │   ├── grades/            # Grade distribution processor
@@ -145,23 +148,25 @@ acm-api/
 2. **Grade Processor** → Processes Excel files containing grade distributions
 3. **RMP Scraper** → Collects professor ratings from Rate My Professor
 4. **Integration Service** → Combines all data sources and uploads to Firebase
-5. **API Server** → Serves integrated data via REST endpoints
+5. **Uploader Service** → Collects scraped data and uploads to Firestore
+6. **API Server** → Serves integrated data via REST endpoints
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `PORT` | API server port | No | `8080` |
-| `FB_CONFIG` | Firebase service account JSON filename | Yes | `acmutd-api.json` |
-| `SCRAPER` | Which scraper to run (coursebook/grades/rmp-profiles/integration) | Yes (for scraper) | - |
-| `SAVE_ENVIRONMENT` | Where to save data (local/dev/prod) | No | `local` |
-| `NETID` | UTD NetID for coursebook access | Yes (for coursebook) | - |
-| `PASSWORD` | UTD password for coursebook access | Yes (for coursebook) | - |
-| `CLASS_TERMS` | Comma-separated terms to scrape (e.g., 24f,25s,25f) | Yes (for scrapers) | - |
-| `INTEGRATION_SOURCE` | Data source for integration scraper (local/dev/prod) | No | `local` |
-| `INTEGRATION_RESCRAPE` | Whether to run scrapers before integration (true/false) | No | `false` |
+| Variable               | Description                                                       | Required             | Default           |
+| ---------------------- | ----------------------------------------------------------------- | -------------------- | ----------------- |
+| `PORT`                 | API server port                                                   | No                   | `8080`            |
+| `FB_CONFIG`            | Firebase service account JSON filename                            | Yes                  | `acmutd-api.json` |
+| `SAVE_ENVIRONMENT`     | Where to save data (local/dev/prod)                               | No                   | `local`           |
+| `CLASS_TERMS`          | Comma-separated terms to scrape (e.g., 24f,25s,25f)               | Yes (for scrapers)   | -                 |
+| `SCRAPER`              | Which scraper to run (coursebook/grades/rmp-profiles/integration) | Yes (for scraper)    | -                 |
+| `NETID`                | UTD NetID for coursebook access                                   | Yes (for coursebook) | -                 |
+| `PASSWORD`             | UTD password for coursebook access                                | Yes (for coursebook) | -                 |
+| `INTEGRATION_SOURCE`   | Data source for integration scraper (local/dev/prod)              | No                   | `local`           |
+| `INTEGRATION_RESCRAPE` | Whether to run scrapers before integration (true/false)           | No                   | `false`           |
+| `UPLOADER`             | Which data to upload to Firestore                                 | Yes                  | -                 |
 
 ### Term Format
 

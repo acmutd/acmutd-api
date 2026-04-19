@@ -36,7 +36,31 @@ func (s School) String() string {
 	return string(s)
 }
 
-// Course represents a course section stored in Firestore.
+// Course represents a course stored in Firestore
+//
+// Firestore Structure:
+//   - courses/{course_prefix}/numbers/{course_number}
+type CourseGeneralInfo struct {
+	Prefix            string                       `firestore:"course_prefix"`
+	Number            string                       `firestore:"course_number"`
+	Title             string                       `firestore:"title"`
+	Description       string                       `firestore:"description"`
+	CreditHours       int                          `firestore:"credit_hours"`
+	School            string                       `firestore:"school"`
+	SchoolID          string                       `firestore:"school_id"`
+	Core              string                       `firestore:"core"`
+	ScheduleFrequency string                       `firestore:"schedule_frequency"`
+	SectionTypes      []string                     `firestore:"section_types"`
+	Grades            map[string]GradeDistribution `firestore:"grades"`
+	LastUpdatedTerm   string                       `firestore:"last_updated_term"`
+
+	// Sections holds the associated section documents for this course.
+	// Populated during the combine step; not written to Firestore.
+	Sections []*SectionDoc `json:"sections,omitempty" firestore:"-"`
+}
+
+// Course represents a course section stored in Firestore, combining coursebook
+// data with grade distribution.
 //
 // Firestore Structure:
 //   - courses/{course_prefix}/numbers/{course_number}/sections/{section_address}
@@ -52,61 +76,128 @@ func (s School) String() string {
 //
 // Related Collections:
 //   - terms/{term}/prefixes/{course_prefix} - metadata for available prefixes per term
-type Course struct {
-	// Core identifiers (normalized to lowercase during ingestion)
-	SectionAddress string `json:"section_address" firestore:"section_address"` // Unique ID: {prefix}{number}.{section}.{term}
-	CoursePrefix   string `json:"course_prefix" firestore:"course_prefix"`     // e.g., "cs" (normalized lowercase)
-	CourseNumber   string `json:"course_number" firestore:"course_number"`     // e.g., "2305" (normalized lowercase)
-	Section        string `json:"section" firestore:"section"`                 // e.g., "001" (normalized lowercase)
-	Term           string `json:"term" firestore:"term"`                       // e.g., "23f" (normalized lowercase, indexed for collection group queries)
+type SectionDoc struct {
+	// Core identifiers (normalized to lowercase)
+	SectionAddress string `json:"section_address" firestore:"section_address"`
+	Prefix         string `json:"prefix" firestore:"prefix"`
+	Number         string `json:"number" firestore:"number"`
+	Section        string `json:"section" firestore:"section"`
+	Term           string `json:"term" firestore:"term"`
 
 	// Course metadata
-	ClassNumber string `json:"class_number" firestore:"class_number"` // UTD class number
-	Title       string `json:"title" firestore:"title"`               // Course title
-	Topic       string `json:"topic" firestore:"topic"`               // Special topics course name
+	Title       string `json:"title" firestore:"title"`
+	Subtitle    string `json:"subtitle" firestore:"subtitle"`
+	Description string `json:"description" firestore:"description"`
+	School      string `json:"school" firestore:"school"`
+	SchoolID    string `json:"school_id" firestore:"school_id"`
+	Core        string `json:"core" firestore:"core"`
+
+	CreditHours     int      `json:"credit_hours" firestore:"credit_hours"`
+	ActivityType    string   `json:"activity_type" firestore:"activity_type"`
+	CrossListed     []string `json:"cross_listed" firestore:"cross_listed"`
+	EnrollmentReqs  []string `json:"enrollment_reqs" firestore:"enrollment_reqs"`
+	ClassAttributes []string `json:"class_attributes" firestore:"class_attributes"`
+
+	ClassID         string `json:"class_id" firestore:"class_id"`
+	ClassLevel      string `json:"class_level" firestore:"class_level"`
+	InstructionMode string `json:"instruction_mode" firestore:"instruction_mode"`
+	Grading         string `json:"grading" firestore:"grading"`
+	SessionType     string `json:"session_type" firestore:"session_type"`
+	AddConsent      string `json:"add_consent" firestore:"add_consent"`
+	ClassNotes      string `json:"class_notes" firestore:"class_notes"`
+	SyllabusID      string `json:"syllabus_id" firestore:"syllabus_id"`
 
 	// Enrollment information
-	EnrolledStatus  string `json:"enrolled_status" firestore:"enrolled_status"`   // "Open", "Closed", "Waitlist"
-	EnrolledCurrent string `json:"enrolled_current" firestore:"enrolled_current"` // Current enrollment count
-	EnrolledMax     string `json:"enrolled_max" firestore:"enrolled_max"`         // Maximum enrollment
+	EnrolledStatus  string `json:"enrolled_status" firestore:"enrolled_status"`
+	EnrolledCurrent int    `json:"enrolled_current" firestore:"enrolled_current"`
+	EnrolledMax     int    `json:"enrolled_max" firestore:"enrolled_max"`
+	Waitlist        int    `json:"waitlist" firestore:"waitlist"`
 
-	// Instructor information
-	Instructors   string `json:"instructors" firestore:"instructors"`       // Comma-separated instructor names
-	InstructorIDs string `json:"instructor_ids" firestore:"instructor_ids"` // Comma-separated instructor IDs (links to professors collection)
-	Assistants    string `json:"assistants" firestore:"assistants"`         // Teaching assistants
+	StartDate string   `json:"start_date" firestore:"start_date"`
+	EndDate   string   `json:"end_date" firestore:"end_date"`
+	Days      []string `json:"days" firestore:"days"`
+	Time      string   `json:"time" firestore:"time"`
+	Location  string   `json:"location" firestore:"location"`
+	Building  string   `json:"building" firestore:"building"`
+	Room      string   `json:"room" firestore:"room"`
 
-	// Schedule information
-	Session  string `json:"session" firestore:"session"`     // Session identifier
-	Days     string `json:"days" firestore:"days"`           // Days of the week (e.g., "Monday, Wednesday")
-	Times    string `json:"times" firestore:"times"`         // 24-hour time format
-	Times12h string `json:"times_12h" firestore:"times_12h"` // 12-hour time format
-	Location string `json:"location" firestore:"location"`   // Building and room
+	Instructors              []string `json:"instructors" firestore:"instructors"`
+	InstructorIDs            []string `json:"instructor_ids" firestore:"instructor_ids"`
+	TAs                      []string `json:"tas" firestore:"tas"`
+	TAIDs                    []string `json:"ta_ids" firestore:"ta_ids"`
+	InstructorNameNormalized string   `json:"instructor_name_normalized" firestore:"instructor_name_normalized"`
 
-	// Academic categorization
-	CoreArea     string `json:"core_area" firestore:"core_area"`         // Core curriculum area
-	ActivityType string `json:"activity_type" firestore:"activity_type"` // Lecture, Lab, etc.
-	School       School `json:"school" firestore:"school"`               // School code (can be string or number)
-	Dept         string `json:"dept" firestore:"dept"`                   // Department
+	OrionDatetime     string `json:"orion_datetime" firestore:"orion_datetime"`
+	ScheduleFrequency string `json:"schedule_frequency" firestore:"schedule_frequency"`
 
-	// Additional resources
-	Syllabus  string `json:"syllabus" firestore:"syllabus"`   // Syllabus URL or content
-	Textbooks string `json:"textbooks" firestore:"textbooks"` // Required textbooks
+	Grades *GradeDistribution `json:"grades,omitempty" firestore:"grades,omitempty"`
 }
 
-// CourseQuery contains parameters for querying courses
-type CourseQuery struct {
-	Term         string // e.g., "23f"
-	CoursePrefix string // e.g., "cs"
-	CourseNumber string // e.g., "2305"
-	Section      string // e.g., "001"
-	School       string // School code
-	Instructor   string // Filter by instructor name
-	InstructorID string // Filter by instructor ID
-	Days         string // Filter by days (e.g., "Monday, Wednesday")
-	Times        string // Filter by times (24h format, e.g., "14:00 - 14:50")
-	Times12h     string // Filter by times (12h format, e.g., "2:00 PM - 2:50 PM")
-	Location     string // Filter by location (e.g., "SCI_1.210")
-	Search       string // Search query for title, topic, instructors
-	Limit        int    // Max results to return (0 for no limit)
-	Offset       int    // Number of results to skip
+// RawMeeting represents a meeting block from the scraper JSON output.
+type RawMeeting struct {
+	DateRange string   `json:"date_range"`
+	Days      []string `json:"days"`
+	Time      string   `json:"time"`
+	Location  string   `json:"location"`
+}
+
+// RawCourse represents a course section as output by the coursebook scraper.
+type RawCourse struct {
+	SectionAddress      string       `json:"section_address"`
+	CoursePrefix        string       `json:"course_prefix"`
+	CourseNumber        string       `json:"course_number"`
+	Section             string       `json:"section"`
+	ClassCourseNumber   string       `json:"class_course_number"`
+	ClassLevel          string       `json:"class_level"`
+	InstructionMode     string       `json:"instruction_mode"`
+	Title               string       `json:"title"`
+	Description         string       `json:"description"`
+	EnrolledStatus      string       `json:"enrolled_status"`
+	EnrolledCurrent     int          `json:"enrolled_current"`
+	EnrolledMax         int          `json:"enrolled_max"`
+	Waitlist            int          `json:"waitlist"`
+	Term                string       `json:"term"`
+	StartDate           string       `json:"start_date"`
+	EndDate             string       `json:"end_date"`
+	Meetings            []RawMeeting `json:"meetings"`
+	ActivityType        string       `json:"activity_type"`
+	SemesterCreditHours string       `json:"semester_credit_hours"`
+	Core                *string      `json:"core"`
+	Grading             string       `json:"grading"`
+	SessionType         *string      `json:"session_type"`
+	AddConsent          string       `json:"add_consent"`
+	OrionDatetime       string       `json:"orion_datetime"`
+	ScheduleFrequency   *string      `json:"schedule_frequency"`
+	EnrollmentReqs      []string     `json:"enrollment_reqs"`
+	ClassAttributes     []string     `json:"class_attributes"`
+	ClassNotes          *string      `json:"class_notes"`
+	Instructors         []string     `json:"instructors"`
+	InstructorIDs       []string     `json:"instructor_ids"`
+	TAs                 []string     `json:"tas"`
+	TAIDs               []string     `json:"ta_ids"`
+	School              string       `json:"school"`
+	SchoolID            string       `json:"school_id"`
+	CrossListed         []string     `json:"cross_listed"`
+	Syllabus            *string      `json:"syllabus"`
+}
+
+// SectionQuery contains parameters for querying SectionDoc documents
+type SectionQuery struct {
+	Term       string // required; e.g., "23f"
+	Prefix     string // e.g., "cs"
+	Number     string // e.g., "2305"
+	Instructor string // exact match on an element of the instructor_name_normalized field
+	Days       string // exact match on an element of the days array (e.g., "Monday")
+	Building   string // exact match on building (e.g., "ecss")
+	Title      string // substring match on title (e.g., "data structures")
+	Limit      int
+	Offset     int
+}
+
+// GeneralCourseQuery contains parameters for querying CourseGeneralInfo documents.
+type GeneralCourseQuery struct {
+	Prefix string // required; scopes query to courses/{prefix}/numbers
+	Search string // substring match on title or description
+	Limit  int
+	Offset int
 }
