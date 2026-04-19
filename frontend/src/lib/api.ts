@@ -11,6 +11,7 @@ import {
   ServerStateLog,
   User
 } from "../types/models";
+
 import {
   mockApiKeys,
   mockAppConfig,
@@ -393,19 +394,19 @@ export async function startServer(): Promise<void> {
 export async function stopServer(): Promise<void> {
   const actor = getCurrentUserLocal();
 
-  if (appConfig.hackutdModeEnabled) {
+  if (appConfig.hackathonModeEnabled) {
     const fallbackType: InstanceState["instanceType"] = "t3.micro";
     await changeServerState({
-      action: "hackutd_disable",
+      action: "hackathon_disable",
       triggerSource: "admin_dashboard",
       actorType: "user",
       actorId: actor.uid,
       actorEmail: actor.email,
-      reason: "HackUTD mode automatically disabled during manual stop",
+      reason: "Hackathon mode automatically disabled during manual stop",
       nextType: fallbackType
     });
     await updateAppConfig({
-      hackutdModeEnabled: false,
+      hackathonModeEnabled: false,
       instanceType: fallbackType
     });
   }
@@ -437,32 +438,32 @@ export async function updateAppConfig(cfg: Partial<AppConfig>): Promise<AppConfi
   return { ...appConfig };
 }
 
-export async function enableHackutdMode(): Promise<void> {
+export async function enableHackathonMode(): Promise<void> {
   const actor = getCurrentUserLocal();
   const nextType: InstanceState["instanceType"] = "t3.large";
   await changeServerState({
-    action: "hackutd_enable",
+    action: "hackathon_enable",
     triggerSource: "admin_dashboard",
     actorType: "user",
     actorId: actor.uid,
     actorEmail: actor.email,
-    reason: "HackUTD mode enabled from admin dashboard",
+    reason: "Hackathon mode enabled from admin dashboard",
     nextType
   });
-  await updateAppConfig({ hackutdModeEnabled: true, instanceType: nextType });
+  await updateAppConfig({ hackathonModeEnabled: true, instanceType: nextType });
 }
 
-export async function disableHackutdMode(): Promise<void> {
+export async function disableHackathonMode(): Promise<void> {
   const actor = getCurrentUserLocal();
   const nextType: InstanceState["instanceType"] = "t3.micro";
   await changeServerState({
-    action: "hackutd_disable",
+    action: "hackathon_disable",
     triggerSource: "admin_dashboard",
     actorType: "user",
     actorId: actor.uid,
     actorEmail: actor.email,
-    reason: "HackUTD mode disabled from admin dashboard",
+    reason: "Hackathon mode disabled from admin dashboard",
     nextType
   });
-  await updateAppConfig({ hackutdModeEnabled: false, instanceType: nextType });
+  await updateAppConfig({ hackathonModeEnabled: false, instanceType: nextType });
 }

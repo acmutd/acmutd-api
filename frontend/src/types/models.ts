@@ -48,8 +48,8 @@ export type InstanceType = "t3.nano" | "t3.micro" | "t3.small" | "t3.medium" | "
 
 export interface AppConfig {
   autoApproveMode: AutoApproveMode;
-  hackutdModeEnabled: boolean;
-  hackutdEndDate: string;
+  hackathonModeEnabled: boolean;
+  hackathonEndDate: string;
   currentSemester: string;
   instanceType: InstanceType;
   updatedAt: string;
@@ -86,7 +86,7 @@ export interface CronLog {
 export interface ServerStateLog {
   logId: string;
   timestamp: string;
-  action: "start" | "stop" | "resize" | "hackutd_enable" | "hackutd_disable";
+  action: "start" | "stop" | "resize" | "hackathon_enable" | "hackathon_disable";
   status: "success" | "error";
   triggerSource: "admin_dashboard" | "cron" | "system";
   actorType: "user" | "system";

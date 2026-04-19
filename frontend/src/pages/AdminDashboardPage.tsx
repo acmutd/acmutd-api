@@ -12,9 +12,9 @@ import {
   approveKey,
   banUser,
   deactivateToken,
-  disableHackutdMode,
+  disableHackathonMode,
   editToken,
-  enableHackutdMode,
+  enableHackathonMode,
   getAppConfig,
   getInstanceState,
   listAllKeys,
@@ -734,19 +734,19 @@ export function AdminDashboardPage() {
               <Button
                 variant="secondary"
                 onClick={async () => {
-                  if (appConfig?.hackutdModeEnabled) {
-                    await disableHackutdMode();
-                    showToast("HackUTD mode disabled");
+                  if (appConfig?.hackathonModeEnabled) {
+                    await disableHackathonMode();
+                    showToast("Hackathon mode disabled");
                   } else {
-                    await enableHackutdMode();
-                    showToast("HackUTD mode enabled");
+                    await enableHackathonMode();
+                    showToast("Hackathon mode enabled");
                   }
                   await loadData();
                 }}
               >
-                {appConfig?.hackutdModeEnabled
-                  ? "Disable HackUTD mode"
-                  : "Enable HackUTD mode"}
+                {appConfig?.hackathonModeEnabled
+                  ? "Disable Hackathon mode"
+                  : "Enable Hackathon mode"}
               </Button>
             </div>
           </Card>
@@ -781,15 +781,15 @@ export function AdminDashboardPage() {
               </div>
 
               <div>
-                <Label>HackUTD mode</Label>
+                <Label>Hackathon mode</Label>
                 <Select
-                  value={configDraft.hackutdModeEnabled ? "on" : "off"}
+                  value={configDraft.hackathonModeEnabled ? "on" : "off"}
                   onChange={(e) =>
                     setConfigDraft((prev) =>
                       prev
                         ? {
                             ...prev,
-                            hackutdModeEnabled: e.target.value === "on",
+                            hackathonModeEnabled: e.target.value === "on",
                           }
                         : prev,
                     )
@@ -801,16 +801,16 @@ export function AdminDashboardPage() {
               </div>
 
               <div>
-                <Label>HackUTD end date</Label>
+                <Label>Hackathon end date</Label>
                 <Input
                   type="date"
-                  value={configDraft.hackutdEndDate.slice(0, 10)}
+                  value={configDraft.hackathonEndDate.slice(0, 10)}
                   onChange={(e) =>
                     setConfigDraft((prev) =>
                       prev
                         ? {
                             ...prev,
-                            hackutdEndDate: `${e.target.value}T23:59:59.000Z`,
+                            hackathonEndDate: `${e.target.value}T23:59:59.000Z`,
                           }
                         : prev,
                     )

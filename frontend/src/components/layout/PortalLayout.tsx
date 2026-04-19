@@ -91,9 +91,9 @@ export function PortalLayout({
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
               {appConfig.instanceType}
             </span>
-            {appConfig.hackutdModeEnabled && (
+            {appConfig.hackathonModeEnabled && (
               <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700">
-                HackUTD
+                Hackathon
               </span>
             )}
           </div>

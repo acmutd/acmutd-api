@@ -1,6 +1,6 @@
 /*
   Fake data used to create frontend skeleton
-  Will be deleted once integration is completed
+  Not needed once integration is completed
 */
 
 import {
@@ -247,8 +247,8 @@ export const mockRecentRequests: RequestEvent[] = [
 
 export const mockAppConfig: AppConfig = {
   autoApproveMode: "@acmutd.co",
-  hackutdModeEnabled: false,
-  hackutdEndDate: "2026-11-03T23:59:59.000Z",
+  hackathonModeEnabled: false,
+  hackathonEndDate: "2026-11-03T23:59:59.000Z",
   currentSemester: "26s",
   instanceType: "t3.small",
   updatedAt: "2026-03-31T13:00:00.000Z",
