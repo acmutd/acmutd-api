@@ -19,17 +19,13 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 	router.GET("/openapi.yaml", handler.OpenAPISpec)
 	router.GET("/health", handler.Health)
 
-	// Serve SPA pages - serve index.html for React Router to handle client-side routing
-	router.GET("/", func(c *gin.Context) {
-		c.File("frontend/dist/index.html")
-	})
-	router.GET("/dashboard", func(c *gin.Context) {
-		c.File("frontend/dist/index.html")
-	})
+	// Serve SPA pages - inject Firebase config and serve index.html for React Router
+	router.GET("/", handler.UserDashboardPage)
+	router.GET("/dashboard", handler.UserDashboardPage)
 
-	// Serve index.html for any unmatched route so React Router handles client-side navigation.
+	// Inject Firebase config for any unmatched route so React Router handles client-side navigation.
 	router.NoRoute(func(c *gin.Context) {
-		c.File("frontend/dist/index.html")
+		handler.UserDashboardPage(c)
 	})
 
 	// Dashboard REST API — authenticated via Firebase ID token

@@ -19,7 +19,7 @@ func (h *Handler) AdminDashboardPage(c *gin.Context) {
 }
 
 func (h *Handler) serveDashboardAppPage(c *gin.Context) {
-	htmlPath := filepath.Join(frontendDistDir(), "src", "dashboard", "dashboard.html")
+	htmlPath := filepath.Join(frontendDistDir(), "index.html")
 	content, err := os.ReadFile(htmlPath)
 	if err != nil {
 		c.Data(http.StatusServiceUnavailable, "text/plain; charset=utf-8", []byte(fmt.Sprintf("Dashboard assets are not built yet. Run: cd frontend && npm install && npm run build\nMissing file: %s", htmlPath)))
