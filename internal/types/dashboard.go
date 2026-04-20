@@ -33,7 +33,6 @@ type AppConfig struct {
 	AutoApproveMode      string    `firestore:"auto_approve_mode" json:"autoApproveMode"`
 	HackathonModeEnabled bool      `firestore:"hackathon_mode_enabled" json:"hackathonModeEnabled"`
 	HackathonEndDate     string    `firestore:"hackathon_end_date" json:"hackathonEndDate"` // stored as ISO string
-	CurrentSemester      string    `firestore:"current_semester" json:"currentSemester"`
 	InstanceType         string    `firestore:"instance_type" json:"instanceType"`
 	KeysExpiresAtDate    time.Time `firestore:"keys_expires_at_date" json:"keysExpiresAtDate"`
 	TrackStats           bool      `firestore:"track_stats" json:"trackStats"`

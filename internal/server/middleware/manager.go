@@ -56,7 +56,7 @@ func (m *Manager) Auth() gin.HandlerFunc {
 			}
 
 			if keyData.IsAdmin {
-				m.updateKeyUsageAsync(key)
+				m.updateKeyUsageAsync(keyData.KeyID)
 				c.Set("api_key", keyData)
 				c.Next()
 				return
@@ -73,7 +73,7 @@ func (m *Manager) Auth() gin.HandlerFunc {
 				return
 			}
 
-			m.updateKeyUsageAsync(key)
+			m.updateKeyUsageAsync(keyData.KeyID)
 			c.Set("api_key", keyData)
 			c.Next()
 			return
@@ -98,7 +98,7 @@ func (m *Manager) Auth() gin.HandlerFunc {
 			return
 		}
 
-		m.updateKeyUsageAsync(key)
+		m.updateKeyUsageAsync(apiKey.KeyID)
 		m.apiKeyCache.Set(key, apiKey, cache.DefaultExpiration)
 		c.Set("api_key", apiKey)
 		c.Next()
@@ -167,8 +167,8 @@ func (m *Manager) Admin() gin.HandlerFunc {
 	}
 }
 
-func (m *Manager) updateKeyUsageAsync(key string) {
-	if key == "" {
+func (m *Manager) updateKeyUsageAsync(keyID string) {
+	if keyID == "" {
 		return
 	}
 
@@ -176,5 +176,5 @@ func (m *Manager) updateKeyUsageAsync(key string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		m.db.UpdateKeyUsage(ctx, k)
-	}(key)
+	}(keyID)
 }

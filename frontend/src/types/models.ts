@@ -45,7 +45,6 @@ export interface AppConfig {
   autoApproveMode: AutoApproveMode;
   hackathonModeEnabled: boolean;
   hackathonEndDate: string;
-  currentSemester: string;
   instanceType: InstanceType;
   keysExpiresAtDate: string;
   trackStats: boolean;

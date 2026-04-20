@@ -60,7 +60,7 @@ const adminNavItems = [
   { key: "user-keys", label: "User Keys" },
   { key: "usage", label: "Usage" },
   { key: "server-controls", label: "Server Controls" },
-  { key: "logs-metrics", label: "Logs & Metrics" },
+  { key: "logs-metrics", label: "Logs & Metrics (In progress)" },
 ];
 
 type AdminTab = (typeof adminNavItems)[number]["key"];
@@ -386,41 +386,39 @@ export function AdminDashboardPage() {
                                 : maskKey(key.key)}
                             </button>
                             <button
-                                type="button"
-                                title="Copy to clipboard"
-                                className={`text-slate-400 hover:text-slate-700 ${revealedKeys.has(key.keyId) ? "" : "invisible pointer-events-none"}`}
-                                onClick={async () => {
-                                  try {
-                                    await navigator.clipboard.writeText(
-                                      key.key,
-                                    );
-                                    showToast("API key copied to clipboard");
-                                  } catch {
-                                    showToast("Unable to copy key");
-                                  }
-                                }}
+                              type="button"
+                              title="Copy to clipboard"
+                              className={`text-slate-400 hover:text-slate-700 ${revealedKeys.has(key.keyId) ? "" : "invisible pointer-events-none"}`}
+                              onClick={async () => {
+                                try {
+                                  await navigator.clipboard.writeText(key.key);
+                                  showToast("API key copied to clipboard");
+                                } catch {
+                                  showToast("Unable to copy key");
+                                }
+                              }}
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-3.5 w-3.5"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
                               >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  className="h-3.5 w-3.5"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <rect
-                                    x="9"
-                                    y="9"
-                                    width="13"
-                                    height="13"
-                                    rx="2"
-                                    ry="2"
-                                  />
-                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                                </svg>
-                              </button>
+                                <rect
+                                  x="9"
+                                  y="9"
+                                  width="13"
+                                  height="13"
+                                  rx="2"
+                                  ry="2"
+                                />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
                       </td>
@@ -608,7 +606,10 @@ export function AdminDashboardPage() {
               <Card>
                 <CardSubtitle>Error Rate (today)</CardSubtitle>
                 <CardTitle>
-                  {todayRequests > 0 ? ((todayErrors / todayRequests) * 100).toFixed(2) : "0.00"}%
+                  {todayRequests > 0
+                    ? ((todayErrors / todayRequests) * 100).toFixed(2)
+                    : "0.00"}
+                  %
                 </CardTitle>
               </Card>
             </div>
@@ -699,7 +700,9 @@ export function AdminDashboardPage() {
       {activeTab === "server-controls" && (
         <div className="space-y-4">
           <Card>
-            <CardTitle>Server state</CardTitle>
+            <CardTitle>
+              Server state (In progress, this isn't integrated with ec2 yet)
+            </CardTitle>
             <div className="mt-3 grid gap-3 text-sm md:grid-cols-2">
               <p>
                 <span className="font-medium">Instance ID:</span>{" "}
@@ -848,20 +851,6 @@ export function AdminDashboardPage() {
                               ? `${e.target.value}T23:59:59.000Z`
                               : "",
                           }
-                        : prev,
-                    )
-                  }
-                />
-              </div>
-
-              <div>
-                <Label>Current semester</Label>
-                <Input
-                  value={configDraft.currentSemester}
-                  onChange={(e) =>
-                    setConfigDraft((prev) =>
-                      prev
-                        ? { ...prev, currentSemester: e.target.value }
                         : prev,
                     )
                   }
@@ -1152,11 +1141,18 @@ export function AdminDashboardPage() {
                   : "Are you sure you want to revoke this key? This action cannot be undone."}
             </p>
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => setKeyActionConfirm(null)}>
+              <Button
+                variant="secondary"
+                onClick={() => setKeyActionConfirm(null)}
+              >
                 Cancel
               </Button>
               <Button
-                variant={keyActionConfirm.action === "regenerate" ? "secondary" : "danger"}
+                variant={
+                  keyActionConfirm.action === "regenerate"
+                    ? "secondary"
+                    : "danger"
+                }
                 onClick={async () => {
                   if (keyActionConfirm.action === "regenerate") {
                     await adminRegenerateKey(keyActionConfirm.keyId);

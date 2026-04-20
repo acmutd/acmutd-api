@@ -29,13 +29,39 @@ func generateKeyValue() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// findKeyDocByKeyID returns the document reference and data for a key by its key_id field.
-func (c *Firestore) findKeyDocByKeyID(ctx context.Context, keyID string) (*firestore.DocumentSnapshot, error) {
-	iter := c.Collection("api_keys").Where("key_id", "==", keyID).Limit(1).Documents(ctx)
+// ValidateAPIKey looks up a key by its secret value and returns the key data.
+func (c *Firestore) ValidateAPIKey(ctx context.Context, key string) (*types.APIKey, error) {
+	iter := c.Collection("api_keys").Where("key", "==", key).Limit(1).Documents(ctx)
 	defer iter.Stop()
 
 	doc, err := iter.Next()
 	if err == iterator.Done {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	var apiKey types.APIKey
+	if err := doc.DataTo(&apiKey); err != nil {
+		return nil, err
+	}
+	return &apiKey, nil
+}
+
+// UpdateKeyUsage increments usage_count and updates last_used_at on the document identified by keyID.
+func (c *Firestore) UpdateKeyUsage(ctx context.Context, keyID string) error {
+	_, err := c.Collection("api_keys").Doc(keyID).Update(ctx, []firestore.Update{
+		{Path: "usage_count", Value: firestore.Increment(1)},
+		{Path: "last_used_at", Value: time.Now()},
+	})
+	return err
+}
+
+// findKeyDocByKeyID returns the document snapshot for a key by its key_id (document ID).
+func (c *Firestore) findKeyDocByKeyID(ctx context.Context, keyID string) (*firestore.DocumentSnapshot, error) {
+	doc, err := c.Collection("api_keys").Doc(keyID).Get(ctx)
+	if status.Code(err) == codes.NotFound {
 		return nil, nil
 	}
 	return doc, err
@@ -58,11 +84,9 @@ func (c *Firestore) GetUserAPIKey(ctx context.Context, userID string) (*types.AP
 	return &key, doc.DataTo(&key)
 }
 
-// ListAllKeys returns all dashboard-managed API keys ordered by created_at descending.
+// ListAllKeys returns all API keys ordered by created_at descending.
 func (c *Firestore) ListAllKeys(ctx context.Context) ([]types.APIKey, error) {
 	iter := c.Collection("api_keys").
-		Where("key_id", "!=", "").
-		OrderBy("key_id", firestore.Asc).
 		OrderBy("created_at", firestore.Desc).
 		Documents(ctx)
 	defer iter.Stop()
@@ -133,31 +157,32 @@ func (c *Firestore) RequestAPIKey(ctx context.Context, userID, ownerEmail, label
 		return err
 	}
 
-	status := "pending"
+	keyStatus := "pending"
 	if cfg != nil {
 		mode := cfg.AutoApproveMode
 		switch mode {
 		case "all":
-			status = "active"
+			keyStatus = "active"
 		case "@utdallas.edu", "@acmutd.co":
 			if strings.HasSuffix(ownerEmail, mode) {
-				status = "active"
+				keyStatus = "active"
 			}
 		case "both":
 			if strings.HasSuffix(ownerEmail, "@utdallas.edu") || strings.HasSuffix(ownerEmail, "@acmutd.co") {
-				status = "active"
+				keyStatus = "active"
 			}
 		}
 	}
 
+	keyID := generateKeyID()
 	key := types.APIKey{
 		Key:           keyValue,
-		KeyID:         generateKeyID(),
+		KeyID:         keyID,
 		UserID:        userID,
 		OwnerEmail:    ownerEmail,
 		Label:         label,
 		Description:   description,
-		Status:        status,
+		Status:        keyStatus,
 		IsAdmin:       false,
 		RateLimit:     60,
 		WindowSeconds: 60,
@@ -168,7 +193,7 @@ func (c *Firestore) RequestAPIKey(ctx context.Context, userID, ownerEmail, label
 		key.ExpiresAt = cfg.KeysExpiresAtDate
 	}
 
-	_, err = c.Collection("api_keys").Doc(keyValue).Set(ctx, key)
+	_, err = c.Collection("api_keys").Doc(keyID).Set(ctx, key)
 	return err
 }
 
@@ -209,8 +234,8 @@ func (c *Firestore) DeleteKey(ctx context.Context, keyID string) error {
 	return err
 }
 
-// RegenerateKey deletes the existing key document and creates a new one with fresh key bytes,
-// preserving all metadata (key_id, user_id, owner_email, label, description, status).
+// RegenerateKey replaces the key value on an existing document in-place, preserving all metadata.
+// The key_id (document ID) remains unchanged.
 func (c *Firestore) RegenerateKey(ctx context.Context, keyID string) (*types.APIKey, error) {
 	doc, err := c.findKeyDocByKeyID(ctx, keyID)
 	if err != nil {
@@ -230,20 +255,25 @@ func (c *Firestore) RegenerateKey(ctx context.Context, keyID string) (*types.API
 		return nil, err
 	}
 
+	newStatus := existing.Status
+	if existing.Status == "inactive" {
+		newStatus = "pending"
+	}
+
+	if _, err := doc.Ref.Update(ctx, []firestore.Update{
+		{Path: "key", Value: newKeyValue},
+		{Path: "usage_count", Value: int64(0)},
+		{Path: "last_used_at", Value: nil},
+		{Path: "status", Value: newStatus},
+	}); err != nil {
+		return nil, err
+	}
+
 	updated := existing
 	updated.Key = newKeyValue
 	updated.UsageCount = 0
 	updated.LastUsedAt = nil
-	if existing.Status == "inactive" {
-		updated.Status = "pending"
-	}
-
-	batch := c.BulkWriter(ctx)
-	defer batch.End()
-	batch.Delete(doc.Ref)
-	batch.Set(c.Collection("api_keys").Doc(newKeyValue), updated)
-	batch.Flush()
-
+	updated.Status = newStatus
 	return &updated, nil
 }
 
@@ -261,7 +291,7 @@ func (c *Firestore) AddKey(ctx context.Context, input types.APIKey) (*types.APIK
 	input.CreatedAt = time.Now()
 	input.UsageCount = 0
 
-	if _, err := c.Collection("api_keys").Doc(keyValue).Set(ctx, input); err != nil {
+	if _, err := c.Collection("api_keys").Doc(input.KeyID).Set(ctx, input); err != nil {
 		return nil, err
 	}
 	return &input, nil
@@ -294,13 +324,10 @@ func (c *Firestore) UpdateKey(ctx context.Context, keyID string, updates map[str
 	return &key, refreshed.DataTo(&key)
 }
 
-// GetKeyByKeyID retrieves a key by its key_id field.
+// GetKeyByKeyID retrieves a key by its key_id.
 func (c *Firestore) GetKeyByKeyID(ctx context.Context, keyID string) (*types.APIKey, error) {
 	doc, err := c.findKeyDocByKeyID(ctx, keyID)
 	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return nil, nil
-		}
 		return nil, err
 	}
 	if doc == nil {

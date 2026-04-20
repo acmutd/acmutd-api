@@ -34,7 +34,6 @@ func (h *Handler) UpdateAppConfig(c *gin.Context) {
 		AutoApproveMode      *string `json:"autoApproveMode"`
 		HackathonModeEnabled *bool   `json:"hackathonModeEnabled"`
 		HackathonEndDate     *string `json:"hackathonEndDate"`
-		CurrentSemester      *string `json:"currentSemester"`
 		InstanceType         *string `json:"instanceType"`
 		KeysExpiresAtDate    *string `json:"keysExpiresAtDate"`
 		TrackStats           *bool   `json:"trackStats"`
@@ -57,9 +56,6 @@ func (h *Handler) UpdateAppConfig(c *gin.Context) {
 			return
 		}
 		updates["hackathon_end_date"] = *req.HackathonEndDate
-	}
-	if req.CurrentSemester != nil {
-		updates["current_semester"] = *req.CurrentSemester
 	}
 	if req.InstanceType != nil {
 		updates["instance_type"] = *req.InstanceType
