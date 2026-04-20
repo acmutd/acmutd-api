@@ -168,6 +168,38 @@ acm-api/
 | `INTEGRATION_RESCRAPE` | Whether to run scrapers before integration (true/false)           | No                   | `false`           |
 | `UPLOADER`             | Which data to upload to Firestore                                 | Yes                  | -                 |
 
+## Deploying to EC2
+
+### Build the Linux Binary (from local Windows)
+
+```powershell
+$env:GOOS="linux"
+$env:GOARCH="amd64"
+$env:CGO_ENABLED="0"
+go build -o acmutd-api ./cmd/api
+```
+
+This produces an `acmutd-api` binary in the project root.
+
+### Copy Files to EC2
+
+```bash
+# Copy the binary
+scp -i "path/to/acmapi-key.pem" ./acmutd-api ec2-user@<EC2_IPV4>:/opt/acmutd-api/acmutd-api
+
+# If config changed, copy the service account too
+scp -i "path/to/acmapi-key.pem" prod.service_account.json ec2-user@<EC2_IPV4>:/opt/acmutd-api/prod.service_account.json
+```
+
+### Restart the Service
+
+```bash
+ssh -i "path/to/acmapi-key.pem" ec2-user@<EC2_IPV4>
+chmod +x /opt/acmutd-api/acmutd-api
+sudo systemctl restart acmutd-api
+sudo systemctl status acmutd-api --no-pager
+```
+
 ### Term Format
 
 Terms use a specific format: `{YY}{season}` where:
