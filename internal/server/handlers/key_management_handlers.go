@@ -286,7 +286,12 @@ func (h *Handler) EditKey(c *gin.Context) {
 		updates["window_seconds"] = *req.WindowSeconds
 	}
 	if req.ExpiresAt != nil {
-		updates["expires_at"] = *req.ExpiresAt
+		t, err := time.Parse(time.RFC3339, *req.ExpiresAt)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid expiresAt format, expected RFC3339"})
+			return
+		}
+		updates["expires_at"] = t
 	}
 
 	if len(updates) == 0 {

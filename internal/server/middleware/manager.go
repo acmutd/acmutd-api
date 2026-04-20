@@ -62,7 +62,7 @@ func (m *Manager) Auth() gin.HandlerFunc {
 				return
 			}
 
-			if keyData.ExpiresAt.Before(time.Now()) {
+			if !keyData.ExpiresAt.IsZero() && keyData.ExpiresAt.Before(time.Now()) {
 				m.apiKeyCache.Delete(key)
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key expired"})
 				return
@@ -89,7 +89,7 @@ func (m *Manager) Auth() gin.HandlerFunc {
 			return
 		}
 
-		if apiKey.ExpiresAt.Before(time.Now()) && !apiKey.IsAdmin {
+		if !apiKey.ExpiresAt.IsZero() && apiKey.ExpiresAt.Before(time.Now()) && !apiKey.IsAdmin {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key expired"})
 			return
 		}

@@ -254,6 +254,9 @@ func (c *Firestore) RegenerateKey(ctx context.Context, keyID string) (*types.API
 	if err != nil {
 		return nil, err
 	}
+	if existing.IsAdmin {
+		newKeyValue = "admin-" + newKeyValue
+	}
 
 	newStatus := existing.Status
 	if existing.Status == "inactive" {
@@ -284,6 +287,9 @@ func (c *Firestore) AddKey(ctx context.Context, input types.APIKey) (*types.APIK
 		return nil, err
 	}
 
+	if input.IsAdmin {
+		keyValue = "admin-" + keyValue
+	}
 	input.Key = keyValue
 	if input.KeyID == "" {
 		input.KeyID = generateKeyID()
