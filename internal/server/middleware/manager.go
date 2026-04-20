@@ -19,18 +19,16 @@ type Manager struct {
 	db          *firebase.Firestore
 	apiKeyCache *cache.Cache
 	rateLimiter *ratelimit.Limiter
-	adminKey    string
 	authClient  *fbauth.Client // used by FirebaseAuth for dashboard routes
 	trackStats  *atomic.Bool
 }
 
 // NewManager builds a middleware manager for the HTTP server.
-func NewManager(db *firebase.Firestore, apiKeyCache *cache.Cache, limiter *ratelimit.Limiter, adminKey string, authClient *fbauth.Client, trackStats *atomic.Bool) *Manager {
+func NewManager(db *firebase.Firestore, apiKeyCache *cache.Cache, limiter *ratelimit.Limiter, authClient *fbauth.Client, trackStats *atomic.Bool) *Manager {
 	return &Manager{
 		db:          db,
 		apiKeyCache: apiKeyCache,
 		rateLimiter: limiter,
-		adminKey:    adminKey,
 		authClient:  authClient,
 		trackStats:  trackStats,
 	}
@@ -150,21 +148,21 @@ func (m *Manager) RateLimit() gin.HandlerFunc {
 	}
 }
 
-// Admin restricts routes to the generated admin key.
+// Admin restricts routes to keys with is_admin == true.
 func (m *Manager) Admin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		key := c.GetHeader("X-API-Key")
-		if key == "" {
+		keyData, exists := c.Get("api_key")
+		if !exists {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key required"})
 			return
 		}
 
-		if key != m.adminKey {
+		apiKey, ok := keyData.(*types.APIKey)
+		if !ok || !apiKey.IsAdmin {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "admin access required"})
 			return
 		}
 
-		m.updateKeyUsageAsync(key)
 		c.Next()
 	}
 }

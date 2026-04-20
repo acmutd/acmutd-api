@@ -30,7 +30,6 @@ type Server struct {
 	apiKeyCache *cache.Cache
 	rateLimiter *ratelimit.Limiter
 	port        int
-	adminKey    string
 }
 
 func NewServer() *http.Server {
@@ -63,20 +62,7 @@ func NewServer() *http.Server {
 		log.Fatalf("error initializing firebase auth client: %v\n", err)
 	}
 
-	// Delete all existing admin keys and generate a new one
 	ctx := context.Background()
-
-	if err := db.DeleteAllAdminKeys(ctx); err != nil {
-		log.Printf("[acmutd-api] Warning: failed to delete existing admin keys: %v", err)
-	}
-
-	// Generate a new admin key in memory and store it in Firebase
-	adminKey, err := db.GenerateAdminAPIKey(ctx)
-	if err != nil {
-		log.Fatalf("failed to generate admin key: %v", err)
-	}
-
-	log.Printf("[acmutd-api] New admin key generated: %s", adminKey)
 
 	var trackStats atomic.Bool
 	appCfg, err := db.GetAppConfig(ctx)
@@ -94,11 +80,10 @@ func NewServer() *http.Server {
 		apiKeyCache: cache.New(apiKeyCacheTTL, 10*time.Minute),
 		rateLimiter: limiter,
 		port:        port,
-		adminKey:    adminKey,
 	}
 
 	handler := handlers.New(newServer.db, &trackStats)
-	middlewares := middleware.NewManager(newServer.db, newServer.apiKeyCache, newServer.rateLimiter, newServer.adminKey, authClient, &trackStats)
+	middlewares := middleware.NewManager(newServer.db, newServer.apiKeyCache, newServer.rateLimiter, authClient, &trackStats)
 	httpHandler := router.New(handler, middlewares)
 
 	return &http.Server{
