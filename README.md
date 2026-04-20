@@ -170,28 +170,40 @@ acm-api/
 
 ## Deploying to EC2
 
-### Build the Linux Binary (from local Windows)
+### 1. Build the Linux Binary (from local Windows)
+
+Cross-compilation is required — running `go build` without these flags produces a Windows executable that cannot run on EC2.
 
 ```powershell
-$env:GOOS="linux"
-$env:GOARCH="amd64"
-$env:CGO_ENABLED="0"
-go build -o acmutd-api ./cmd/api
+# PowerShell
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o acmutd-api ./cmd/api/main.go
 ```
 
-This produces an `acmutd-api` binary in the project root.
+Verify the output is a Linux binary before uploading:
+```bash
+file ./acmutd-api   # must say: ELF 64-bit LSB executable, x86-64
+```
 
-### Copy Files to EC2
+### 2. Build the Frontend
+
+```bash
+cd frontend && npm run build && cd ..
+```
+
+### 3. Copy Files to EC2
 
 ```bash
 # Copy the binary
 scp -i "path/to/acmapi-key.pem" ./acmutd-api ec2-user@<EC2_IPV4>:/opt/acmutd-api/acmutd-api
 
-# If config changed, copy the service account too
+# Copy frontend dist — target the parent directory to avoid creating a nested dist/dist/
+scp -O -r -i "path/to/acmapi-key.pem" ./frontend/dist ec2-user@<EC2_IPV4>:/opt/acmutd-api/frontend/
+
+# If the service account changed, copy it too
 scp -i "path/to/acmapi-key.pem" prod.service_account.json ec2-user@<EC2_IPV4>:/opt/acmutd-api/prod.service_account.json
 ```
 
-### Restart the Service
+### 4. Restart the Service
 
 ```bash
 ssh -i "path/to/acmapi-key.pem" ec2-user@<EC2_IPV4>
@@ -199,6 +211,33 @@ chmod +x /opt/acmutd-api/acmutd-api
 sudo systemctl restart acmutd-api
 sudo systemctl status acmutd-api --no-pager
 ```
+
+### EC2 Environment Configuration
+
+The systemd service loads environment variables from **`/etc/acmutd-api.env`**, not from `/opt/acmutd-api/.env`. The `.env` file in the project directory is for local development only.
+
+> **Important:** `godotenv` does not override environment variables already set by systemd. `/etc/acmutd-api.env` always takes precedence over `/opt/acmutd-api/.env` on EC2.
+
+To view or edit the EC2 environment:
+```bash
+sudo nano /etc/acmutd-api.env
+```
+
+Example `/etc/acmutd-api.env`:
+```env
+PORT=8080
+SAVE_ENVIRONMENT=prod
+FB_CONFIG=service_account.json
+FIREBASE_WEB_API_KEY=your-web-api-key
+FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+FIREBASE_PROJECT_ID=your-project-id
+```
+
+`SAVE_ENVIRONMENT` controls which Firebase project the server connects to:
+- `dev` → uses `dev.service_account.json` → dev Firestore
+- `prod` → uses `prod.service_account.json` → prod Firestore
+
+API keys created on a dev server will not work on a prod server (and vice versa) since they are stored in separate Firestore databases.
 
 ### Term Format
 
