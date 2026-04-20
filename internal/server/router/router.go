@@ -27,6 +27,53 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 		c.File("frontend/dist/index.html")
 	})
 
+	// Serve index.html for any unmatched route so React Router handles client-side navigation.
+	router.NoRoute(func(c *gin.Context) {
+		c.File("frontend/dist/index.html")
+	})
+
+	// Dashboard REST API — authenticated via Firebase ID token
+	dash := router.Group("/dashboard/api/v1")
+	dash.Use(mw.FirebaseAuth())
+	{
+		dash.GET("/users/me", handler.GetMe)
+		dash.GET("/keys/me", handler.GetMyAPIKey)
+		dash.POST("/keys/request", handler.RequestAPIKey)
+		dash.POST("/keys/:keyId/regenerate", handler.RegenerateKey)
+		dash.DELETE("/keys/:keyId", handler.RevokeKey)
+		dash.GET("/stats/daily", handler.GetMyDailyStats)
+		dash.GET("/stats/requests", handler.GetMyRecentRequests)
+		dash.GET("/config", handler.GetAppConfig)
+
+		dashAdmin := dash.Group("")
+		dashAdmin.Use(mw.DashboardAdmin())
+		{
+			dashAdmin.GET("/users", handler.ListUsers)
+			dashAdmin.PUT("/users/:uid/ban", handler.BanUser)
+			dashAdmin.PUT("/users/:uid/unban", handler.UnbanUser)
+			dashAdmin.GET("/admin/keys", handler.ListAllKeys)
+			dashAdmin.GET("/admin/keys/pending", handler.ListPendingKeys)
+			dashAdmin.POST("/admin/keys/:keyId/approve", handler.ApproveKey)
+			dashAdmin.POST("/admin/keys/:keyId/reject", handler.RejectKey)
+			dashAdmin.POST("/admin/keys/:keyId/regenerate", handler.AdminRegenerateKey)
+			dashAdmin.DELETE("/admin/keys/:keyId", handler.AdminRevokeKey)
+			dashAdmin.POST("/admin/keys", handler.AddKey)
+			dashAdmin.PUT("/admin/keys/:keyId", handler.EditKey)
+			dashAdmin.GET("/admin/stats/daily", handler.ListAllDailyStats)
+			dashAdmin.GET("/admin/stats/requests", handler.ListAllRecentRequests)
+			dashAdmin.PUT("/admin/config", handler.UpdateAppConfig)
+			dashAdmin.GET("/admin/server/state", handler.GetInstanceState)
+			dashAdmin.POST("/admin/server/start", handler.StartServer)
+			dashAdmin.POST("/admin/server/stop", handler.StopServer)
+			dashAdmin.POST("/admin/server/hackathon/enable", handler.EnableHackathonMode)
+			dashAdmin.POST("/admin/server/hackathon/disable", handler.DisableHackathonMode)
+			dashAdmin.GET("/admin/logs/scraper", handler.ListScraperLogs)
+			dashAdmin.GET("/admin/logs/cron", handler.ListCronLogs)
+			dashAdmin.GET("/admin/logs/server", handler.ListServerStateLogs)
+			dashAdmin.GET("/admin/logs/promotion", handler.ListPromotionLogs)
+		}
+	}
+
 	admin := router.Group("/admin")
 	admin.Use(mw.Auth(), mw.RateLimit(), mw.Admin())
 	{

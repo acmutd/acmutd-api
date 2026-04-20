@@ -57,6 +57,11 @@ func NewServer() *http.Server {
 		log.Fatalf("error initializing firestore: %v\n", err)
 	}
 
+	authClient, err := app.Auth(context.Background())
+	if err != nil {
+		log.Fatalf("error initializing firebase auth client: %v\n", err)
+	}
+
 	// Delete all existing admin keys and generate a new one
 	ctx := context.Background()
 
@@ -84,7 +89,7 @@ func NewServer() *http.Server {
 	}
 
 	handler := handlers.New(newServer.db)
-	middlewares := middleware.NewManager(newServer.db, newServer.apiKeyCache, newServer.rateLimiter, newServer.adminKey)
+	middlewares := middleware.NewManager(newServer.db, newServer.apiKeyCache, newServer.rateLimiter, newServer.adminKey, authClient)
 	httpHandler := router.New(handler, middlewares)
 
 	return &http.Server{

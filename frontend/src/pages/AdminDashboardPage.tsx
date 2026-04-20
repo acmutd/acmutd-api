@@ -31,7 +31,7 @@ import {
   stopServer,
   unbanUser,
   updateAppConfig,
-} from "../lib/api";
+} from "../lib/apiClient";
 import {
   formatDate,
   formatDateTime,
@@ -811,6 +811,31 @@ export function AdminDashboardPage() {
                         ? {
                             ...prev,
                             hackathonEndDate: `${e.target.value}T23:59:59.000Z`,
+                          }
+                        : prev,
+                    )
+                  }
+                />
+              </div>
+
+              <div>
+                <Label>Keys expiration date</Label>
+                <Input
+                  type="date"
+                  value={
+                    configDraft.keysExpiresAtDate &&
+                    !configDraft.keysExpiresAtDate.startsWith("0001")
+                      ? configDraft.keysExpiresAtDate.slice(0, 10)
+                      : ""
+                  }
+                  onChange={(e) =>
+                    setConfigDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            keysExpiresAtDate: e.target.value
+                              ? `${e.target.value}T23:59:59.000Z`
+                              : "",
                           }
                         : prev,
                     )

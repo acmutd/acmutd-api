@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	fbauth "firebase.google.com/go/v4/auth"
 	"github.com/acmutd/acmutd-api/internal/firebase"
 	"github.com/acmutd/acmutd-api/internal/server/ratelimit"
 	"github.com/acmutd/acmutd-api/internal/types"
@@ -18,15 +19,17 @@ type Manager struct {
 	apiKeyCache *cache.Cache
 	rateLimiter *ratelimit.Limiter
 	adminKey    string
+	authClient  *fbauth.Client // used by FirebaseAuth for dashboard routes
 }
 
 // NewManager builds a middleware manager for the HTTP server.
-func NewManager(db *firebase.Firestore, apiKeyCache *cache.Cache, limiter *ratelimit.Limiter, adminKey string) *Manager {
+func NewManager(db *firebase.Firestore, apiKeyCache *cache.Cache, limiter *ratelimit.Limiter, adminKey string, authClient *fbauth.Client) *Manager {
 	return &Manager{
 		db:          db,
 		apiKeyCache: apiKeyCache,
 		rateLimiter: limiter,
 		adminKey:    adminKey,
+		authClient:  authClient,
 	}
 }
 
@@ -64,8 +67,12 @@ func (m *Manager) Auth() gin.HandlerFunc {
 				return
 			}
 
-			m.updateKeyUsageAsync(key)
+			if rejectInactiveKey(c, keyData) {
+				m.apiKeyCache.Delete(key)
+				return
+			}
 
+			m.updateKeyUsageAsync(key)
 			c.Set("api_key", keyData)
 			c.Next()
 			return
@@ -82,8 +89,11 @@ func (m *Manager) Auth() gin.HandlerFunc {
 		}
 
 		if apiKey.ExpiresAt.Before(time.Now()) && !apiKey.IsAdmin {
-			m.apiKeyCache.Delete(key)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "API key expired"})
+			return
+		}
+
+		if !apiKey.IsAdmin && rejectInactiveKey(c, apiKey) {
 			return
 		}
 
@@ -91,6 +101,25 @@ func (m *Manager) Auth() gin.HandlerFunc {
 		m.apiKeyCache.Set(key, apiKey, cache.DefaultExpiration)
 		c.Set("api_key", apiKey)
 		c.Next()
+	}
+}
+
+// rejectInactiveKey aborts the request if the key's status is not "active".
+// Returns true if the request was aborted.
+func rejectInactiveKey(c *gin.Context, key *types.APIKey) bool {
+	switch key.Status {
+	case "active":
+		return false
+	case "pending":
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "your API key is pending approval, wait for an administrator to approve it",
+		})
+		return true
+	default: // "inactive", "rejected"
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "API key is not active",
+		})
+		return true
 	}
 }
 

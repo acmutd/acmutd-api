@@ -3,7 +3,7 @@ export interface User {
   email: string;
   displayName: string;
   isAdmin: boolean;
-  approvalStatus: "approved" | "pending" | "banned";
+  approvalStatus: "approved" | "banned";
   createdAt: string;
   lastLoginAt: string;
 }
@@ -52,6 +52,7 @@ export interface AppConfig {
   hackathonEndDate: string;
   currentSemester: string;
   instanceType: InstanceType;
+  keysExpiresAtDate: string;
   updatedAt: string;
   updatedBy: string;
 }

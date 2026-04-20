@@ -26,7 +26,14 @@ func (h *Handler) serveDashboardAppPage(c *gin.Context) {
 		return
 	}
 
-	html := strings.ReplaceAll(string(content), "__FIREBASE_CONFIG__", "{}")
+	firebaseCfg := fmt.Sprintf(
+		`{"apiKey":%q,"authDomain":%q,"projectId":%q}`,
+		os.Getenv("FIREBASE_WEB_API_KEY"),
+		os.Getenv("FIREBASE_AUTH_DOMAIN"),
+		os.Getenv("FIREBASE_PROJECT_ID"),
+	)
+	// Replace the quoted placeholder so the JS receives a raw object, not a string
+	html := strings.ReplaceAll(string(content), `"__FIREBASE_CONFIG__"`, firebaseCfg)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 }
 

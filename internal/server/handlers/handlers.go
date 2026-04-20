@@ -167,3 +167,19 @@ func getQueryParam(c *gin.Context, name string) string {
 	value := strings.ToLower(strings.TrimSpace(c.Query(name)))
 	return value
 }
+
+// getDashboardUID extracts the authenticated user's UID from the gin context.
+// Set by the FirebaseAuth middleware. Responds 401 and returns false if missing.
+func getDashboardUID(c *gin.Context) (string, bool) {
+	val, exists := c.Get("dash_uid")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return "", false
+	}
+	uid, ok := val.(string)
+	if !ok || uid == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+		return "", false
+	}
+	return uid, true
+}

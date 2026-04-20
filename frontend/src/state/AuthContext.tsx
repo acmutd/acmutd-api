@@ -1,4 +1,9 @@
 import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+} from "firebase/auth";
+import {
   createContext,
   useCallback,
   useContext,
@@ -6,12 +11,9 @@ import {
   useMemo,
   useState,
 } from "react";
-import {
-  getCurrentUser,
-  loginWithGoogle,
-  setSessionUser,
-  signOut,
-} from "../lib/api";
+import { flushSync } from "react-dom";
+import { firebaseAuth } from "../lib/firebase";
+import { setSessionUser } from "../lib/apiClient";
 import { User } from "../types/models";
 
 interface AuthContextValue {
@@ -30,32 +32,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function bootstrap() {
-      const user = await getCurrentUser();
-      setCurrentUser(user);
+    const unsubscribe = onAuthStateChanged(firebaseAuth, async (fbUser) => {
+      if (fbUser) {
+        try {
+          const token = await fbUser.getIdToken();
+          const res = await fetch("/dashboard/api/v1/users/me", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          setCurrentUser(res.ok ? ((await res.json()) as User) : null);
+        } catch {
+          setCurrentUser(null);
+        }
+      } else {
+        setCurrentUser(null);
+      }
       setLoading(false);
-    }
-    void bootstrap();
+    });
+    return unsubscribe;
   }, []);
 
   const login = useCallback(async () => {
-    const user = await loginWithGoogle();
-    setCurrentUser(user);
+    const result = await signInWithPopup(firebaseAuth, new GoogleAuthProvider());
+    const token = await result.user.getIdToken();
+    const res = await fetch("/dashboard/api/v1/users/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const userData = (await res.json()) as User;
+      // flushSync commits the state update synchronously so RequireAuth
+      // sees the new user before navigate() triggers its render.
+      flushSync(() => setCurrentUser(userData));
+    }
   }, []);
 
   const logout = useCallback(async () => {
-    await signOut();
-    setCurrentUser(null);
+    await firebaseAuth.signOut();
   }, []);
 
+  // Dev-only helpers for switching between mock users.
+  // These are no-ops when apiClient.ts points to the real backend.
   const switchToAdmin = useCallback(async () => {
-    const user = await setSessionUser("u_002");
-    setCurrentUser(user);
+    if (!import.meta.env.DEV) return;
+    const user = await setSessionUser("u_002").catch(() => null);
+    if (user) setCurrentUser(user);
   }, []);
 
   const switchToStudent = useCallback(async () => {
-    const user = await setSessionUser("u_001");
-    setCurrentUser(user);
+    if (!import.meta.env.DEV) return;
+    const user = await setSessionUser("u_001").catch(() => null);
+    if (user) setCurrentUser(user);
   }, []);
 
   const value = useMemo(
@@ -67,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       switchToAdmin,
       switchToStudent,
     }),
-    [currentUser, loading, login, logout, switchToAdmin, switchToStudent],
+    [currentUser, loading, login, logout, switchToAdmin, switchToStudent]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

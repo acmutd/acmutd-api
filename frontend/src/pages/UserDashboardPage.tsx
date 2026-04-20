@@ -13,7 +13,7 @@ import {
   regenerateApiKey,
   requestApiKey,
   revokeApiKey,
-} from "../lib/api";
+} from "../lib/apiClient";
 import { formatDate, formatDateTime, maskKey } from "../lib/format";
 import { useAuth } from "../state/AuthContext";
 import { useToast } from "../state/ToastContext";
