@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	_ "embed"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,16 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Default serves an embedded Swagger UI page.
-func (h *Handler) Default(c *gin.Context) {
-	pagePath := swaggerUIPagePath()
-	content, err := os.ReadFile(pagePath)
-	if err != nil {
-		c.Data(http.StatusServiceUnavailable, "text/plain; charset=utf-8", []byte(fmt.Sprintf("Swagger UI page is missing. Expected file: %s", pagePath)))
-		return
-	}
+//go:embed swagger.html
+var swaggerUIPage []byte
 
-	c.Data(http.StatusOK, "text/html; charset=utf-8", content)
+// Default serves the embedded Swagger UI page.
+func (h *Handler) Default(c *gin.Context) {
+	c.Data(http.StatusOK, "text/html; charset=utf-8", swaggerUIPage)
 }
 
 // OpenAPISpec serves the OpenAPI document consumed by Swagger UI.
@@ -40,12 +37,4 @@ func openAPISpecPath() string {
 	}
 
 	return filepath.Join("internal", "server", "docs", "openapi.yaml")
-}
-
-func swaggerUIPagePath() string {
-	if custom := strings.TrimSpace(os.Getenv("SWAGGER_UI_PAGE_PATH")); custom != "" {
-		return custom
-	}
-
-	return filepath.Join("frontend", "src", "swagger", "swagger.html")
 }
