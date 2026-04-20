@@ -25,6 +25,9 @@ func (c *Firestore) GenerateAPIKey(
 		return "", fmt.Errorf("failed to generate key: %w", err)
 	}
 	key := hex.EncodeToString(keyBytes)
+	if isAdmin {
+		key = "admin-" + key
+	}
 
 	apiKey := types.APIKey{
 		Key:           key,
