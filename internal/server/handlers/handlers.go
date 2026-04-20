@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/acmutd/acmutd-api/internal/firebase"
 	"github.com/gin-gonic/gin"
@@ -40,72 +39,6 @@ func (h *Handler) Health(c *gin.Context) {
 	})
 }
 
-// CreateAPIKey provisions a new API key.
-func (h *Handler) CreateAPIKey(c *gin.Context) {
-	var req struct {
-		RateLimit     int    `json:"rate_limit" binding:"required"`
-		WindowSeconds int    `json:"window_seconds" binding:"required"`
-		IsAdmin       bool   `json:"is_admin"`
-		ExpiresAt     string `json:"expires_at"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if req.RateLimit <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "rate limit must be greater than 0"})
-		return
-	}
-
-	if req.WindowSeconds <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "window seconds must be greater than 0"})
-		return
-	}
-
-	var expiresAt time.Time
-	if req.ExpiresAt != "" {
-		var err error
-		expiresAt, err = time.Parse(time.RFC3339, req.ExpiresAt)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid expires_at format"})
-			return
-		}
-
-		if expiresAt.Before(time.Now()) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "expiration date must be in the future"})
-			return
-		}
-	}
-
-	key, err := h.db.GenerateAPIKey(
-		c.Request.Context(),
-		req.RateLimit,
-		req.WindowSeconds,
-		req.IsAdmin,
-		expiresAt,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create API key"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{"key": key})
-}
-
-// GetAPIKey retrieves metadata for a stored API key.
-func (h *Handler) GetAPIKey(c *gin.Context) {
-	key := c.Param("key")
-
-	apiKey, err := h.db.GetAPIKey(c.Request.Context(), key)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get API key"})
-		return
-	}
-
-	c.JSON(http.StatusOK, apiKey)
-}
 
 func parsePaginationParams(c *gin.Context) (paginationParams, error) {
 	limitValue := strings.TrimSpace(c.Query("limit"))

@@ -76,13 +76,6 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 		}
 	}
 
-	admin := router.Group("/admin")
-	admin.Use(mw.Auth(), mw.RateLimit(), mw.Admin())
-	{
-		admin.POST("/apikeys", handler.CreateAPIKey)
-		admin.GET("/apikeys/:key", handler.GetAPIKey)
-	}
-
 	v1 := router.Group("/api/v1")
 	v1.Use(mw.Auth(), mw.RateLimit(), mw.Track())
 	{

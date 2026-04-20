@@ -12,26 +12,6 @@
 GET {{baseUrl}}/health
 
 ### ============================================
-### ADMIN ENDPOINTS (Admin Key Required)
-### ============================================
-
-### Create API Key
-POST {{baseUrl}}/admin/apikeys
-X-API-Key: {{apiKey}}
-Content-Type: application/json
-
-{
-  "rate_limit": 100,
-  "window_seconds": 60,
-  "is_admin": false,
-  "expires_at": "2025-12-31T23:59:59Z"
-}
-
-### Get API Key Information
-GET {{baseUrl}}/admin/apikeys/{{apiKey}}
-X-API-Key: {{apiKey}}
-
-### ============================================
 ### COURSE ENDPOINTS
 ### ============================================
 

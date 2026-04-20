@@ -138,23 +138,6 @@ components:
           additionalProperties: { type: number, format: double }
           description: Per-course average ratings keyed by course code
 
-    ApiKey:
-      type: object
-      properties:
-        rate_limit:
-          type: integer
-          description: Max requests allowed per window
-        window_seconds:
-          type: integer
-          description: Rolling window size in seconds
-        is_admin:
-          type: boolean
-          description: Whether the key has admin privileges
-        expires_at:
-          type: string
-          format: date-time
-          description: RFC3339 expiry timestamp; omit for no expiration
-
     ErrorResponse:
       type: object
       properties:
@@ -176,80 +159,6 @@ paths:
                 properties:
                   status: { type: string, example: healthy }
                   message: { type: string, example: ACM API is running }
-
-  /admin/apikeys:
-    post:
-      summary: Create API key
-      description: Create a new API key with specified rate limiting and permissions. Requires admin key.
-      tags: [Admin]
-      security:
-        - ApiKeyAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ApiKey"
-            example:
-              rate_limit: 100
-              window_seconds: 60
-              is_admin: false
-              expires_at: "2026-12-31T23:59:59Z"
-      responses:
-        "200":
-          description: API key created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  key: { type: string }
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ErrorResponse" }
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ErrorResponse" }
-        "403":
-          description: Forbidden — admin access required
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ErrorResponse" }
-
-  /admin/apikeys/{key}:
-    get:
-      summary: Get API key information
-      description: Retrieve information about a specific API key. Requires admin key.
-      tags: [Admin]
-      security:
-        - ApiKeyAuth: []
-      parameters:
-        - name: key
-          in: path
-          required: true
-          description: The API key to look up
-          schema: { type: string }
-      responses:
-        "200":
-          description: API key details
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ApiKey"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ErrorResponse" }
-        "403":
-          description: Forbidden — admin access required
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ErrorResponse" }
 
   /api/v1/courses/general:
     get:
