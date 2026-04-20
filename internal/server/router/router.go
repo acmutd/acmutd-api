@@ -41,6 +41,7 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 		dash.POST("/keys/request", handler.RequestAPIKey)
 		dash.POST("/keys/:keyId/regenerate", handler.RegenerateKey)
 		dash.DELETE("/keys/:keyId", handler.RevokeKey)
+		dash.DELETE("/keys/:keyId/permanent", handler.DeleteKey)
 		dash.GET("/stats/daily", handler.GetMyDailyStats)
 		dash.GET("/stats/requests", handler.GetMyRecentRequests)
 		dash.GET("/config", handler.GetAppConfig)

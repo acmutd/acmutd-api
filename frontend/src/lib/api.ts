@@ -96,6 +96,10 @@ export async function revokeApiKey(keyId: string): Promise<void> {
   await apiFetch(`/keys/${keyId}`, { method: "DELETE" });
 }
 
+export async function deleteApiKey(keyId: string): Promise<void> {
+  await apiFetch(`/keys/${keyId}/permanent`, { method: "DELETE" });
+}
+
 // ---------------------------------------------------------------------------
 // User-facing: usage stats
 // ---------------------------------------------------------------------------

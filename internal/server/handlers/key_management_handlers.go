@@ -119,6 +119,28 @@ func (h *Handler) RevokeKey(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "key revoked"})
 }
 
+// DeleteKey permanently deletes the caller's own key document from Firestore.
+func (h *Handler) DeleteKey(c *gin.Context) {
+	uid, ok := getDashboardUID(c)
+	if !ok {
+		return
+	}
+	keyID := c.Param("keyId")
+
+	existing, err := h.db.GetUserAPIKey(c.Request.Context(), uid)
+	if err != nil || existing == nil || existing.KeyID != keyID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "key not found or not owned by you"})
+		return
+	}
+
+	if err := h.db.DeleteKey(c.Request.Context(), keyID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete key"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "key deleted"})
+}
+
 // ListAllKeys returns all dashboard-managed API keys. Admin only.
 func (h *Handler) ListAllKeys(c *gin.Context) {
 	keys, err := h.db.ListAllKeys(c.Request.Context())

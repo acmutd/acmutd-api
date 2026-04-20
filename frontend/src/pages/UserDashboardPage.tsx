@@ -6,6 +6,7 @@ import { Card, CardSubtitle, CardTitle } from "../components/ui/Card";
 import { Input, Label, TextArea } from "../components/ui/Field";
 import { Modal } from "../components/ui/Modal";
 import {
+  deleteApiKey,
   getAppConfig,
   getMyApiKey,
   getMyDailyStats,
@@ -40,7 +41,7 @@ export function UserDashboardPage() {
   const [requestDescription, setRequestDescription] = useState("");
 
   const [confirmAction, setConfirmAction] = useState<
-    "regenerate" | "revoke" | null
+    "regenerate" | "revoke" | "delete" | null
   >(null);
 
   const [keyRevealed, setKeyRevealed] = useState(false);
@@ -230,7 +231,13 @@ export function UserDashboardPage() {
                   variant="danger"
                   onClick={() => setConfirmAction("revoke")}
                 >
-                  Delete / Revoke key
+                  Revoke key
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => setConfirmAction("delete")}
+                >
+                  Delete key
                 </Button>
               </div>
             </Card>
@@ -371,14 +378,16 @@ export function UserDashboardPage() {
         <p className="text-sm text-slate-600">
           {confirmAction === "regenerate"
             ? "This will generate a new token value and invalidate the previous key."
-            : "This will revoke and deactivate the key."}
+            : confirmAction === "revoke"
+              ? "This will deactivate the key. You can request a new one later."
+              : "This will permanently delete the key and all associated data. This cannot be undone."}
         </p>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="secondary" onClick={() => setConfirmAction(null)}>
             Cancel
           </Button>
           <Button
-            variant={confirmAction === "revoke" ? "danger" : "primary"}
+            variant={confirmAction === "regenerate" ? "primary" : "danger"}
             onClick={async () => {
               if (!myKey || !confirmAction) {
                 return;
@@ -394,6 +403,11 @@ export function UserDashboardPage() {
                 const next = await getMyApiKey(currentUser.uid);
                 setMyKey(next);
                 showToast("API key revoked");
+              }
+              if (confirmAction === "delete") {
+                await deleteApiKey(myKey.keyId);
+                setMyKey(null);
+                showToast("API key deleted");
               }
               setConfirmAction(null);
             }}

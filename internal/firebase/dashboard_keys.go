@@ -197,6 +197,18 @@ func (c *Firestore) RevokeKey(ctx context.Context, keyID string) error {
 	return c.setKeyStatus(ctx, keyID, "inactive")
 }
 
+func (c *Firestore) DeleteKey(ctx context.Context, keyID string) error {
+	doc, err := c.findKeyDocByKeyID(ctx, keyID)
+	if err != nil {
+		return err
+	}
+	if doc == nil {
+		return fmt.Errorf("key not found: %s", keyID)
+	}
+	_, err = doc.Ref.Delete(ctx)
+	return err
+}
+
 // RegenerateKey deletes the existing key document and creates a new one with fresh key bytes,
 // preserving all metadata (key_id, user_id, owner_email, label, description, status).
 func (c *Firestore) RegenerateKey(ctx context.Context, keyID string) (*types.APIKey, error) {
@@ -222,6 +234,9 @@ func (c *Firestore) RegenerateKey(ctx context.Context, keyID string) (*types.API
 	updated.Key = newKeyValue
 	updated.UsageCount = 0
 	updated.LastUsedAt = nil
+	if existing.Status == "inactive" {
+		updated.Status = "pending"
+	}
 
 	batch := c.BulkWriter(ctx)
 	defer batch.End()
