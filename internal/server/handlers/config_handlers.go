@@ -37,6 +37,7 @@ func (h *Handler) UpdateAppConfig(c *gin.Context) {
 		CurrentSemester      *string `json:"currentSemester"`
 		InstanceType         *string `json:"instanceType"`
 		KeysExpiresAtDate    *string `json:"keysExpiresAtDate"`
+		TrackStats           *bool   `json:"trackStats"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -71,6 +72,9 @@ func (h *Handler) UpdateAppConfig(c *gin.Context) {
 		}
 		updates["keys_expires_at_date"] = t
 	}
+	if req.TrackStats != nil {
+		updates["track_stats"] = *req.TrackStats
+	}
 
 	if len(updates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "no valid fields to update"})
@@ -83,6 +87,10 @@ func (h *Handler) UpdateAppConfig(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update config"})
 		return
+	}
+
+	if req.TrackStats != nil {
+		h.trackStats.Store(*req.TrackStats)
 	}
 
 	c.JSON(http.StatusOK, cfg)

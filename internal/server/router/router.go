@@ -84,7 +84,7 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 	}
 
 	v1 := router.Group("/api/v1")
-	v1.Use(mw.Auth(), mw.RateLimit())
+	v1.Use(mw.Auth(), mw.RateLimit(), mw.Track())
 	{
 		courses := v1.Group("/courses")
 		{

@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	fbauth "firebase.google.com/go/v4/auth"
@@ -20,16 +21,18 @@ type Manager struct {
 	rateLimiter *ratelimit.Limiter
 	adminKey    string
 	authClient  *fbauth.Client // used by FirebaseAuth for dashboard routes
+	trackStats  *atomic.Bool
 }
 
 // NewManager builds a middleware manager for the HTTP server.
-func NewManager(db *firebase.Firestore, apiKeyCache *cache.Cache, limiter *ratelimit.Limiter, adminKey string, authClient *fbauth.Client) *Manager {
+func NewManager(db *firebase.Firestore, apiKeyCache *cache.Cache, limiter *ratelimit.Limiter, adminKey string, authClient *fbauth.Client, trackStats *atomic.Bool) *Manager {
 	return &Manager{
 		db:          db,
 		apiKeyCache: apiKeyCache,
 		rateLimiter: limiter,
 		adminKey:    adminKey,
 		authClient:  authClient,
+		trackStats:  trackStats,
 	}
 }
 

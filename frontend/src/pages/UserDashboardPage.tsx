@@ -51,8 +51,8 @@ export function UserDashboardPage() {
   const mostUsedEndpoint = useMemo(() => {
     const counts = new Map<string, number>();
     stats.forEach((s) => {
-      s.endpointBreakdown.forEach((e) => {
-        counts.set(e.endpoint, (counts.get(e.endpoint) ?? 0) + e.count);
+      Object.entries(s.endpointCounts ?? {}).forEach(([endpoint, count]) => {
+        counts.set(endpoint, (counts.get(endpoint) ?? 0) + count);
       });
     });
     let best = "N/A";

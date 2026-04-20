@@ -130,11 +130,10 @@ export function AdminDashboardPage() {
   }, [allKeys, statusFilter, emailSearch]);
 
   const activeKeyCount = allKeys.filter((k) => k.status === "active").length;
-  const todayRequests = allKeys.reduce(
-    (sum, key) => sum + Math.min(key.usageCount, 500),
-    0,
-  );
-  const todayErrors = Math.max(Math.round(todayRequests * 0.02), 1);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayStats = allDailyStats.filter((s) => s.date === today);
+  const todayRequests = todayStats.reduce((sum, s) => sum + s.totalRequests, 0);
+  const todayErrors = todayStats.reduce((sum, s) => sum + s.errorCount, 0);
 
   const filteredUsageStats = useMemo(() => {
     return allDailyStats.filter((stat) =>
@@ -609,7 +608,7 @@ export function AdminDashboardPage() {
               <Card>
                 <CardSubtitle>Error Rate (today)</CardSubtitle>
                 <CardTitle>
-                  {((todayErrors / todayRequests) * 100).toFixed(2)}%
+                  {todayRequests > 0 ? ((todayErrors / todayRequests) * 100).toFixed(2) : "0.00"}%
                 </CardTitle>
               </Card>
             </div>
@@ -892,6 +891,23 @@ export function AdminDashboardPage() {
                   <option value="t3.large">t3.large</option>
                   <option value="t3.xlarge">t3.xlarge</option>
                   <option value="t3.2xlarge">t3.2xlarge</option>
+                </Select>
+              </div>
+
+              <div>
+                <Label>Track API usage stats</Label>
+                <Select
+                  value={configDraft.trackStats ? "on" : "off"}
+                  onChange={(e) =>
+                    setConfigDraft((prev) =>
+                      prev
+                        ? { ...prev, trackStats: e.target.value === "on" }
+                        : prev,
+                    )
+                  }
+                >
+                  <option value="off">Off</option>
+                  <option value="on">On</option>
                 </Select>
               </div>
             </div>

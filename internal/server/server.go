@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	fb "firebase.google.com/go/v4"
@@ -77,6 +78,14 @@ func NewServer() *http.Server {
 
 	log.Printf("[acmutd-api] New admin key generated: %s", adminKey)
 
+	var trackStats atomic.Bool
+	appCfg, err := db.GetAppConfig(ctx)
+	if err != nil {
+		log.Printf("[acmutd-api] Warning: failed to load app config for trackStats: %v", err)
+	} else if appCfg != nil {
+		trackStats.Store(appCfg.TrackStats)
+	}
+
 	limiter := ratelimit.NewLimiter()
 	limiter.StartCleanup(rateLimitCacheTTL)
 
@@ -88,8 +97,8 @@ func NewServer() *http.Server {
 		adminKey:    adminKey,
 	}
 
-	handler := handlers.New(newServer.db)
-	middlewares := middleware.NewManager(newServer.db, newServer.apiKeyCache, newServer.rateLimiter, newServer.adminKey, authClient)
+	handler := handlers.New(newServer.db, &trackStats)
+	middlewares := middleware.NewManager(newServer.db, newServer.apiKeyCache, newServer.rateLimiter, newServer.adminKey, authClient, &trackStats)
 	httpHandler := router.New(handler, middlewares)
 
 	return &http.Server{

@@ -27,11 +27,6 @@ export interface APIKey {
   lastUsedAt: string | null;
 }
 
-export interface EndpointBreakdown {
-  endpoint: string;
-  count: number;
-}
-
 export interface DailyStat {
   statId: string;
   keyId: string;
@@ -40,7 +35,7 @@ export interface DailyStat {
   totalRequests: number;
   successCount: number;
   errorCount: number;
-  endpointBreakdown: EndpointBreakdown[];
+  endpointCounts: Record<string, number>;
 }
 
 export type AutoApproveMode = "none" | "@utdallas.edu" | "@acmutd.co" | "both" | "all";
@@ -53,6 +48,7 @@ export interface AppConfig {
   currentSemester: string;
   instanceType: InstanceType;
   keysExpiresAtDate: string;
+  trackStats: boolean;
   updatedAt: string;
   updatedBy: string;
 }

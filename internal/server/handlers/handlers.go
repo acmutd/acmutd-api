@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/acmutd/acmutd-api/internal/firebase"
@@ -12,7 +13,8 @@ import (
 )
 
 type Handler struct {
-	db *firebase.Firestore
+	db         *firebase.Firestore
+	trackStats *atomic.Bool
 }
 
 const (
@@ -26,8 +28,8 @@ type paginationParams struct {
 	Offset int
 }
 
-func New(db *firebase.Firestore) *Handler {
-	return &Handler{db: db}
+func New(db *firebase.Firestore, trackStats *atomic.Bool) *Handler {
+	return &Handler{db: db, trackStats: trackStats}
 }
 
 // Health responds with a simple service heartbeat.

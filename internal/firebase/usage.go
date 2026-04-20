@@ -6,6 +6,8 @@ import (
 	"cloud.google.com/go/firestore"
 	"github.com/acmutd/acmutd-api/internal/types"
 	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // GetDailyStats returns usage statistics for a specific user, ordered by date descending.
@@ -88,4 +90,51 @@ func collectRequestEvents(iter *firestore.DocumentIterator) ([]types.RequestEven
 		events = append(events, e)
 	}
 	return events, nil
+}
+
+// RecordRequestEvent writes a single request event document to Firestore.
+func (c *Firestore) RecordRequestEvent(ctx context.Context, event *types.RequestEvent) error {
+	_, err := c.Collection("request_events").Doc(event.ID).Set(ctx, event)
+	return err
+}
+
+// IncrementDailyStat atomically upserts the daily stat document for the given key and date.
+func (c *Firestore) IncrementDailyStat(ctx context.Context, keyID, userID, date, endpoint string, success bool) error {
+	docID := keyID + "_" + date
+	ref := c.Collection("daily_stats").Doc(docID)
+
+	return c.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		doc, err := tx.Get(ref)
+
+		var stat types.DailyStat
+		if err != nil {
+			if status.Code(err) != codes.NotFound {
+				return err
+			}
+			stat = types.DailyStat{
+				StatID:         docID,
+				KeyID:          keyID,
+				UserID:         userID,
+				Date:           date,
+				EndpointCounts: map[string]int{},
+			}
+		} else {
+			if err := doc.DataTo(&stat); err != nil {
+				return err
+			}
+			if stat.EndpointCounts == nil {
+				stat.EndpointCounts = map[string]int{}
+			}
+		}
+
+		stat.TotalRequests++
+		if success {
+			stat.SuccessCount++
+		} else {
+			stat.ErrorCount++
+		}
+		stat.EndpointCounts[endpoint]++
+
+		return tx.Set(ref, stat)
+	})
 }

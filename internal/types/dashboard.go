@@ -8,14 +8,14 @@ type EndpointBreakdown struct {
 }
 
 type DailyStat struct {
-	StatID            string              `firestore:"stat_id" json:"statId"`
-	KeyID             string              `firestore:"key_id" json:"keyId"`
-	UserID            string              `firestore:"user_id" json:"userId"`
-	Date              string              `firestore:"date" json:"date"` // "YYYY-MM-DD"
-	TotalRequests     int                 `firestore:"total_requests" json:"totalRequests"`
-	SuccessCount      int                 `firestore:"success_count" json:"successCount"`
-	ErrorCount        int                 `firestore:"error_count" json:"errorCount"`
-	EndpointBreakdown []EndpointBreakdown `firestore:"endpoint_breakdown" json:"endpointBreakdown"`
+	StatID         string         `firestore:"stat_id" json:"statId"`
+	KeyID          string         `firestore:"key_id" json:"keyId"`
+	UserID         string         `firestore:"user_id" json:"userId"`
+	Date           string         `firestore:"date" json:"date"` // "YYYY-MM-DD"
+	TotalRequests  int            `firestore:"total_requests" json:"totalRequests"`
+	SuccessCount   int            `firestore:"success_count" json:"successCount"`
+	ErrorCount     int            `firestore:"error_count" json:"errorCount"`
+	EndpointCounts map[string]int `firestore:"endpoint_counts" json:"endpointCounts"`
 }
 
 type RequestEvent struct {
@@ -36,6 +36,7 @@ type AppConfig struct {
 	CurrentSemester      string    `firestore:"current_semester" json:"currentSemester"`
 	InstanceType         string    `firestore:"instance_type" json:"instanceType"`
 	KeysExpiresAtDate    time.Time `firestore:"keys_expires_at_date" json:"keysExpiresAtDate"`
+	TrackStats           bool      `firestore:"track_stats" json:"trackStats"`
 	UpdatedAt            time.Time `firestore:"updated_at" json:"updatedAt"`
 	UpdatedBy            string    `firestore:"updated_by" json:"updatedBy"`
 }
