@@ -58,6 +58,7 @@ func New(handler *handlers.Handler, mw *middleware.Manager) http.Handler {
 			dashAdmin.POST("/admin/keys/:keyId/reject", handler.RejectKey)
 			dashAdmin.POST("/admin/keys/:keyId/regenerate", handler.AdminRegenerateKey)
 			dashAdmin.DELETE("/admin/keys/:keyId", handler.AdminRevokeKey)
+			dashAdmin.DELETE("/admin/keys/:keyId/permanent", handler.AdminDeleteKey)
 			dashAdmin.POST("/admin/keys", handler.AddKey)
 			dashAdmin.PUT("/admin/keys/:keyId", handler.EditKey)
 			dashAdmin.GET("/admin/stats/daily", handler.ListAllDailyStats)

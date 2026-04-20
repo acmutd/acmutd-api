@@ -7,6 +7,7 @@ import { Input, Label, Select, TextArea } from "../components/ui/Field";
 import { Modal } from "../components/ui/Modal";
 import {
   addToken,
+  adminDeleteKey,
   adminRegenerateKey,
   adminRevokeKey,
   approveKey,
@@ -114,7 +115,7 @@ export function AdminDashboardPage() {
 
   const [keyActionConfirm, setKeyActionConfirm] = useState<{
     keyId: string;
-    action: "regenerate" | "revoke";
+    action: "regenerate" | "revoke" | "delete";
   } | null>(null);
 
   const filteredKeys = useMemo(() => {
@@ -552,6 +553,17 @@ export function AdminDashboardPage() {
                             }
                           >
                             Revoke
+                          </Button>
+                          <Button
+                            variant="danger"
+                            onClick={() =>
+                              setKeyActionConfirm({
+                                keyId: key.keyId,
+                                action: "delete",
+                              })
+                            }
+                          >
+                            Delete
                           </Button>
                         </div>
                       </td>
@@ -1108,7 +1120,9 @@ export function AdminDashboardPage() {
         title={
           keyActionConfirm?.action === "regenerate"
             ? "Confirm regenerate key"
-            : "Confirm revoke key"
+            : keyActionConfirm?.action === "delete"
+              ? "Confirm delete key"
+              : "Confirm revoke key"
         }
         onClose={() => setKeyActionConfirm(null)}
       >
@@ -1117,18 +1131,23 @@ export function AdminDashboardPage() {
             <p className="text-sm text-slate-700">
               {keyActionConfirm.action === "regenerate"
                 ? "Are you sure you want to regenerate this key? The old key will stop working immediately."
-                : "Are you sure you want to revoke this key? This action cannot be undone."}
+                : keyActionConfirm.action === "delete"
+                  ? "Are you sure you want to permanently delete this key? The document will be removed from Firestore and cannot be recovered."
+                  : "Are you sure you want to revoke this key? This action cannot be undone."}
             </p>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setKeyActionConfirm(null)}>
                 Cancel
               </Button>
               <Button
-                variant={keyActionConfirm.action === "revoke" ? "danger" : "secondary"}
+                variant={keyActionConfirm.action === "regenerate" ? "secondary" : "danger"}
                 onClick={async () => {
                   if (keyActionConfirm.action === "regenerate") {
                     await adminRegenerateKey(keyActionConfirm.keyId);
                     showToast("Key regenerated");
+                  } else if (keyActionConfirm.action === "delete") {
+                    await adminDeleteKey(keyActionConfirm.keyId);
+                    showToast("Key deleted");
                   } else {
                     await adminRevokeKey(keyActionConfirm.keyId);
                     showToast("Key revoked");

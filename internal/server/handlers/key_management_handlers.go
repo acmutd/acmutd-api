@@ -204,6 +204,16 @@ func (h *Handler) AdminRevokeKey(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "key revoked"})
 }
 
+// AdminDeleteKey permanently deletes a key document from Firestore. Admin only.
+func (h *Handler) AdminDeleteKey(c *gin.Context) {
+	keyID := c.Param("keyId")
+	if err := h.db.DeleteKey(c.Request.Context(), keyID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete key"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "key deleted"})
+}
+
 // AddKey creates a new API key with all fields specified. Admin only.
 func (h *Handler) AddKey(c *gin.Context) {
 	var req struct {

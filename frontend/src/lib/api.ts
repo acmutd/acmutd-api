@@ -144,6 +144,10 @@ export async function adminRevokeKey(keyId: string): Promise<void> {
   await apiFetch(`/admin/keys/${keyId}`, { method: "DELETE" });
 }
 
+export async function adminDeleteKey(keyId: string): Promise<void> {
+  await apiFetch(`/admin/keys/${keyId}/permanent`, { method: "DELETE" });
+}
+
 export async function addToken(input: {
   ownerEmail: string;
   label: string;
