@@ -14,10 +14,8 @@ import (
 )
 
 func init() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatalf("error loading .env file: %v\n", err)
-	}
+	// .env is optional — on EC2 the systemd EnvironmentFile supplies all vars.
+	godotenv.Load()
 	log.SetPrefix("[acmutd-api] ")
 }
 
