@@ -1,1 +1,2 @@
 fuzzywuzzy==0.18.0
+rapidfuzz>=3.0.0

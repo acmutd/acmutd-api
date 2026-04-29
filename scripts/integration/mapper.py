@@ -19,19 +19,25 @@ def create_section_lookup(coursebook_data):
     return section_lookup
 
 
-def find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section):
+def find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section, semester):
     """Finds instructor ID using section address matching (more reliable approach)."""
-    key = f"{subject}{catalog_nbr}.{section}".lower()
+    # Some grade csvs (e.g. 23s) use unpadded section numbers (e.g. '1' instead of '001')
+    if section.isdigit():
+        section = section.zfill(3)
+    key = f"{subject}{catalog_nbr}.{section}.{semester}".lower()
 
-    for section_address, section_data in section_lookup.items():
-        if section_address.startswith(key):
-            instructor_ids = section_data.get('instructor_ids', '')
-            # Normalize to list if CSV string
-            if isinstance(instructor_ids, str):
-                instructor_ids = instructor_ids.split(",") if instructor_ids else []
-            return instructor_ids[0].strip() if instructor_ids and instructor_ids[0].strip() else ''
+    if key in section_lookup:
+        section_data = section_lookup[key]
+        instructor_ids = section_data.get('instructor_ids', '')
+        title = section_data.get('title', '')
+        # Normalize to list if CSV string
+        if isinstance(instructor_ids, str):
+            instructor_ids = instructor_ids.split(",") if instructor_ids else []
+        instructor_id = instructor_ids[0].strip() if instructor_ids and instructor_ids[0].strip() else ''
+
+        return instructor_id, title
     
-    return ''
+    return '', ''
 
 
 def create_instructor_id_lookup(matched_professor_data):
@@ -133,7 +139,7 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
 
                 # Extract grade data fields
                 subject = row.get("Subject", "").strip().upper()
-                catalog_nbr = row.get('"Catalog Nbr"') or row.get("Catalog Nbr", "")
+                catalog_nbr = row.get('"Catalog Nbr"') or row.get("Catalog Nbr") or row.get("Catalog Number", "")
                 catalog_nbr = catalog_nbr.strip()
                 section = row.get("Section", "").strip()
 
@@ -143,9 +149,10 @@ def map_grades_to_instructors(grades_files, coursebook_data, matched_professor_d
                 enhanced_row["instructor_name_normalized"] = ""
 
                 # Try section address lookup (more reliable method)
-                instructor_id = find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section)
+                instructor_id, title = find_instructor_id_by_section_address(section_lookup, subject, catalog_nbr, section, semester)
                 #print(f"Instructor Id: {instructor_id} for {subject} {catalog_nbr} section {section}")
                 enhanced_row["instructor_id"] = instructor_id
+                enhanced_row["title"] = title
 
                 # Check if we have professor data for this instructor
                 if instructor_id and instructor_id in instructor_by_id:

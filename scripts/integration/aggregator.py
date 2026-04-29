@@ -81,7 +81,7 @@ def calculate_professor_ratings_from_grades(grades_files, coursebook_data):
                 for row in reader:
                     instructor = normalize_name(row.get("Instructor 1", ""))
                     subject = row.get("Subject", "").strip()
-                    catalog_nbr = row.get('"Catalog Nbr"') or row.get("Catalog Nbr", "")
+                    catalog_nbr = row.get('"Catalog Nbr"') or row.get("Catalog Nbr") or row.get("Catalog Number", "") # some grade files have different catalog number names
                     catalog_nbr = catalog_nbr.strip()
                     course = f"{subject}{catalog_nbr}"
                     row_grades = {grade: int(float(row.get(grade, 0) or 0)) for grade in grade_values}
